@@ -1,0 +1,141 @@
+# Indicator registry — the single place that says what each dashboard
+# indicator measures, how it is computed, which 95 it serves, and how it is
+# targeted. Measures named in num/den are computed in kpi/measures.py.
+#
+# group:    IPI | Non-IPI | Conventional
+# pillar:   1st 95 | 2nd 95 | 3rd 95 | Biometrics | PMTCT | TB | Prevention | Systems
+# kind:     rate (num/den) | count (num only)
+# flow:     cumulative (adds up over the period, pro-rated for pacing)
+#           snapshot   (point in time, e.g. TX_CURR — compared to full target)
+# target:   key into the targets table (targets.py builds it from the workbook)
+
+ipi:
+  - code: IPI_PMTCT_ART_COV
+    name: PMTCT ART coverage
+    pillar: PMTCT
+    measures: "Pregnant women living with HIV who received ART to reduce vertical transmission"
+    num: pmtct_art
+    den: pmtct_stat_pos
+    kind: rate
+    target: IPI_PMTCT_ART_COV
+    source: DHIS2 (PMTCT)
+  - code: IPI_ART_COV
+    name: ART coverage among PLHIV who know their status
+    pillar: 2nd 95
+    measures: "People who know their HIV status and are on ART. Tracked through linkage (TX_NEW ÷ HTS_TST_POS), per the FY27 target note"
+    num: tx_new_q
+    den: hts_tst_pos
+    kind: rate
+    target: IPI_ART_COV
+    source: Central repository (TX_NEW), DHIS2 (HTS_TST_POS)
+  - code: IPI_VLS_ON_ART
+    name: Viral suppression among clients on ART
+    pillar: 3rd 95
+    measures: "Everyone on ART who is virally suppressed. The denominator is all of TX_CURR, so clients without a recent VL result count against it"
+    num: vl_suppressed
+    den: tx_curr_emr     # VL results live in the EMR, so the denominator is the EMR TX_CURR
+    kind: rate
+    target: IPI_VLS_ON_ART
+    source: Central repository (linelist)
+  - code: IPI_JOINT_SSV
+    name: Joint supportive supervision visits with GoN
+    pillar: Systems
+    measures: "Completed site visits with at least three GoN entities (SASCP, SACA, HMB, SPHCDA, LMCU…)"
+    num: joint_ssv
+    kind: count
+    flow: cumulative
+    milestone_scope: programme   # Q2: 4, Q3: 2 visits across the three states
+    target: IPI_JOINT_SSV
+    source: Manual (trip reports)
+
+non_ipi:
+  - code: NIPI_PREP_AMONG_NEG
+    name: HTS-negative persons newly enrolled on PrEP
+    pillar: Prevention
+    measures: "Share of people testing HIV-negative who start PrEP (oral or injectable)"
+    num: prep_new
+    den: hts_tst_neg
+    kind: rate
+    target: NIPI_PREP_AMONG_NEG
+    source: DHIS2 (PrEP) — confirm table
+  - code: NIPI_KNOW_STATUS
+    name: Knowledge of HIV status among PLHIV
+    pillar: 1st 95
+    measures: "PLHIV with a confirmed diagnosis, against the Naomi 2025 PLHIV estimate"
+    num: plhiv_diagnosed
+    den: plhiv_est
+    kind: rate
+    target: NIPI_KNOW_STATUS
+    source: NDR, Naomi estimate (manual)
+  - code: NIPI_INFANT_DX
+    name: New HIV diagnoses among infants (0–12 months)
+    pillar: PMTCT
+    measures: "HIV-exposed infants with a positive virologic result, sample by 12 months"
+    num: pmtct_eid_pos
+    kind: count
+    flow: cumulative
+    neutral: true             # target 49 is a planning figure, not better/worse
+    target: NIPI_INFANT_DX
+    source: DHIS2 (PMTCT EID)
+  - code: NIPI_CASE_FINDING
+    name: Case finding among children and adults
+    pillar: 1st 95
+    measures: "Confirmed new HIV diagnoses (HTS_TST_POS)"
+    num: hts_tst_pos
+    kind: count
+    flow: cumulative
+    target: NIPI_CASE_FINDING
+    source: DHIS2 (HTS)
+  - code: NIPI_POP_VLS
+    name: Population viral suppression (Naomi 2025)
+    pillar: 3rd 95
+    measures: "PLHIV on ART and suppressed, against the estimated number of PLHIV"
+    num: vl_suppressed
+    den: plhiv_est
+    kind: rate
+    target: NIPI_POP_VLS
+    neutral: true             # shown against the target but not rated (Naomi denominator is an estimate)
+    source: Central repository, Naomi estimate (manual)
+  - code: NIPI_TX_CURR
+    name: TX_CURR
+    pillar: 2nd 95
+    measures: "Number of people currently on ART"
+    num: tx_curr
+    kind: count
+    flow: snapshot
+    target: NIPI_TX_CURR
+    source: Central repository (linelist)
+  - code: NIPI_VLS_WITH_RESULT
+    name: Viral suppression among PLHIV on ART with a VL result
+    pillar: 3rd 95
+    measures: "Suppression among those with a documented result in the last 12 months (the clinical rate)"
+    num: vl_suppressed
+    den: vl_result
+    kind: rate
+    target: NIPI_VLS_WITH_RESULT
+    source: Central repository (linelist)
+  - code: NIPI_DQA_COVERAGE
+    name: DQA coverage rate
+    pillar: Systems
+    measures: "Supported sites with at least one comprehensive DQA under the FY27 SOP"
+    num: dqa_sites
+    den: sites_total
+    kind: rate
+    paced: true               # milestones build up through the year (10/20/30/40%)
+    target: NIPI_DQA_COVERAGE
+    source: Manual (DQA report, ODK linelist)
+
+conventional:
+  - {code: HTS_TST,     name: HTS_TST,        pillar: 1st 95, num: hts_tst,        kind: count, flow: cumulative, target: HTS_TST}
+  - {code: HTS_TST_POS, name: HTS_TST_POS,    pillar: 1st 95, num: hts_tst_pos,    kind: count, flow: cumulative, target: HTS_TST_POS}
+  - {code: PMTCT_STAT,  name: PMTCT_STAT (N), pillar: PMTCT,  num: pmtct_stat_num, kind: count, flow: cumulative, target: PMTCT_STAT}
+  - {code: TX_NEW,      name: TX_NEW,         pillar: 2nd 95, num: tx_new_q,       kind: count, flow: cumulative, target: TX_NEW}
+  - {code: TX_CURR,     name: TX_CURR,        pillar: 2nd 95, num: tx_curr,        kind: count, flow: snapshot,   target: TX_CURR}
+  - {code: PMTCT_ART,   name: PMTCT_ART,      pillar: PMTCT,  num: pmtct_art,      kind: count, flow: cumulative, target: PMTCT_ART}
+  - {code: TX_PVLS_D,   name: TX_PVLS (D),    pillar: 3rd 95, num: vl_result,      kind: count, flow: snapshot,   target: TX_PVLS_D}
+  - {code: TX_PVLS_N,   name: TX_PVLS (N),    pillar: 3rd 95, num: vl_suppressed,  kind: count, flow: snapshot,   target: TX_PVLS_N}
+  - {code: PrEP_NEW,    name: PrEP_NEW,       pillar: Prevention, num: prep_new,   kind: count, flow: cumulative, target: PrEP_NEW}
+  - {code: TB_PREV,     name: TB_PREV (N),    pillar: TB,     num: tb_prev_num,    kind: count, flow: cumulative, target: TB_PREV}
+  - {code: TX_TB,       name: TX_TB (N),      pillar: TB,     num: tx_tb_num,      kind: count, flow: cumulative, target: TX_TB}
+  - {code: TB_ART,      name: TB_ART (N),     pillar: TB,     num: tb_art,         kind: count, flow: cumulative, target: TB_ART}
+  - {code: POST_RESP,   name: POST_RESP,      pillar: Prevention, num: post_resp,  kind: count, flow: cumulative, target: POST_RESP}
