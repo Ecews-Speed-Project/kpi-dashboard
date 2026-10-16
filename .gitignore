@@ -1,0 +1,22 @@
+.env
+data/raw/
+data/out/
+data/demo/
+dashboard/out/
+__pycache__/
+.pytest_cache/
+data/history/
+exports/*
+live/
+archive/
+exports/
+logs/
+inbox/*
+!inbox/README.txt
+# client-level or programme data never goes to git
+*.parquet
+*.pptx
+docs/PowerBI_measure_export.xlsx
+data/excel/
+data/manual/
+.claude/

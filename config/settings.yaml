@@ -1,0 +1,263 @@
+# ECEWS SPEED KPI pipeline — settings
+# Credentials are NEVER stored here. They come from .env (see .env.example).
+
+programme: ECEWS SPEED
+fiscal_year: FY27
+fy_start: 2026-10-01          # FY27 = Oct 2026 – Sep 2027
+states: [Delta, Ekiti, Osun]
+
+reporting:
+  as_of: auto                 # "auto" = today, or a fixed date e.g. 2026-10-10
+  # Which month a DHIS2 weekly period (ISO week, Mon–Sun) belongs to:
+  #   thursday  = month containing the week's Thursday (ISO convention; default)
+  #   week_end  = month containing the Sunday
+  #   week_start= month containing the Monday
+  week_to_month_rule: thursday
+  # When a facility's MONTHLY report for a month exists for a table, its weekly
+  # rows for that month are dropped. Grain of that check:
+  #   facility_table  = per facility x month x table (default, most precise)
+  #   all             = whole month switches only once month is declared closed
+  monthly_takeover: facility_table
+  # A month is flagged "closed" (display only) once monthly reporting reaches
+  # this share of facilities, or after this day of the following month.
+  month_close_completeness: 0.90
+  month_close_day: 15
+  # How far back to pull (months before FY start) so earlier quarters can be
+  # selected on the dashboard
+  history_months: 12
+  # Scheduled runs re-pull only the last refresh_months from DHIS2 and reuse the
+  # cached older months (data/raw/cache); a full re-pull happens every
+  # full_refresh_days, or on demand with: update_dashboard.bat --full
+  refresh_months: 3
+  full_refresh_days: 7
+  # Dated copies of the linelist / NDR file (data/history/sources) give past periods their
+  # stock figures; after this many days only the last copy of each month is kept
+  source_keep_days: 120
+
+rag:                          # count targets — deck legend: 0–49 red, 50–74 amber, >=75 green
+  red_below: 0.50             #   (scored on pace: achieved ÷ expected by the data date)
+  green_from: 0.75
+  rate_warning_gap: 0.05      # rate targets: met = green; within 5 points = amber; else red
+
+dhis2:
+  weekly_url: https://speeddhis-weekly.ecews.org
+  monthly_url: https://speeddhis-monthly.ecews.org
+  # Field used as the indicator key ("dataname") — must match on both instances
+  dataname_field: name        # name | shortName | code
+  # How a facility is matched across the two instances (UIDs can differ)
+  orgunit_match: name         # name | code | id
+  # Org unit levels in the hierarchy (check with: python run_pipeline.py discover)
+  level_state: 2
+  level_lga: 3
+  level_facility: 4
+  # Measures computed exactly as the DHIS2 indicators (the formula is read from each instance and
+  # applied to that instance's own reports, so the dashboard matches the DHIS2 pivot).
+  indicators:
+    hts_tst:     {monthly: JYBIve84SJC, weekly: ouDxBXlJkJo}
+    hts_tst_pos: {monthly: VT498ChUjhT, weekly: QoGaH8j31ml}
+  # Map each pipeline table to the dataSet UID(s) on EACH instance (a list
+  # pulls several datasets into one table). Mapped 2026-10-10 from
+  # data/raw/dhis2_catalog_*.csv; UIDs are the same on both instances.
+  tables:
+    HTS_TST:         {weekly: [llIVb031ufJ, HZLQXHypCbz], monthly: [llIVb031ufJ, HZLQXHypCbz]}  # HTS Facility + Community
+    INDEX:           {weekly: [LHxJVJ0Ql1r, tpmfjDqLf0x], monthly: [LHxJVJ0Ql1r, tpmfjDqLf0x]}  # HTS_INDEX + CSCS/CSCC Index (KP)
+    HIVST:           {weekly: sphM8t6MOF0, monthly: sphM8t6MOF0}   # HTS_SELF
+    PMTCT:           {weekly: ERZfHSbeLcF, monthly: ERZfHSbeLcF}   # PMTCT
+    PMTCT_COMM:      {weekly: YcFJygygF2f, monthly: ""}            # Community PMTCT (weekly instance only)
+    PMTCT_EID:       {weekly: ERZfHSbeLcF, monthly: ERZfHSbeLcF}   # PMTCT (EID/HEI elements)
+    TB:              {weekly: IYXpDsFErfR, monthly: IYXpDsFErfR}   # TB/HIV
+    TX_TB:           {weekly: ao3uO7ifv5c, monthly: ao3uO7ifv5c}   # HIV Care and Treatment
+    AHD:             {weekly: ao3uO7ifv5c, monthly: ao3uO7ifv5c}   # AHD_MSF elements in Care and Treatment (AHD_MSF datasets: no access / empty)
+    PREP:            {weekly: KvZ6FtCvd52, monthly: KvZ6FtCvd52}   # PrEP (PrEP_NEW)
+
+postgres:                     # central data repository
+  host: ""                    # set PG_HOST in .env (kept out of git)
+  port: 5432
+  dbname: ecews
+  schema: public
+  tables:
+    linelist: linelist_flat         # was linelist (removed 2026-10-14); weekly stacked snapshots
+    previous_quarter_status: previous_quarter_status
+    # No "Trends" or "linelist7" table exists in public (2026-10-10);
+    # nearest are waterfall_trend, linelist6, linelist_monthly. Not read by run.
+    trends: waterfall_trend
+    # EAC line list: the output of EAC_Script_Version11 (docs/EAC_Script_Version11.sql) for every
+    # facility, loaded by the CDR team (request: docs/CDR_request_EAC.md). Empty / missing = no EAC section.
+    eac: eac_linelist
+
+# Facility name fixes: a linelist / PBS name -> the DHIS2 facility name it should
+# match. Names are compared ignoring case, punctuation, word order and the
+# "de "/"os "/"ek " state prefix, so only genuinely different spellings belong
+# here. See the "Data flow" page for unmatched facilities.
+# Checked 2026-10-10 against the DHIS2 LGA of each site:
+facility_aliases:
+  "Seventh Day Hospital Inisha": "Seventh Day Adventist Hospital, Inisha"                      # Odo-Otin
+  "de Assumption Catholic Hospital": "Assumption Catholic Hospital - Warri"                     # Warri North
+  "St. Elizabeth Catholic Hospital - Sapele": "St. Elizabeth Catholic Hospital"                 # Sapele (Umunede is separate)
+  "de General Hospital Agbo-Aladinma": "Agbor-Aladinma General Hospital"                        # Ika South
+  "de General Hospital Ogwashiuku": "Ogwashi-uku General Hospital"                              # Aniocha South
+  "Obafemi Awolowo University Teaching Hospital Compl": "Obafemi Awolowo University Teaching Hospital Complex"
+  "os State Hospital - Asubiaro": "Asubiaro sate Hospital"                                      # Osogbo (DHIS2 typo)
+  "Federal Medical Center Oviwan": "Federal Medical Centre, Ovwian"                              # Udu
+  "St John's Catholic Hospital - Agbor": "St. John Catholic Hospital Agbor"                     # Ika South
+  "de Tuberculosis Referral Centre - Eku": "Turberculosis Referral Center - Eku"                # DHIS2 typo
+
+# Folder layout (relative to this project folder)
+paths:
+  inbox: inbox        # drop new source files here; the newest matching file wins
+  live: live          # live\index.html is always the latest dashboard: open it, press F5
+  archive: archive    # a dated copy of every build (last 60 kept)
+  exports: exports    # QA CSVs when run with --export
+  logs: logs          # one log per run (update_dashboard.bat)
+
+# Files the pipeline looks for in the inbox (newest by modified date). If none
+# is there, it falls back to the paths below.
+inbox_patterns:
+  targets: ["FY*Target*.xlsx", "*targets*.xlsx"]
+  pbs_all: ["pbs_all*.xlsx", "pbs*.xlsx", "pbs_all*.csv"]
+  ccmp: ["CCMP*.xlsx", "ccmp*.csv"]
+  naomi: ["naomi*.xlsx", "naomi*.csv", "*Naomi*.xlsx"]
+  dqa: ["dqa_sites*.csv"]
+  joint_ssv: ["joint_ssv*.csv"]
+  eac: ["eac_linelist*.csv", "eac_linelist*.xlsx"]   # fallback only, when the CDR EAC table is empty
+  # Quarter-end treatment line list (NDR / PHIS3 layout with _Q1.._Q4 columns), e.g. "q4 linelist_phsi3.csv".
+  # The quarter comes from the file name (q1..q4); it is used for every treatment number of that quarter.
+  quarter_linelist: ["q[1-4]*linelis*.csv", "Q[1-4]*linelis*.csv"]
+
+excel:
+  targets: data/excel/FY27_Targets.xlsx
+  pbs_all: data/excel/pbs_all.xlsx
+  ccmp: data/excel/CCMP.xlsx
+
+# Earlier fiscal years: annual targets by state with the achievement Power BI
+# reported (no quarterly split). Selecting a period in that year scores against them.
+prior_targets:
+  FY26: data/excel/FY26_Target_Achievement.csv   # from Downloads\PBI_FY25_TARGET.csv (2026-10-11)
+
+manual:                       # small hand-maintained inputs (CSV)
+  joint_ssv: data/manual/joint_ssv_visits.csv
+  dqa: data/manual/dqa_sites.csv
+  naomi: data/manual/naomi_estimates.xlsx  # Naomi PLHIV (state x sex x <15/15+), CSV or XLSX
+  naomi_quarter: ""                        # e.g. CY2025Q4; blank = latest in file
+
+# Column names in the source extracts (from the Power BI model). Change here
+# if the database uses different names — measures read only these keys.
+columns:
+  linelist:                         # CDR public.linelist_flat (weekly snapshots, one per "period")
+    id: unique_id
+    period: period                  # snapshot date; the latest period is "now", earlier ones give history
+    state: state
+    lga: lga
+    facility: facilityname
+    status: currentartstatus
+    prev_status: artstatus_previousquarter
+    sample_date: lastdateofsamplecollection
+    ti_date: date_transfered_in     # transfer-in date (waterfall: transferred in during the quarter)
+    next_appt: estimatednextappointmentpharmacy
+    regimen_line: currentregimenline
+    regimen: currentartregimen
+    art_start: artstartdate
+    last_pickup: pharmacy_lastpickupdate
+    refill_days: daysofarvrefill
+    days_on_art: daysonart
+    vl_date: dateofcurrentviralload
+    vl_value: currentviralload
+    ti: ti
+    sex: sex
+    age: current_age
+    outcome_date: outcomes_date     # date of death / transfer out / stop (trend backfill)
+    generated: period               # the snapshot date (Date_Generated carries some future dates)
+    datim: datim_code               # client link to the NDR: DATIM code + ART number
+    art_no: pepid
+    hosp_no: patienthospitalno      # shown in the EMR vs NDR line lists (no names are read)
+    pbs: pbs                        # Yes/No baseline capture - biometrics fallback without the NDR file
+    recapture_flag: recapture
+    pbs_date: pbsdatecreated
+    valid_bio: validbiometric       # unique TX_CURR (EMR) = active with a valid print, or under 15 (as the NDR)
+    # AHD among clients already on ART (EMR; newly initiated AHD stays on DHIS2)
+    ahd_indication: indication_ahd  # Initial / Repeat CD4 for AHD screening
+    cd4_lfa: cd4_lfa_result         # LessThan200 / GreaterTE200
+    cd4: firstcd4
+    cd4_date: firstcd4date
+    lflam: other_test_(tb-lam_lf-lam_etc)
+    crag: serology_for_crag_result
+    csf_crag: csf_for_crag_result
+    who_stage: whostage
+    # DSD
+    dsd_model: dsd_model            # Facility Dispensing / Decentralized Drug Delivery (DDD)
+    dsd_type: dsd_model_type        # Refill Fast Track, Community ART, FBM2, CBM6, Home Delivery ...
+    # TB screening among PLHIV (TB programme indicators stay on DHIS2; TPT fields are empty in linelist_flat)
+    tb_status: current_tb_status
+    tb_status_date: dateofcurrent_tbstatus   # screening date (TB_Screening_Date is empty)
+    tb_cough: are_you_coughing_currently
+    tb_fever: do_you_have_fever
+    tb_weight: are_you_losing_weight
+    tb_sweats: are_you_having_night_sweats
+    tb_gxp: genexpert
+    tb_gxp_result: genexpert_result
+    tb_afb: sputum_afb
+    tb_afb_result: sputum_afb_result
+    tb_cxr: chest_xray
+    tb_cxr_result: chest_xray_result
+    tb_culture: culture
+    tb_culture_result: culture_result
+    tb_tx_start: tbtreatmentstartdate
+    # OTZ
+    otz_enrolled: date_enrolled_into_otz
+    otz_outcome: otz_outcome
+    otz_transitioned: transitioned_adult_clinic
+    new_unique: ndr_unique          # quarter files only: TX_NEW counts clients with the NDR unique flag (q<N>_algo 1-4)
+  eac:                              # EAC_Script_Version11 output (CDR eac table); names / DOB are never read
+    datim: datim_code
+    art_no: pepid
+    hosp_no: patienthospitalno
+    state: state
+    facility: facilityname
+    sex: sex
+    age: current_age
+    status: current_status
+    transferred_in: transferred_in
+    first_vl: first_high_vl_value
+    first_vl_date: first_high_vl_result_date
+    trigger_vl: eac_triggering_high_vl_value
+    trigger_date: eac_triggering_high_vl_date
+    cycle: eac_cycle_number
+    s1: session_1_date
+    s2: session_2_date
+    s3: session_3_date
+    s4: session_4_extended_date
+    s5: session_5_extended_date
+    s6: session_6_extended_date
+    sessions: total_eac_sessions_all_cycles
+    fu_vl: followup_vl_value
+    fu_date: followup_vl_result_date
+    fu_status: followup_vl_suppression_status
+    switched: switched_to_second_line
+    generated: date_generated
+  pbs_all:                          # NDR PBS line list (inbox\pbs_all*.xlsx), active + inactive
+    state: statename
+    datim: datimcode
+    unique_id: unique_id
+    art_no: patientartnumber
+    hosp_no: hospitalnumber
+    valid: fingerprint valid
+    date_captured: date_captured
+    facility: facilityname
+    status28: currentstatus28
+    baseline: fingerprint enrolled
+    recapture: recapture fingerprint enrolled
+    match_outcome: match_outcome
+    fp_status: fingerprintstatus
+    dup_type: duplicate_type       # matches the PBS portal "Duplicate" card (131 on 2026-10-10)
+    prev_status28: currentstatus28q4   # NDR status at the end of the last quarter (NDR waterfall start)
+    ti_flag: patienttransferredin
+    ti_date: transferredindate
+    to_flag: patienttransferredout
+    to_date: transferredoutdate
+    dead_flag: patienthasdied
+    dead_date: patientdeceaseddate
+    art_start: artstartdate
+    last_pickup: lastdrugpickupdate
+    sex: sex
+    age: currentage
+    unique_flag: ndr_unique          # quarter files only: the NDR TX_CURR_Unique classification (q4_algo 1-4)
