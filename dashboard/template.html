@@ -1301,17 +1301,23 @@ function artPage(){
   const regl=agg(F,{by:"mod"}), lines=[...regl.entries()].filter(([k,x])=>(x.tx_regline||0)>0).sort((a,b)=>b[1].tx_regline-a[1].tx_regline);
   const regs=[...regl.entries()].filter(([k,x])=>(x.tx_regimen||0)>0).sort((a,b)=>b[1].tx_regimen-a[1].tx_regimen);
   return context()+`<div class="kpis">${kpi(n(v.tx_curr),TXL(),cur.target!=null?`${pct(cur.score,0)} of ${n(cur.target)}`:"",cur.status,TXTIP())}
-   ${kpi(n(v.tx_curr_emr),"TX_CURR (EMR)","central-repository linelist")}
+   ${NDRT() ? `${kpi(n(v.wf_new),"TX_NEW",`${llQ()} to ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
+     ${kpi(n(v.wf_iit),"IIT",`${llQ()} · NDR`)}${kpi(pct(iitEMR(v),2),"IIT rate","IIT ÷ (previous TX_CURR + TX_NEW)")}
+     ${kpi(n(v.wf_rtt),"Returned to treatment",`${llQ()} · NDR`)}`
+   : `${kpi(n(v.tx_curr_emr),"TX_CURR (EMR)","central-repository linelist")}
    ${kpi(n(v.wf_new),"TX_NEW (EMR)",`${llQ()} to ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
    ${kpi(n(v.ndr_wf_iit),"IIT",`${D.meta.fiscal_year} from 1 Oct · NDR TX_CURR`)}${kpi(pct(iitNDR(v),2),"IIT rate","IIT ÷ (TX_CURR at end of Q4 + TX_NEW)")}
-   ${kpi(n(v.ndr_wf_rtt),"Returned to treatment",`NDR, ${D.meta.fiscal_year} to date`)}${kpi(pct(sat),"Saturation (Naomi)","ref. 90.25%",rateStatus(sat,.9025))}${kpi(pct(div(v.mmd3,v.tx_curr_emr)),"On 3+ month refills")}</div>
-   <div class="grid g2"><section class="c3d">${secH(`Continuity of treatment — ${NDRT()?"NDR line list":"EMR"}, ${llQ()}`,`Previous TX_CURR = active last quarter (ART status previous quarter) with a valid print or under 15; flows from the linelist as of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
+   ${kpi(n(v.ndr_wf_rtt),"Returned to treatment",`NDR, ${D.meta.fiscal_year} to date`)}`}${kpi(pct(sat),"Saturation (Naomi)","ref. 90.25%",rateStatus(sat,.9025))}${kpi(pct(div(v.mmd3,v.tx_curr_emr)),"On 3+ month refills")}</div>
+   ${NDRT() ? `<section class="c3d">${secH(`Continuity of treatment — NDR, ${llQ()}`,`TX_CURR at the end of last quarter to TX_CURR now (valid unique print or under 15) · updates with every NDR file · NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
+     ${waterfallFrom(stepsEMR(v), `IIT rate ${pct(iitEMR(v),2)} = IIT ÷ (previous TX_CURR + TX_NEW). IIT = active at the end of last quarter and inactive now; transfers out and deaths count only when dated on or after the last pickup.`)}</section>`
+   : `   <div class="grid g2"><section class="c3d">${secH(`Continuity of treatment — ${NDRT()?"NDR line list":"EMR"}, ${llQ()}`,`Previous TX_CURR = active last quarter (ART status previous quarter) with a valid print or under 15; flows from the linelist as of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
      ${waterfallFrom(stepsEMR(v), `IIT rate ${pct(iitEMR(v),2)} = IIT ÷ (previous TX_CURR + TX_NEW).${demog?" The starting TX_CURR has no sex/age in previous_quarter_status, so with a sex/age filter the gap shows in gain/loss.":" Gain/loss holds clients in previous_quarter_status who are no longer in the linelist."}`)}</section>
    <section class="c3d">${secH(`Continuity of treatment — NDR TX_CURR, ${D.meta.fiscal_year} to date`,"From 1 October: TX_CURR at the end of Q4 (NDR TX_CURR rule) to NDR TX_CURR now")}
      ${dOf(P.end)<FYS?`<div class="empty">No data for ${esc(P.label)}: the NDR waterfall starts on 1 October ${esc(D.meta.fiscal_year)}.</div>`:MEAS.includes("ndr_wf_prev")?waterfallFrom(stepsNDR(v), `IIT rate ${pct(iitNDR(v),2)} = IIT ÷ (TX_CURR at end of Q4 + TX_NEW). Both TX_CURR bars use the NDR TX_CURR rule (valid unique print or under 15); TX_NEW, transfers and deaths from NDR line-list dates since 1 October. Print status is as of the NDR file.`):`<div class="empty">Needs the NDR line list with active and inactive clients.</div>`}</section></div>
+`}
    <section class="c3d">${secH("IIT and IIT rate by facility",`NDR TX_CURR, ${D.meta.fiscal_year} from 1 October · click to drill · rows by paediatric (<20) / adult`)}${pivot("iit",[C("TX_CURR end Q4",V("ndr_wf_prev"),0,0,"ndr_wf_prev"),C("TX_NEW",V("ndr_wf_new")),
      C("IIT",V("ndr_wf_iit")),C("IIT rate",iitNDR,1,x=>{const r=iitNDR(x); return r==null?null:r<=.01?"good":r<=.02?"warning":"critical";}),C("RTT",V("ndr_wf_rtt")),C("Dead",V("ndr_wf_dead")),C("TO",V("ndr_wf_to")),
-     C("TX_CURR (NDR)",V("ndr_wf_curr")),C(`IIT (EMR, ${llQ()})`,V("wf_iit")),C("IIT rate (EMR)",iitEMR,1)],["org","paed","sex","age"])}</section>
+     C("TX_CURR (NDR)",V("ndr_wf_curr")),...(NDRT()?[]:[C(`IIT (EMR, ${llQ()})`,V("wf_iit")),C("IIT rate (EMR)",iitEMR,1)])],["org","paed","sex","age"])}</section>
    <div class="grid g2"><section class="c3d">${secH("TX_CURR by age and sex","NDR TX_CURR")}${pyramid("tx_curr")}</section>
    <section class="c3d">${secH("IIT by age and sex",`NDR, ${D.meta.fiscal_year} from 1 October`)}${pyramid("ndr_wf_iit")}</section></div>
    <div class="grid g2"><section class="c3d">${secH("TX_CURR by regimen line","With viral load results (EMR)")}<div class="tw"><table><thead><tr><th>Regimen line</th><th class="n">TX_CURR</th><th class="n">VL results</th><th class="n">Suppressed</th><th class="n">Unsuppressed</th><th class="n">VLS</th></tr></thead><tbody>
@@ -1798,16 +1804,18 @@ function trendAgg(f=F){
     out[k]=wk; }
   return out;
 }
-function lineChart(series, {fmt=n, yMin=null, yMax=null, label=""}={}){
+function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false}={}){
   const pts = series.flatMap(s=>s.pts); if(!pts.length) return `<div class="empty">No data yet.</div>`;
   const ds = [...new Set(pts.map(p=>p.d))].sort(), t0=dOf(ds[0]).getTime(), t1=Math.max(dOf(ds.at(-1)).getTime(), t0+DAY);
   const vs = pts.map(p=>p.v).filter(v=>v!=null), lo = yMin ?? Math.min(...vs)*.97, hi = yMax ?? Math.max(...vs)*1.02;
-  const nMon=new Set(ds.map(d=>d.slice(0,7))).size, W=Math.max(640,nMon*95),H=250,pl=58,pr=14,pt=16,pb=34, x=d=>pl+(W-pl-pr)*(dOf(d).getTime()-t0)/(t1-t0), y=v=>pt+(H-pt-pb)*(1-(v-lo)/((hi-lo)||1));
+  const nMon=new Set(ds.map(d=>d.slice(0,7))).size, W=weekly?Math.max(640,ds.length*78):Math.max(640,nMon*95),H=250,pl=58,pr=14,pt=16,pb=34, x=d=>pl+(W-pl-pr)*(dOf(d).getTime()-t0)/(t1-t0), y=v=>pt+(H-pt-pb)*(1-(v-lo)/((hi-lo)||1));
   const ticks=[0,.25,.5,.75,1].map(k=>lo+(hi-lo)*k), months=[...new Set(ds.map(d=>d.slice(0,7)))];
   const step=Math.ceil(months.length/Math.max(8,Math.floor(W/95)));
   return `<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="${esc(label)}">
    ${ticks.map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--rule)" stroke-dasharray="2 3"/><text x="${pl-6}" y="${y(t)+4}" text-anchor="end" font-size="11">${fmt(t)}</text>`).join("")}
-   ${months.filter((_,i)=>i%step===0).map(m=>`<text x="${x(m+"-01")}" y="${H-pb+18}" text-anchor="middle" font-size="11">${monthLab(m)}</text>`).join("")}
+   ${weekly ? ds.map((d,i)=>{ const near = i<ds.length-1 && (dOf(ds[i+1])-dOf(d))/DAY<5;      // a short last week: label only the later point
+       return `<line x1="${x(d)}" x2="${x(d)}" y1="${pt}" y2="${H-pb}" stroke="var(--rule-soft)"/>${near?"":`<text x="${x(d)}" y="${H-pb+18}" text-anchor="middle" font-size="11">${dOf(d).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</text>`}`; }).join("")
+     : months.filter((_,i)=>i%step===0).map(m=>`<text x="${x(m+"-01")}" y="${H-pb+18}" text-anchor="middle" font-size="11">${monthLab(m)}</text>`).join("")}
    ${series.map(s=>{const p=s.pts.filter(q=>q.v!=null).sort((a,b)=>a.d<b.d?-1:1); if(!p.length) return "";
      return `<path d="${p.map((q,i)=>(i?"L":"M")+x(q.d).toFixed(1)+","+y(q.v).toFixed(1)).join("")}" fill="none" stroke="${s.c}" stroke-width="2.2"${s.dash?` stroke-dasharray="6 4"`:""}/>
       ${p.map(q=>`<circle cx="${x(q.d).toFixed(1)}" cy="${y(q.v).toFixed(1)}" r="${s.dash?2.5:3.5}" fill="${s.c}" data-tip="${esc(s.l)} · ${fmtDate(q.d)}: ${fmt(q.v)}"/>`).join("")}`;}).join("")}
@@ -1954,7 +1962,7 @@ function ipiDetail(code){
   const wk=weeklyProgress(code), tg=wk.map(w=>w.target).filter(x=>x!=null);
   const chart = lineChart([{l:i.name+(rate?"":" (cumulative)"),c:"var(--s1)",pts:wk.map(w=>({d:w.d,v:w.value}))},
      ...(tg.length?[{l:rate?"Target":"Target, paced",c:"var(--gold)",dash:true,pts:wk.map(w=>({d:w.d,v:w.target}))}]:[])],
-     {fmt:x=>rate?pct(x,0):n(x), yMin:rate?0:0, yMax:rate?Math.max(1,...wk.map(w=>w.value||0),...tg):null, label:i.name+" weekly progress"});
+     {fmt:x=>rate?pct(x,0):n(x), yMin:0, yMax:rate?Math.max(1,...wk.map(w=>w.value||0),...tg):null, label:i.name+" weekly progress", weekly:true});
   const methods = comps.filter(([m])=>ME.catalog[m]).map(([m,role])=>`<details class="terms"><summary>${ico("methods",18)} ${role}: the ${(ME.catalog[m]||[]).length} DHIS2 data elements behind ${esc(mlab(m))}</summary>
      ${termTable(m, `${role}: ${mlab(m)}`, v, termValues())}</details>`).join("");
   return `<a class="back" href="#ipi">${ico("back",16)} Back to IPI cards</a>
