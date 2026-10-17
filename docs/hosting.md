@@ -14,6 +14,17 @@ Every build writes two files to `live\`:
 - **`version.json`:** use `Cache-Control: no-store`. It must never be cached.
 - **Access:** serve over HTTPS behind a login, because `index.html` contains client-level ART and hospital numbers.
 
+## Sign-in
+
+`serve_dashboard.py` asks for an email address before showing the dashboard:
+- **Who gets in:** only addresses allowed under `access:` in `config/settings.yaml` (`allowed_domains`, `allowed_emails`).
+- **Sessions:** the browser stays signed in for `session_days` (30).
+- **Log:** every sign-in or refusal is written to `logs/access.log`.
+- **Background photos:** every `.webp` / `.jpg` in `dashboard/assets/login`. Add or remove files to change them.
+- **Signing key:** session cookies are signed with `DASH_SECRET` from `.env`, or a random key kept in `data/.dash_secret`.
+
+The address is not verified with a code or a password. This keeps out people who don't know a staff address, not someone who types one in. For stronger protection on the hosting server, put the dashboard behind ECEWS's Microsoft 365 sign-in (Entra ID) or send a one-time code by email.
+
 ## serve_dashboard.py (this project's server)
 
 Compression and caching are already built in. Run it with:

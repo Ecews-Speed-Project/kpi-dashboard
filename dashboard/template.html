@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SPEED KPI Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Cinzel:wght@500;600&display=swap">
@@ -276,12 +277,75 @@ footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:
 .kgrid .hb.axis i:first-child{transform:none}.kgrid .hb.axis i:last-child{transform:translateX(-100%)}
 .concbars{clear:both;margin-top:22px;padding-top:6px}
 .concbars .legend{margin-bottom:6px}
+/* ---------- signed-in visitor ---------- */
+.who{display:flex;gap:10px;align-items:center;font-size:15px;color:var(--on-cloth);margin-left:auto}
+.who b{font-family:var(--display);font-size:17px}
+.who a{display:inline-flex;gap:5px;align-items:center;font-family:var(--caps);font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.85;text-decoration:none;border:1px solid currentColor;border-radius:4px;padding:2px 8px}
+.who a:hover{opacity:1}
+.hello{display:flex;gap:10px;align-items:center;font-size:27px;margin:0}
+.hello small{font-family:var(--body);font-weight:400;font-style:italic;font-size:15px;color:var(--ink-3)}
+/* ---------- charts that scroll back through the months ---------- */
+.hscroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--gold) transparent;-webkit-overflow-scrolling:touch;padding-bottom:6px}
+.hscroll::-webkit-scrollbar{height:8px}.hscroll::-webkit-scrollbar-thumb{background:var(--gold);border-radius:4px}
+.hscroll svg{display:block;height:auto}
+.hsnote{font-size:12.5px;color:var(--ink-3);font-style:italic;margin:2px 0 0}
+/* ---------- searchable dropdowns ---------- */
+.ssel{display:inline-block;max-width:100%}
+.ssel-btn{display:inline-flex;align-items:center;gap:6px;justify-content:space-between;background:var(--card-hi);border:1px solid var(--edge);border-radius:4px;
+  padding:4px 8px;font-size:15px;max-width:200px;min-width:110px;color:var(--ink);cursor:pointer;text-align:left;text-transform:none;letter-spacing:0;font-family:var(--body)}
+.ssel-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ssel-btn::after{content:"";flex:none;border:4px solid transparent;border-top-color:currentColor;margin-top:4px;opacity:.7}
+.ssel-pop{position:fixed;z-index:50;background:var(--card-hi);border:1px solid var(--gold);border-radius:8px;box-shadow:0 16px 34px -14px var(--shadow);padding:8px}
+.ssel-pop input{width:100%;font:inherit;font-size:15px;padding:7px 9px 7px 30px;border:1px solid var(--edge);border-radius:5px;background:var(--paper) no-repeat 9px 50%/14px
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23887a5c' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M15.5 15.5L21 21'/%3E%3C/svg%3E");color:var(--ink)}
+.ssel-list{max-height:min(320px,50vh);overflow:auto;margin-top:6px}
+.ssel-list div{padding:7px 9px;border-radius:4px;cursor:pointer;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ssel-list div.on{background:var(--bevel-hi);outline:1px solid var(--rule)}
+.ssel-list div[aria-selected="true"]{font-weight:700;color:var(--gold-ink)}
+.ssel-list mark{background:var(--warn-bg);color:inherit;border-radius:2px}
+.ssel-none{margin:8px;color:var(--ink-3);font-style:italic}
+/* ---------- IPI detail ---------- */
+.vdet{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font-family:var(--caps);font-size:11.5px;letter-spacing:1.1px;text-transform:uppercase;
+  text-decoration:none;color:var(--gold-ink);border:1px solid var(--gold);border-radius:4px;padding:4px 10px;background:var(--card-hi)}
+.vdet:hover{background:var(--gold);color:#1F1A10}
+.back{display:inline-flex;align-items:center;gap:6px;font-family:var(--caps);font-size:12px;letter-spacing:1.1px;text-transform:uppercase;text-decoration:none;
+  color:var(--ink);border:1px solid var(--edge);border-radius:4px;padding:6px 12px;background:var(--card-hi);justify-self:start}
+.back:hover{border-color:var(--gold)}
+.dhead{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.dhead h2{font-size:28px}
+.formula{font-family:var(--display);font-size:19px;padding:10px 14px;border-left:3px solid var(--gold);background:var(--paper-2);border-radius:0 6px 6px 0;margin:10px 0}
+.sec-h h2 .ico{margin-right:8px;vertical-align:-.28em}
+details.terms{margin-top:12px;border:1px solid var(--rule-soft);border-radius:6px;padding:8px 12px;background:var(--card-hi)}
+details.terms summary{cursor:pointer;font-family:var(--caps);font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-2)}
+details.terms summary .ico{vertical-align:-.3em}
+/* ---------- phones and small tablets ---------- */
+@media (max-width:640px){
+  .top{position:static}
+  body{font-size:15.5px}
+  main{padding-inline:12px;gap:16px;padding-block:14px 32px}
+  .band-in{padding:8px 12px 0;gap:10px}.nav{padding:6px 8px 0}
+  .who{width:100%;justify-content:space-between;margin-left:0}
+  .filters-in{padding:6px 12px;flex-wrap:wrap;overflow:visible;gap:6px 8px}
+  .filters label{flex:1 1 46%;flex-direction:column;align-items:stretch;gap:2px}
+  .filters select,.filters input[type=date],.ssel,.ssel-btn{max-width:none;width:100%}
+  .fsep{display:none}.ftog{margin-left:0}
+  .c3d{padding:12px 12px}
+  .big{font-size:32px!important}
+  .icards{grid-template-columns:minmax(0,1fr)}
+  table{font-size:13.5px} td,th{padding:6px 7px}
+  .ctx{font-size:13.5px;gap:6px 10px}
+  .sec-h{flex-direction:column;align-items:flex-start;gap:2px}
+  .hello{font-size:23px}.dhead h2{font-size:23px}
+  footer{padding:0 12px 24px}
+}
+@media (hover:none){.tip{max-width:78vw}}
 </style>
 
 <header class="top">
   <div class="band-in">
     <div class="cartouche"><img src="__LOGO__" alt="ECEWS"></div>
     <div class="title"><h1>SPEED KPI Dashboard</h1><p id="sub"></p></div>
+    <div class="who" id="who"></div>
   </div>
   <nav class="nav" id="nav" aria-label="Pages"></nav>
   <div class="filters"><div class="filters-in" id="filters"></div></div>
@@ -295,7 +359,7 @@ const D = /*__DATA__*/null;
 const SPEED = "ECEWS SPEED";
 const PAGES = [["overview","Overview"],["ipi","IPI & Non-IPI"],["hts","HIV Testing Services"],["naomi","Saturation"],["art","Current on Treatment"],["vl","Viral Load"],
   ["pmtct","AP3/PMTCT"],["tb","TB"],["ahd","AHD"],["pbs","Biometrics"],["methods","How it's calculated"],["flow","Data flow"]];
-let page = "overview";
+let page = "overview", IPID = null, WHO = null;
 const F = {state:"", lga:"", fac:"", sex:"", age:""};
 try { Object.assign(F, JSON.parse(localStorage.getItem("speed.filters")||"{}")); } catch(e){}
 
@@ -502,7 +566,7 @@ function context(){
   <div class="ctx"><span><b>${esc(P.label)}</b> · ${P.mode==="range"?`${total} days`:`day ${day} of ${total}`}</span>
   <span class="qbar" data-tip="Share of the selected period covered by DHIS2 data"><i style="width:${(el*100).toFixed(1)}%"></i></span>
   <span data-tip="${P.mode==="quarter"?"Quarters use the monthly reports only; weekly reports count only for a month that has no monthly reports yet":"DHIS2 reports are counted by reporting period: a week when its Thursday is in range, a month when at least half of it is"}">${nM} monthly + ${nW} weekly DHIS2 periods${P.mode==="quarter"?" · monthly reports only":""}</span>
-  <span>DHIS2 through <b>${fmtDate(m.dhis_through)}</b>${lastWk?` (${lastWk})`:""}</span><span${(m.linelist_as_of||m.as_of)<m.as_of?` data-tip="The central-repository linelist was last generated on this date; TX_CURR, VL and IIT are measured as of it"`:""}>Linelist as of <b>${fmtDate(m.linelist_as_of||m.as_of)}</b>${(dOf(m.as_of)-dOf(m.linelist_as_of||m.as_of))/DAY>7?` <span class="pill openm">${Math.round((dOf(m.as_of)-dOf(m.linelist_as_of))/DAY)} days old</span>`:""}</span>
+  <span>DHIS2 through <b>${fmtDate(m.dhis_through)}</b>${lastWk?` (${lastWk})`:""}</span><span${(m.linelist_as_of||m.as_of)<m.as_of?` data-tip="The central-repository linelist was last generated on this date; TX_CURR, VL and IIT are measured as of it"`:""}>${NDRT()?"NDR line list":"Linelist"} as of <b>${fmtDate(m.linelist_as_of||m.as_of)}</b>${(dOf(m.as_of)-dOf(m.linelist_as_of||m.as_of))/DAY>7?` <span class="pill openm">${Math.round((dOf(m.as_of)-dOf(m.linelist_as_of))/DAY)} days old</span>`:""}</span>
   ${drilled?`<span class="drillnote">Count targets apply at programme and state level; rate targets apply everywhere.</span>`:""}
   ${m.linelist_note?`<span class="pill openm" data-tip="${esc(m.linelist_note)}">⚠ ${esc(m.linelist_note)}</span>`:""}</div>
   <p class="drillnote" style="margin:0">${!STOCK&&(SNL||SNN)?`<b>Stock figures from saved copies:</b> ${SNL?`linelist of ${fmtDate(SNL.slice(2))}`:"no linelist copy in this period"} · ${SNN?`NDR file of ${fmtDate(SNN.slice(2))}`:"no NDR copy in this period"}. DHIS2 figures follow the selected dates.`:STOCK?`DHIS2 figures, TX_NEW and IIT follow the selected dates. TX_CURR, viral load, biometrics and appointments are stock figures as of the linelist date.`:`<b>TX_CURR, viral load, biometrics and appointments: no data for this period</b> — they are stock figures as of ${fmtDate(m.linelist_as_of||m.as_of)}. DHIS2 figures follow the selected dates.`}</p>`;
@@ -513,7 +577,8 @@ function row(label, value, target, status, tip){
 function kpi(v, label, sub, status, tip){
   return `<div class="c3d kpi"${tip?` data-tip="${esc(tip)}"`:""}><div class="k-v num">${v}</div><div class="k-l">${label}</div>${sub||status?`<div class="k-s">${sub||""} ${status?dot(status):""}</div>`:""}</div>`;
 }
-function secH(title, note){ return `<div class="sec-h"><h2>${title}</h2>${note?`<p>${note}</p>`:""}</div>`; }
+function secH(title, note){ const ic=/<svg/.test(String(title)) ? "" : iconForTitle(String(title).replace(/<[^>]*>/g,""));
+  return `<div class="sec-h"><h2${ic||/<svg/.test(String(title))?' class="has-ico"':""}>${ic?ico(ic,24):""}${title}</h2>${note?`<p>${note}</p>`:""}</div>`; }
 function hbars(items, {max=null, fmt=n, color="var(--s1)"}={}){
   const mx = max ?? Math.max(...items.map(i=>i.v||0),1);
   return `<div class="hbars">${items.map(i=>`<div class="hb" data-tip="${esc(i.tip||i.l+": "+fmt(i.v))}"><span class="lab">${esc(i.l)}</span>
@@ -698,6 +763,17 @@ const IGLYPH = {
 const ICOLOR = {overview:"green", ipi:"gold", hts:"red", art:"green", vl:"teal", pmtct:"rose", tb:"blue", pbs:"slate", trends:"teal",
   naomi:"gold", methods:"slate", flow:"blue", prevention:"teal", systems:"slate", link:"blue", kpi:"gold"};
 const PILLAR_ICON = {"1st 95":"hts","2nd 95":"art","3rd 95":"vl","PMTCT":"pmtct","Prevention":"prevention","TB":"tb","Systems":"systems"};
+Object.assign(IGLYPH, {
+  map:`<path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/>`,
+  calendar:`<rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h2M14 14h2M8 17h2"/>`,
+  people:`<circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c.6-3.6 3.2-5.6 6.2-5.6s5.6 2 6.2 5.6"/><circle cx="17" cy="9" r="2.6"/><path d="M16.4 14.6c2.6.1 4.4 1.9 4.9 4.9"/>`,
+  pill:`<rect x="2.6" y="8.2" width="18.8" height="7.6" rx="3.8" transform="rotate(-38 12 12)"/><path d="M9.2 8.6l5.6 6.8"/>`,
+  shield:`<path d="M12 2.8l7.6 3v5.8c0 4.8-3.2 8.2-7.6 9.6-4.4-1.4-7.6-4.8-7.6-9.6V5.8z"/><path d="M8.6 12.2l2.4 2.4 4.6-4.8"/>`,
+  clock:`<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.4 2.2"/>`,
+  user:`<circle cx="12" cy="8.2" r="3.8"/><path d="M4.6 20.4c.8-4 3.8-6.4 7.4-6.4s6.6 2.4 7.4 6.4"/>`,
+  back:`<path d="M10 5l-7 7 7 7M3.4 12H21"/>`,
+  arrow:`<path d="M14 5l7 7-7 7M20.6 12H3"/>`,
+});
 let _icoN = 0;
 function ico(name, size=22, title=""){
   const g=IGLYPH[name]; if(!g) return ""; const [c1,c2]=ICOL[ICOLOR[name]||"slate"], id="ig"+(++_icoN);
@@ -711,7 +787,9 @@ function ico(name, size=22, title=""){
 /* icon for a section heading, from its words */
 function iconForTitle(t){
   const s=String(t).toLowerCase();
-  return /key performance|targets/.test(s)?"kpi" : /concurrence|emr vs ndr/.test(s)?"link" : /biometric|client follow|pbs|unique|stuck|captur/.test(s)?"pbs"
+  return /map|lga|distribution/.test(s)?"map" : /appointment|schedul|missed/.test(s)?"calendar" : /mmd|dsd|differentiated|regimen|dispens/.test(s)?"pill"
+   : /ahd|advanced|cd4|crag/.test(s)?"shield" : /sex and age|by age|age and sex|paediatric|adolescent|otz|population/.test(s)?"people"
+   : /week|weekly|progress/.test(s)?"clock" : /key performance|targets/.test(s)?"kpi" : /concurrence|emr vs ndr/.test(s)?"link" : /biometric|client follow|pbs|unique|stuck|captur/.test(s)?"pbs"
    : /viral|vl |suppression/.test(s)?"vl" : /pmtct|mothers|infant|facility and community/.test(s)?"pmtct" : /tb|tx_tb|tb_prev/.test(s)?"tb"
    : /treatment|tx_curr|continuity|iit|on art/.test(s)?"art" : /test|hts|yield|modality|diagnos/.test(s)?"hts" : /trend|by month|current on/.test(s)?"trends"
    : /saturation|naomi|estimate/.test(s)?"naomi" : /ipi/.test(s)?"ipi" : /source|rule|indicators, rates|how the figures/.test(s)?"methods"
@@ -818,9 +896,9 @@ function monthlyPick(id, opts, f=F, grain="month", nWeeks=26){
     lab=m=>monthLab(m).replace(" 20"," ’"); }
   const val = m => { const x=g.get(m)||{}; return o.den ? div(x[o.num]||0, x[o.den]) : (x[o.num]||0); };
   const vals = ms.map(val), fmt = o.den ? (x=>pct(x,o.d??1)) : n, mx = Math.max(...vals.map(x=>x||0), o.den?0.0001:1);
-  const W=wk?Math.max(640,ms.length*34):640,H=200,pb=30,pt=22,bw=(W-20)/Math.max(ms.length,1);
+  const W=wk?Math.max(640,ms.length*40):Math.max(640,ms.length*58),H=200,pb=30,pt=22,bw=(W-20)/Math.max(ms.length,1);
   return `<div class="dimbar"><span class="seg">${opts.map(x=>`<button data-msel="${id}:${x.k}" aria-pressed="${x.k===k}">${esc(x.l)}</button>`).join("")}</span>${wk?`<span class="drillnote">Weeks Monday–Sunday, last ${ms.length} to the linelist date</span>`:""}</div>
-   <div class="tw"><svg class="mchart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(o.l)} by month">
+   <div class="hscroll"><svg class="mchart" viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%;max-height:none" role="img" aria-label="${esc(o.l)} by month">
    <line x1="10" x2="${W-10}" y1="${H-pb}" y2="${H-pb}" stroke="var(--rule)"/>
    ${ms.map((m,i)=>{const v=vals[i]||0, h=(H-pb-pt)*v/mx, x=10+i*bw+bw*.22, w=bw*.56, inQ=sel.has(m);
      return `<g data-tip="${wk?"Week of "+fmtDate(m):monthLab(m)}: ${fmt(vals[i])} ${esc(o.l)}${inQ?" · in selected period":""}"><rect x="${x}" y="${H-pb-h}" width="${w}" height="${h}" rx="2" fill="${inQ?"var(--s1)":"var(--bar-none)"}"/>
@@ -895,7 +973,7 @@ function groupBars(cats, series, {fmt=n, H=200, lines=[], sep=false}={}){
   const ry=r=>band-8-(band-24)*(r/rmx);                                    // inside the rate band
   return `<div class="legend">${series.map(s=>`<span><span class="sw" style="background:${s.c}"></span>${esc(s.l)}</span>`).join("")}
     ${lines.map(l=>`<span><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="${l.c}"/></svg>${esc(l.l)}</span>`).join("")}${sep?`<span class="drillnote">each bar colour has its own scale</span>`:""}</div>
-   <div class="tw"><svg viewBox="0 0 ${W} ${HH}" width="100%" role="img">
+   <div class="hscroll"><svg viewBox="0 0 ${W} ${HH}" width="${W}" style="min-width:100%" role="img">
    <line x1="8" x2="${W-8}" y1="${HH-pb}" y2="${HH-pb}" stroke="var(--rule)"/>
    ${cats.map((c,i)=>series.map((s,j)=>{ const v=s.v[i]||0, m=sep?Math.max(1,...s.v.map(x=>x||0)):mx, h=(HH-pb-top)*v/m, x=bx(i,j)-bw/2;
        return `<g data-tip="${esc(c)} · ${esc(s.l)}: ${fmt(v)}"><rect x="${x+gap/2}" y="${HH-pb-h}" width="${bw-gap}" height="${h}" rx="2" fill="${s.c}"/>
@@ -1227,7 +1305,7 @@ function artPage(){
    ${kpi(n(v.wf_new),"TX_NEW (EMR)",`${llQ()} to ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
    ${kpi(n(v.ndr_wf_iit),"IIT",`${D.meta.fiscal_year} from 1 Oct · NDR TX_CURR`)}${kpi(pct(iitNDR(v),2),"IIT rate","IIT ÷ (TX_CURR at end of Q4 + TX_NEW)")}
    ${kpi(n(v.ndr_wf_rtt),"Returned to treatment",`NDR, ${D.meta.fiscal_year} to date`)}${kpi(pct(sat),"Saturation (Naomi)","ref. 90.25%",rateStatus(sat,.9025))}${kpi(pct(div(v.mmd3,v.tx_curr_emr)),"On 3+ month refills")}</div>
-   <div class="grid g2"><section class="c3d">${secH(`Continuity of treatment — EMR, ${llQ()}`,`Previous TX_CURR = active last quarter (ART status previous quarter) with a valid print or under 15; flows from the linelist as of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
+   <div class="grid g2"><section class="c3d">${secH(`Continuity of treatment — ${NDRT()?"NDR line list":"EMR"}, ${llQ()}`,`Previous TX_CURR = active last quarter (ART status previous quarter) with a valid print or under 15; flows from the linelist as of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
      ${waterfallFrom(stepsEMR(v), `IIT rate ${pct(iitEMR(v),2)} = IIT ÷ (previous TX_CURR + TX_NEW).${demog?" The starting TX_CURR has no sex/age in previous_quarter_status, so with a sex/age filter the gap shows in gain/loss.":" Gain/loss holds clients in previous_quarter_status who are no longer in the linelist."}`)}</section>
    <section class="c3d">${secH(`Continuity of treatment — NDR TX_CURR, ${D.meta.fiscal_year} to date`,"From 1 October: TX_CURR at the end of Q4 (NDR TX_CURR rule) to NDR TX_CURR now")}
      ${dOf(P.end)<FYS?`<div class="empty">No data for ${esc(P.label)}: the NDR waterfall starts on 1 October ${esc(D.meta.fiscal_year)}.</div>`:MEAS.includes("ndr_wf_prev")?waterfallFrom(stepsNDR(v), `IIT rate ${pct(iitNDR(v),2)} = IIT ÷ (TX_CURR at end of Q4 + TX_NEW). Both TX_CURR bars use the NDR TX_CURR rule (valid unique print or under 15); TX_NEW, transfers and deaths from NDR line-list dates since 1 October. Print status is as of the NDR file.`):`<div class="empty">Needs the NDR line list with active and inactive clients.</div>`}</section></div>
@@ -1724,10 +1802,10 @@ function lineChart(series, {fmt=n, yMin=null, yMax=null, label=""}={}){
   const pts = series.flatMap(s=>s.pts); if(!pts.length) return `<div class="empty">No data yet.</div>`;
   const ds = [...new Set(pts.map(p=>p.d))].sort(), t0=dOf(ds[0]).getTime(), t1=Math.max(dOf(ds.at(-1)).getTime(), t0+DAY);
   const vs = pts.map(p=>p.v).filter(v=>v!=null), lo = yMin ?? Math.min(...vs)*.97, hi = yMax ?? Math.max(...vs)*1.02;
-  const W=640,H=250,pl=58,pr=14,pt=16,pb=34, x=d=>pl+(W-pl-pr)*(dOf(d).getTime()-t0)/(t1-t0), y=v=>pt+(H-pt-pb)*(1-(v-lo)/((hi-lo)||1));
+  const nMon=new Set(ds.map(d=>d.slice(0,7))).size, W=Math.max(640,nMon*95),H=250,pl=58,pr=14,pt=16,pb=34, x=d=>pl+(W-pl-pr)*(dOf(d).getTime()-t0)/(t1-t0), y=v=>pt+(H-pt-pb)*(1-(v-lo)/((hi-lo)||1));
   const ticks=[0,.25,.5,.75,1].map(k=>lo+(hi-lo)*k), months=[...new Set(ds.map(d=>d.slice(0,7)))];
-  const step=Math.ceil(months.length/8);
-  return `<div class="tw"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(label)}">
+  const step=Math.ceil(months.length/Math.max(8,Math.floor(W/95)));
+  return `<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="${esc(label)}">
    ${ticks.map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--rule)" stroke-dasharray="2 3"/><text x="${pl-6}" y="${y(t)+4}" text-anchor="end" font-size="11">${fmt(t)}</text>`).join("")}
    ${months.filter((_,i)=>i%step===0).map(m=>`<text x="${x(m+"-01")}" y="${H-pb+18}" text-anchor="middle" font-size="11">${monthLab(m)}</text>`).join("")}
    ${series.map(s=>{const p=s.pts.filter(q=>q.v!=null).sort((a,b)=>a.d<b.d?-1:1); if(!p.length) return "";
@@ -1781,7 +1859,126 @@ function icard(i){
    <div class="iv"><span class="big num">${r.value==null?"—":fmtInd(i.code,r)}</span><small>${sub}</small></div>
    ${meter(i,r)}
    <div class="crow">${chip(r.status, r.value==null?"Needs data":i.neutral?"Monitored":r.note?"Not due":null)}</div>
-   ${states||`<div class="states"></div>`}<div class="src">Source: ${esc(i.source)}</div></article>`;
+   ${states||`<div class="states"></div>`}<div class="src">Source: ${esc(srcOf(i))}</div>
+   <a class="vdet" href="#ipi/${i.code}">View details ${ico("arrow",16)}</a></article>`;
+}
+/* ---------- after each render: searchable dropdowns, month scrollers opened at the latest month ---------- */
+function afterRender(){
+  enhanceSelects(document);
+  document.querySelectorAll(".hscroll").forEach(el=>{
+    el.scrollLeft = el.scrollWidth;
+    if(el.scrollWidth > el.clientWidth+4 && !(el.previousElementSibling||{}).classList?.contains("hsnote"))
+      el.insertAdjacentHTML("beforebegin", `<p class="hsnote">◀ Scroll or swipe left for earlier months</p>`);
+  });
+}
+/* any dropdown with 6 or more choices gets a search box (type to filter, arrows + Enter to pick) */
+function enhanceSelects(root){
+  root.querySelectorAll("select").forEach(sel=>{
+    if(sel.dataset.ss || sel.options.length < 6) return;
+    sel.dataset.ss = "1";
+    const w=document.createElement("span"); w.className="ssel";
+    const b=document.createElement("button"); b.type="button"; b.className="ssel-btn"; b.setAttribute("aria-haspopup","listbox");
+    b.innerHTML=`<span>${esc(sel.options[sel.selectedIndex]?.text||"")}</span>`;
+    sel.parentNode.insertBefore(w, sel); w.append(b, sel); sel.hidden=true;
+    b.addEventListener("click", e=>{ e.preventDefault(); e.stopPropagation(); SSOPEN&&SSOPEN._btn===b ? closeSsel() : openSsel(sel,b); });
+  });
+}
+let SSOPEN = null;
+function closeSsel(){ if(SSOPEN){ SSOPEN.remove(); SSOPEN=null; } }
+function openSsel(sel, b){
+  closeSsel();
+  const pop=document.createElement("div"); pop.className="ssel-pop"; pop._btn=b;
+  pop.innerHTML=`<input type="search" placeholder="Type to search…" aria-label="Search the list" autocomplete="off"><div class="ssel-list" role="listbox"></div>`;
+  const inp=pop.querySelector("input"), list=pop.querySelector(".ssel-list");
+  const opts=[...sel.options].map((o,i)=>({i,t:o.text}));
+  let act=Math.max(0,sel.selectedIndex), shown=opts;
+  const hl=(t,q)=>{ if(!q) return esc(t); const k=t.toLowerCase().indexOf(q); return k<0?esc(t):esc(t.slice(0,k))+"<mark>"+esc(t.slice(k,k+q.length))+"</mark>"+esc(t.slice(k+q.length)); };
+  const draw=()=>{ const q=inp.value.trim().toLowerCase(); shown=opts.filter(o=>!q||o.t.toLowerCase().includes(q)); act=Math.min(act,Math.max(0,shown.length-1));
+    list.innerHTML = shown.length ? shown.map((o,k)=>`<div role="option" data-k="${k}" aria-selected="${o.i===sel.selectedIndex}"${k===act?' class="on"':""}>${hl(o.t,q)}</div>`).join("")
+      : `<p class="ssel-none">No match for “${esc(inp.value)}”</p>`;
+    list.querySelector(".on")?.scrollIntoView({block:"nearest"}); };
+  const pick=k=>{ const o=shown[k]; if(!o) return; closeSsel(); if(sel.selectedIndex!==o.i){ sel.selectedIndex=o.i; sel.dispatchEvent(new Event("change",{bubbles:true})); } };
+  inp.addEventListener("input",()=>{ act=0; draw(); });
+  inp.addEventListener("keydown",e=>{ if(e.key==="ArrowDown"){act=Math.min(act+1,shown.length-1);draw();e.preventDefault();}
+    else if(e.key==="ArrowUp"){act=Math.max(act-1,0);draw();e.preventDefault();} else if(e.key==="Enter"){pick(act);e.preventDefault();} else if(e.key==="Escape"){closeSsel();b.focus();} });
+  list.addEventListener("click",e=>{ const d=e.target.closest("[data-k]"); if(d) pick(+d.dataset.k); });
+  document.body.append(pop); SSOPEN=pop;
+  const r=b.getBoundingClientRect(), w=Math.min(Math.max(r.width,260),innerWidth-16);
+  pop.style.width=w+"px"; pop.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+"px";
+  if(innerHeight-r.bottom<300 && r.top>innerHeight-r.bottom) pop.style.bottom=(innerHeight-r.top+4)+"px"; else pop.style.top=(r.bottom+4)+"px";
+  draw(); if(matchMedia("(hover:hover)").matches) inp.focus();
+}
+document.addEventListener("pointerdown", e=>{ if(SSOPEN && !e.target.closest(".ssel-pop") && !e.target.closest(".ssel-btn")) closeSsel(); });
+addEventListener("resize", ()=>{ if(SSOPEN && !SSOPEN.contains(document.activeElement)) closeSsel(); });
+
+/* ---------- IPI detail: what it is made of, how it is computed, weekly progress against the target ---------- */
+const MLAB = {pmtct_art:"Pregnant women living with HIV on ART (PMTCT_ART)", pmtct_stat_pos:"Pregnant women positive at ANC (PMTCT_STAT_POS)",
+  tx_new_q:"Newly initiated on ART (TX_NEW, unique)", hts_tst_pos:"Newly diagnosed HIV positive (HTS_TST_POS)", hts_tst:"Tested for HIV (HTS_TST)",
+  hts_tst_neg:"Tested HIV negative", vl_suppressed:"Virally suppressed, VL < 1,000 (TX_PVLS N)", vl_result:"With a VL result in the last 12 months (TX_PVLS D)",
+  tx_curr_emr:"Current on treatment, unique (TX_CURR)", tx_curr:"Current on treatment (TX_CURR)", joint_ssv:"Joint supportive supervision visits",
+  prep_new:"Newly enrolled on PrEP (PrEP_NEW)", plhiv_diagnosed:"PLHIV who know their status", plhiv_est:"PLHIV estimate (Naomi)",
+  pmtct_eid_pos:"Infants diagnosed HIV positive (EID)", dqa_sites:"Sites with a DQA", sites_total:"Sites supported", vl_eligible:"Eligible for VL (TX_PVLS E)"};
+const mlab = m => MLAB[m] || m.toUpperCase();
+// treatment numbers follow reporting.treatment_source: the NDR line list, or the CDR (central repository) line list
+const NDRT = () => D.meta.treatment_source==="ndr";
+const srcOf = i => NDRT() ? String(i.source||"").replace(/Central repository(?: \(linelist\))?/g, "NDR line list") : i.source;
+/* evaluate with the period cut at another end date (weekly progress) */
+function atEnd(end, fn){
+  const keep=[P,WIN,STOCK,SNL,SNN,SKIPM];
+  try { P={...P, end}; WIN=null; WIN=windowSet(); return fn(); }
+  finally { [P,WIN,STOCK,SNL,SNN,SKIPM]=keep; }
+}
+function weeklyProgress(code){
+  const i=REG[code], last=new Date(Math.min(dOf(P.end), dOf(D.meta.as_of))), ends=[];
+  for(let d=new Date(dOf(P.start)); d<=last; d.setDate(d.getDate()+1)) if(d.getDay()===0) ends.push(iso(d));
+  if(!ends.length || ends.at(-1)!==iso(last)) ends.push(iso(last));
+  const span=(dOf(P.end)-dOf(P.start))/DAY+1, full=evaluate(code, agg());
+  const T = i.kind==="rate" ? trendAgg() : null;
+  return ends.map(e=>{
+    let r = atEnd(e, ()=>evaluate(code, agg()));
+    if(r.value==null && T && T[i.num] && T[i.den]){                       // stock rates: the weekly snapshots
+      const nu=T[i.num].get(e), de=T[i.den].get(e); if(nu!=null && de) r={...r, value:nu/de};
+    }
+    const frac=((dOf(e)-dOf(P.start))/DAY+1)/span;
+    const target = i.kind==="rate" ? full.target : full.target!=null && i.flow!=="snapshot" ? full.target*frac : full.target;
+    return {d:e, value:r.value, target, status: i.kind==="rate" ? rateStatus(r.value, target) : r.value!=null&&target ? scoreStatus(r.value/target, i) : "none"};
+  });
+}
+function ipiDetail(code){
+  const i=REG[code], v=agg(), r=evaluate(code,v), rate=i.kind==="rate", fmt=x=>rate?pct(x,1):n(x);
+  const st=STATES.filter(s=>!F.state||s===F.state), per=st.map(s=>({s, v:agg({...F,state:s})}));
+  const comps=[[i.num,rate?"Numerator":"Count"], ...(i.den?[[i.den,"Denominator"]]:[])];
+  const how = rate ? `${esc(mlab(i.num))} <b>÷</b> ${esc(mlab(i.den))}` : i.flow==="snapshot" ? `${esc(mlab(i.num))}, as at the end of the period` : `${esc(mlab(i.num))}, added up over the period`;
+  const tgtRule = rate ? "Met when the rate reaches the target; within 5 points is amber."
+    : i.flow==="snapshot" ? "Compared with the full fiscal-year target." : "Compared with the period target, paced to the data date (75% of the expected value or more is green, 50–74% amber).";
+  const wk=weeklyProgress(code), tg=wk.map(w=>w.target).filter(x=>x!=null);
+  const chart = lineChart([{l:i.name+(rate?"":" (cumulative)"),c:"var(--s1)",pts:wk.map(w=>({d:w.d,v:w.value}))},
+     ...(tg.length?[{l:rate?"Target":"Target, paced",c:"var(--gold)",dash:true,pts:wk.map(w=>({d:w.d,v:w.target}))}]:[])],
+     {fmt:x=>rate?pct(x,0):n(x), yMin:rate?0:0, yMax:rate?Math.max(1,...wk.map(w=>w.value||0),...tg):null, label:i.name+" weekly progress"});
+  const methods = comps.filter(([m])=>ME.catalog[m]).map(([m,role])=>`<details class="terms"><summary>${ico("methods",18)} ${role}: the ${(ME.catalog[m]||[]).length} DHIS2 data elements behind ${esc(mlab(m))}</summary>
+     ${termTable(m, `${role}: ${mlab(m)}`, v, termValues())}</details>`).join("");
+  return `<a class="back" href="#ipi">${ico("back",16)} Back to IPI cards</a>
+   ${context()}
+   <section class="c3d"><div class="dhead">${ico(PILLAR_ICON[i.pillar]||"ipi",34)}<div><span class="tag ${i.group==="IPI"?"ipi":""}">${esc(i.group)}</span> <span class="tag">${esc(i.pillar)}</span>
+     <h2>${esc(i.name)}</h2></div></div>
+     <p>${esc(i.measures)}</p>
+     <div class="kpis">${kpi(r.value==null?"—":fmt(r.value), i.name, r.target!=null?`target ${rate?pct(r.target,0):n(r.target)}`:(r.note||"no target"), r.status)}
+       ${comps.map(([m,role])=>kpi(n(v[m]), role, mlab(m))).join("")}</div>
+     ${meter(i,r)}</section>
+   <section class="c3d">${secH("How it is calculated", "Source: "+esc(srcOf(i)))}
+     <div class="formula">${esc(i.name)} = ${how}</div><p class="drillnote">${tgtRule}</p>
+     <div class="tw"><table><thead><tr><th>Part</th><th>Indicator</th><th class="n">${esc(F.state||SPEED)}</th>${st.length>1?st.map(s=>`<th class="n">${esc(s)}</th>`).join(""):""}</tr></thead><tbody>
+     ${comps.map(([m,role])=>`<tr><td>${role}</td><td style="white-space:normal">${esc(mlab(m))} <code>${esc(m)}</code></td><td class="n">${n(v[m])}</td>${st.length>1?per.map(p=>`<td class="n">${n(p.v[m])}</td>`).join(""):""}</tr>`).join("")}
+     <tr class="total"><td>Result</td><td>${esc(i.name)}</td><td class="n">${r.value==null?"—":fmt(r.value)}${dot(r.status)}</td>${st.length>1?per.map(p=>{const x=evaluate(code,p.v,{...F,state:p.s}); return `<td class="n">${x.value==null?"—":fmt(x.value)}${dot(x.status)}</td>`;}).join(""):""}</tr>
+     <tr><td>Target</td><td></td><td class="n">${r.target!=null?(rate?pct(r.target,0):n(r.target)):"—"}</td>${st.length>1?per.map(p=>{const x=evaluate(code,p.v,{...F,state:p.s}); return `<td class="n">${x.target!=null?(rate?pct(x.target,0):n(x.target)):"—"}</td>`;}).join(""):""}</tr>
+     </tbody></table></div>${methods}</section>
+   <section class="c3d">${secH("Weekly progress against the target", `${esc(P.label)} · week ending Sunday${rate?"":" · cumulative from the start of the period"}`)}
+     ${chart}
+     <div class="tw" style="margin-top:10px"><table><thead><tr><th>Week ending</th><th class="n">${esc(i.name)}</th><th class="n">${rate?"Target":"Target, paced"}</th><th class="n">Status</th></tr></thead><tbody>
+     ${wk.slice().reverse().map(w=>`<tr><td>${fmtDate(w.d)}</td><td class="n">${w.value==null?"—":fmt(w.value)}</td><td class="n">${w.target==null?"—":fmt(w.target)}</td><td class="n">${w.value==null?"No data":chip(w.status)}</td></tr>`).join("")}
+     </tbody></table></div>
+     ${!rate?"":`<p class="drillnote">Rates built from stock figures (TX_CURR, viral load) only have values on the weeks a line-list snapshot was saved.</p>`}</section>
+   <a class="back" href="#ipi">${ico("back",16)} Back to IPI cards</a>`;
 }
 function ipiPage(){
   const order=["1st 95","2nd 95","3rd 95","PMTCT","Prevention","TB","Systems"], s=a=>a.sort((x,y)=>order.indexOf(x.pillar)-order.indexOf(y.pillar));
@@ -1791,8 +1988,8 @@ function ipiPage(){
 function flowPage(){
   const tr=D.trend.filter(t=>!F.state||t.state===F.state), months=[...new Set(D.dataflow.map(r=>r.month))];
   const by=months.map(m=>({m,mon:tr.filter(t=>t.month===m&&t.source==="monthly").reduce((a,t)=>a+t.hts_tst,0),wk:tr.filter(t=>t.month===m&&t.source==="weekly").reduce((a,t)=>a+t.hts_tst,0)}));
-  const mx=Math.max(...by.map(b=>b.mon+b.wk),1),W=640,H=250,pb=34,pt=24,bw=(W-20)/by.length,y=v=>(H-pb-pt)*v/mx;
-  const svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="HTS_TST by month and source"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--s2)"/><line x1="0" y1="0" x2="0" y2="6" stroke="var(--card)" stroke-width="2"/></pattern></defs>
+  const mx=Math.max(...by.map(b=>b.mon+b.wk),1),W=Math.max(640,by.length*64),H=250,pb=34,pt=24,bw=(W-20)/by.length,y=v=>(H-pb-pt)*v/mx;
+  const svg=`<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="HTS_TST by month and source"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--s2)"/><line x1="0" y1="0" x2="0" y2="6" stroke="var(--card)" stroke-width="2"/></pattern></defs>
    <line x1="10" x2="${W-10}" y1="${H-pb}" y2="${H-pb}" stroke="var(--rule)"/>${by.map((b,i)=>{const x=10+i*bw+bw*.22,w=bw*.56,hm=y(b.mon),hw=y(b.wk);
    return `<g data-tip="${monthLab(b.m)}: ${n(b.mon)} from monthly reports + ${n(b.wk)} from weekly reports">${b.mon?`<rect x="${x}" y="${H-pb-hm}" width="${w}" height="${hm}" fill="var(--s1)" rx="2"/>`:""}
    ${b.wk?`<rect x="${x}" y="${H-pb-hm-hw-(b.mon?2:0)}" width="${w}" height="${hw}" fill="url(#hatch)" rx="2"/>`:""}<text class="vlab" x="${x+w/2}" y="${H-pb-hm-hw-8}" text-anchor="middle">${n(b.mon+b.wk)}</text>
@@ -1838,13 +2035,18 @@ function render(){
   document.getElementById("sub").textContent=`${m.programme} · Delta, Ekiti, Osun · showing ${P.label} · current quarter ${m.quarter}`;
   document.getElementById("nav").innerHTML=PAGES.map(([k,l])=>`<a href="#${k}"${k===page?' aria-current="page"':""}>${l}</a>`).join("");
   document.getElementById("filters").innerHTML=filtersBar();
-  const fn={overview,hts:htsPage,art:artPage,vl:vlPage,pmtct:pmtctPage,tb:tbPage,ahd:ahdPage,pbs:pbsPage,trends:artPage,naomi:naomiPage,ipi:ipiPage,methods:methodsPage,flow:flowPage}[page]||overview;
-  document.getElementById("main").innerHTML=fn();
+  const fn={overview,hts:htsPage,art:artPage,vl:vlPage,pmtct:pmtctPage,tb:tbPage,ahd:ahdPage,pbs:pbsPage,trends:artPage,naomi:naomiPage,
+    ipi:()=>IPID?ipiDetail(IPID):ipiPage(),methods:methodsPage,flow:flowPage}[page]||overview;
+  document.getElementById("who").innerHTML = WHO ? `<span>${ico("user",20)} Hi, <b>${esc(WHO.name)}</b></span><a href="/logout" title="${esc(WHO.email)}">Sign out</a>` : "";
+  const hello = page==="overview" && WHO ? `<h2 class="hello">Hi, ${esc(WHO.name)} <small>here is where the programme stands for ${esc(P.label)}</small></h2>` : "";
+  document.getElementById("main").innerHTML=hello+fn();
+  afterRender();
   document.getElementById("foot").textContent=`Generated ${m.generated_at.replace("T"," ")} from DHIS2 (weekly + monthly, merged per facility), the central repository linelist, the PBS extract, FY27 targets and the Naomi PLHIV estimate. Counts are scored on pace (≥75% green, 50–74% amber, below 50% red); rates against the target itself (met = green, within ${Math.round((RAG.rate_warning_gap??.05)*100)} points = amber).`;
   try{localStorage.setItem("speed.filters",JSON.stringify(F));
       localStorage.setItem("speed.period",JSON.stringify({mode:P.mode,value:P.mode==="quarter"?P.label:P.mode==="month"?P.month:P.fy,start:P.start,end:P.end}));}catch(e){}
 }
-function route(){ const h=location.hash.slice(1); page=PAGES.some(p=>p[0]===h)?h:"overview"; render(); window.scrollTo({top:0}); }
+function route(){ const [h,sub]=location.hash.slice(1).split("/"); page=PAGES.some(p=>p[0]===h)?h:"overview";
+  IPID = page==="ipi" && sub && REG[sub] ? sub : null; render(); window.scrollTo({top:0}); }
 addEventListener("hashchange", route);
 document.addEventListener("change", e=>{
   const id=e.target.id;
@@ -1898,6 +2100,13 @@ document.addEventListener("click", e=>{
 const tip=document.getElementById("tip");
 document.addEventListener("mousemove", e=>{const el=e.target.closest("[data-tip]"); if(!el){tip.hidden=true;return;}
   tip.textContent=el.dataset.tip; tip.hidden=false; tip.style.left=Math.min(e.clientX+14,innerWidth-tip.offsetWidth-8)+"px"; tip.style.top=(e.clientY+16)+"px";});
+// signed-in visitor (served by serve_dashboard.py): "Hi, <first name>"
+if (location.protocol.startsWith("http"))
+  fetch("/whoami", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(w=>{ if(w&&w.name){ WHO=w; render(); } }).catch(()=>{});
+// phones have no hover: a tap shows the tooltip
+document.addEventListener("click", e=>{ if(matchMedia("(hover:hover)").matches) return; const el=e.target.closest("[data-tip]"); if(!el){tip.hidden=true;return;}
+  tip.textContent=el.dataset.tip; tip.hidden=false; const r=el.getBoundingClientRect();
+  tip.style.left=Math.max(8,Math.min(r.left,innerWidth-tip.offsetWidth-8))+"px"; tip.style.top=Math.min(r.bottom+8,innerHeight-tip.offsetHeight-8)+"px"; });
 route();
 
 /* Live mode: when the page is served over http (serve_dashboard.py), it checks

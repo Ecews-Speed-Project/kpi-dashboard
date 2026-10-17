@@ -8,6 +8,11 @@ states: [Delta, Ekiti, Osun]
 
 reporting:
   as_of: auto                 # "auto" = today, or a fixed date e.g. 2026-10-10
+  # Where treatment numbers come from (TX_CURR, TX_NEW, waterfall, VL, MMD, appointments):
+  #   ndr = the NDR PBS line list in the inbox (pbs_all*.xlsx); DSD, AHD, TB screening, OTZ and
+  #         regimen are joined from the CDR line list (the NDR file does not carry them)
+  #   emr = the CDR line list (linelist_flat) for everything
+  treatment_source: ndr
   # Which month a DHIS2 weekly period (ISO week, Mon–Sun) belongs to:
   #   thursday  = month containing the week's Thursday (ISO convention; default)
   #   week_end  = month containing the Sunday
@@ -261,3 +266,9 @@ columns:
     sex: sex
     age: currentage
     unique_flag: ndr_unique          # quarter files only: the NDR TX_CURR_Unique classification (q4_algo 1-4)
+
+# Dashboard sign-in (serve_dashboard.py): who may open the dashboard.
+access:
+  allowed_domains: [ecews.org]   # any address @ecews.org
+  allowed_emails: []             # extra individual addresses, e.g. [partner@cdc.gov]
+  session_days: 30               # stay signed in on that browser for this long
