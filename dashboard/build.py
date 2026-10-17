@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import gzip
 import json
 import os
 import shutil
@@ -60,6 +61,10 @@ def build(data: dict, out_dir: Path | None = None, archive_dir: Path | None = No
     path = out_dir / "index.html"
     tmp = out_dir / "index.html.tmp"
     tmp.write_text(html, encoding="utf-8")
+    # precompressed copy for the web server (about 7x smaller): serve_dashboard.py, nginx gzip_static, ...
+    gz, gz_tmp = out_dir / "index.html.gz", out_dir / "index.html.gz.tmp"
+    gz_tmp.write_bytes(gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0))
+    os.replace(gz_tmp, gz)
     os.replace(tmp, path)
     (out_dir / "version.json").write_text(json.dumps({"generated_at": data["meta"]["generated_at"],
                                                       "quarter": data["meta"]["quarter"],
