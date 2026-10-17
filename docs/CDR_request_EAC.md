@@ -28,4 +28,3 @@
 ## Notes from the dashboard side
 - The existing `public.eac_line_list` table has a different layout, and it is currently empty, so we're asking for a separate table with the script's own columns.
 - Once `public.eac_linelist` has rows, the next scheduled dashboard run picks it up automatically. Nothing else needs to change.
-- **Contact:** caleborjime@gmail.com

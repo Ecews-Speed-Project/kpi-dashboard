@@ -35,7 +35,7 @@ The Python environment lives in `%LOCALAPPDATA%\speed_kpi\.venv`, outside OneDri
 
 Outputs:
 - **`live\index.html`**: the dashboard (~18 MB). It **contains client identifiers** (ART and hospital numbers) in the biometrics, concurrence and appointment lists, so keep it within the programme team.
-- **`archive\`**: one copy per build, **without** client lists. The last build of each day is kept for 30 days, then the last of each month for 24 months.
+- **`archive\`**: one copy per build, **without** client lists, saved as a `.zip` (double-click it, then open the page inside). The last build of each day is kept for 30 days, then the last of each month for 24 months.
 - **`data\history\snapshots.csv`**: facility stock figures from every live run (one set per day). It feeds the exact trend lines.
 - **`data\history\sources\`**: dated copies of the linelist (`linelist_<date generated>`) and the NDR file (`ndr_<date in file name>`), only the columns the pipeline reads. **This is client-level data.** When you pick a past period, its TX_CURR, viral load and biometric figures come from the latest copy dated inside that period. With no copy, the page says "No data". After `source_keep_days` (120), only the last copy of each month is kept.
 - **`logs\`**: one log per run, kept for 90 days.
