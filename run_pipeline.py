@@ -291,6 +291,9 @@ def ndr_linelist(pbs: pd.DataFrame, cdr: pd.DataFrame, cfg: dict, file_date: dt.
     pc, lc = cfg["columns"]["pbs_all"], cfg["columns"]["linelist"]
     col = lambda k, default="": pbs[k] if k in pbs else pd.Series(default, index=pbs.index)
     def day(s):
+        """Excel day numbers, real dates or text dates (older NDR files store ART start as a date)."""
+        if pd.api.types.is_datetime64_any_dtype(s):
+            return pd.to_datetime(s, errors="coerce")
         s = pd.to_numeric(s, errors="coerce") if s.dtype != object else s
         d = pd.to_datetime(s, unit="D", origin="1899-12-30", errors="coerce") if pd.api.types.is_numeric_dtype(s) \
             else pd.to_datetime(s, errors="coerce", dayfirst=True)
