@@ -4,7 +4,8 @@ so it opens offline, can be emailed, or hosted on any web server.
 live/index.html is overwritten on every run, so the same file (or the same
 http://localhost address from serve_dashboard.py) always shows the latest
 build. live/version.json lets an open page notice a new build. Each build is
-also copied to archive/ with a timestamp (no client lists), thinned by thin_archive()."""
+also copied to archive/ with a timestamp (no client lists) as a .zip holding the .html (about 7x
+smaller; double-click the zip, then open the page inside), thinned by thin_archive()."""
 from __future__ import annotations
 
 import base64
@@ -13,6 +14,7 @@ import gzip
 import json
 import os
 import shutil
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -80,7 +82,10 @@ def build(data: dict, out_dir: Path | None = None, archive_dir: Path | None = No
         for k in ("pbs_clients", "conc_clients", "appt_clients", "vl_clients", "eac_clients"):     # client-level lists stay in live\ only
             if k in arch:
                 arch[k] = dict(arch[k], rows=[])
-        (archive_dir / f"SPEED_dashboard_{stamp}{tag}.html").write_text(_render(arch), encoding="utf-8")
-        for f in thin_archive(list(archive_dir.glob("SPEED_dashboard_*.html")), dt.date.today()):
+        name = f"SPEED_dashboard_{stamp}{tag}"
+        with zipfile.ZipFile(archive_dir / f"{name}.zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+            z.writestr(f"{name}.html", _render(arch))
+        olds = list(archive_dir.glob("SPEED_dashboard_*.zip")) + list(archive_dir.glob("SPEED_dashboard_*.html"))
+        for f in thin_archive(olds, dt.date.today()):
             f.unlink(missing_ok=True)
     return path
