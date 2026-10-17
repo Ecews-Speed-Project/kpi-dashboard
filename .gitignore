@@ -20,3 +20,7 @@ docs/PowerBI_measure_export.xlsx
 data/excel/
 data/manual/
 .claude/
+
+# sign-in signing key
+data/.dash_secret
+data/

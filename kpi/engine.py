@@ -473,7 +473,8 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
                                   pc, ll_asof, as_of, lo=min(ll_asof - dt.timedelta(days=120), p.fy_start),
                                   hi=(pd.Timestamp(as_of) + pd.offsets.MonthEnd(3)).date())
     if pbs_source == "ndr":
-        conc_rows, conc_cl = concurrence(linelist, cols["linelist"], pbs_src, pc)
+        cdr = manual.get("cdr_linelist")
+        conc_rows, conc_cl = concurrence(cdr if cdr is not None else linelist, cols["linelist"], pbs_src, pc)
         parts.append(attach_master(conc_rows, master, "concurrence", {}))
         from .measures import quarter_start
         parts.append(attach_master(ndr_waterfall(pbs_src, pc, p.fy_start, as_of),   # IIT is counted from 1 October
@@ -558,6 +559,7 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
                      elapsed_asof=p.elapsed(), generated_at=dt.datetime.now().isoformat(timespec="minutes"),
                      demo=demo, rag=settings["rag"], naomi_loaded=bool(len(nao)), age5=AGE5,
                      pbs_source=pbs_source, linelist_as_of=ll_asof.isoformat(), tx_curr_source=tx_curr_source,
+                     treatment_source=linelist.attrs.get("source", "emr"),
                      eac_as_of=_eac_date(manual.get("eac"), cols.get("eac", {})), eac_source=manual.get("eac_source", ""),
                      linelist_note=manual.get("linelist_note", "")),
         "cube": encode_cube(cube, master),

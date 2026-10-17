@@ -275,6 +275,74 @@ def quarter_linelist(cfg: dict) -> list:
     return done
 
 
+# CDR line-list columns the NDR file does not carry: joined onto the NDR clients
+EMR_ONLY = ["regimen_line", "regimen", "ahd_indication", "cd4_lfa", "cd4", "cd4_date", "lflam", "crag", "csf_crag",
+            "who_stage", "dsd_model", "dsd_type", "tb_status", "tb_status_date", "tb_cough", "tb_fever", "tb_weight",
+            "tb_sweats", "tb_gxp", "tb_gxp_result", "tb_afb", "tb_afb_result", "tb_cxr", "tb_cxr_result", "tb_culture",
+            "tb_culture_result", "tb_tx_start", "otz_enrolled", "otz_outcome", "otz_transitioned", "pbs", "recapture_flag", "pbs_date"]
+
+
+def ndr_linelist(pbs: pd.DataFrame, cdr: pd.DataFrame, cfg: dict, file_date: dt.date) -> pd.DataFrame:
+    """The NDR PBS line list in the CDR line-list layout, so every treatment measure reads the NDR:
+    status (Active / LTFU / Death / Transferred out), previous fiscal quarter's status, ART start,
+    pickup, refill, VL, transfer-in, age, sex, and the NDR unique rule (valid print not flagged
+    'Duplicate', or under 15). EMR-only fields (DSD, AHD, TB screening, OTZ, regimen) are joined
+    from the CDR line list by DATIM code + ART number."""
+    pc, lc = cfg["columns"]["pbs_all"], cfg["columns"]["linelist"]
+    col = lambda k, default="": pbs[k] if k in pbs else pd.Series(default, index=pbs.index)
+    def day(s):
+        s = pd.to_numeric(s, errors="coerce") if s.dtype != object else s
+        d = pd.to_datetime(s, unit="D", origin="1899-12-30", errors="coerce") if pd.api.types.is_numeric_dtype(s) \
+            else pd.to_datetime(s, errors="coerce", dayfirst=True)
+        return d
+    iso = lambda d: d.dt.strftime("%Y-%m-%d").fillna("")
+    flag = lambda k: pd.to_numeric(col(k, 0), errors="coerce").fillna(0).eq(1) | col(k).astype(str).str.upper().eq("YES")
+    fq = ((file_date.month - int(str(cfg["fy_start"])[5:7])) % 12) // 3 + 1          # fiscal quarter of the file
+    prev_col = f"currentstatus28q{fq - 1 if fq > 1 else 4}"
+
+    start, pick = day(col("artstartdate")), day(col("lastdrugpickupdate"))
+
+    def status(s):
+        """Inactive clients: transferred out only with a transfer dated on or after the last pickup (older or
+        undated flags belong to an earlier episode, so the client counts as IIT); dead when flagged, unless
+        the death is dated before the last pickup."""
+        out = pd.Series("LTFU", index=pbs.index)
+        out[flag("patienttransferredout") & (day(col("transferredoutdate")) >= pick)] = "Transferred out"
+        out[flag("patienthasdied") & ~(day(col("patientdeceaseddate")) < pick)] = "Death"
+        out[s.astype(str).str.strip().str.lower().eq("active")] = "Active"
+        return out
+
+    refill = pd.to_numeric(col("daysofarvrefill"), errors="coerce")
+    valid = col("fingerprint valid").astype(str).str.upper().eq("YES") & ~col("duplicate_type").astype(str).str.lower().eq("duplicate")
+    out = pd.DataFrame({
+        "unique_id": col("unique_id").astype(str), "period": file_date.isoformat(),
+        "state": col("statename"), "lga": col("lganame"), "facilityname": col("facilityname"),
+        "currentartstatus": status(col("currentstatus28")), "artstatus_previousquarter": status(col(prev_col)),
+        "lastdateofsamplecollection": iso(day(col("dateofcurrentsamplecollection"))),
+        "date_transfered_in": iso(day(col("transferredindate"))),
+        "estimatednextappointmentpharmacy": iso(pick + pd.to_timedelta(refill, unit="D")),
+        "artstartdate": iso(start), "pharmacy_lastpickupdate": iso(pick), "daysofarvrefill": refill,
+        "daysonart": (pd.Timestamp(file_date) - start).dt.days,
+        "dateofcurrentviralload": iso(day(col("currentvldate"))), "currentviralload": pd.to_numeric(col("currentvl"), errors="coerce"),
+        "ti": flag("patienttransferredin").map({True: "Yes", False: "No"}), "sex": col("sex"), "current_age": col("currentage"),
+        "outcomes_date": iso(pd.concat([day(col("transferredoutdate")), day(col("patientdeceaseddate"))], axis=1).max(axis=1)),
+        "datim_code": col("datimcode"), "pepid": col("patientartnumber"), "patienthospitalno": col("hospitalnumber"),
+        "validbiometric": valid.map({True: "Yes", False: "No"}),
+    })
+    # EMR-only fields from the CDR line list (DATIM + ART number, punctuation and leading zeros ignored)
+    emr_cols = [lc[k] for k in EMR_ONLY if lc.get(k) in cdr]
+    if len(cdr) and emr_cols:
+        def key(datim, art):
+            a = art.astype(str).str.upper().str.replace(r"[^A-Z0-9]", "", regex=True).str.replace(r"\d+", lambda m: str(int(m.group())), regex=True)
+            return datim.astype(str).str.strip().str.upper() + "|" + a
+        e = cdr[emr_cols].assign(_k=key(cdr[lc["datim"]], cdr[lc["art_no"]])).drop_duplicates("_k")
+        out = out.assign(_k=key(out["datim_code"], out["pepid"])).merge(e, on="_k", how="left").drop(columns="_k")
+        hit = out[emr_cols[0]].notna().mean() if emr_cols else 0
+        print(f"  treatment from the NDR file ({len(out):,} clients); EMR fields joined for {hit:.0%}")
+    out.attrs["source"] = "ndr"
+    return out
+
+
 def read_flat(eng, pg: dict, lc: dict) -> pd.DataFrame:
     """Read linelist_flat: the latest period, plus any earlier period not yet saved as a dated copy
     (each week is read once, then kept in data/history/sources)."""
@@ -647,6 +715,12 @@ def cmd_run():
     pbs = cached_table(pbs_path, table)
     # dated copies of today's sources, then the saved ones for past periods
     archive_sources(cfg, linelist, pbs, pbs_path, as_of)
+    cdr_linelist = None
+    if cfg["reporting"].get("treatment_source", "emr") == "ndr" and len(pbs):
+        import re
+        m_ = re.search(r"(\d{4}-\d{2}-\d{2})", Path(pbs_path).name)
+        fdate = dt.date.fromisoformat(m_.group(1)) if m_ else dt.date.fromtimestamp(Path(pbs_path).stat().st_mtime)
+        cdr_linelist, linelist = linelist, ndr_linelist(pbs, linelist, cfg, fdate)
     hist_start = (pd.Timestamp(str(cfg["fy_start"])) - pd.DateOffset(months=cfg["reporting"].get("history_months", 12))).date()
     quarter_linelist(cfg)                       # quarter-end line lists in the inbox -> dated copies
     past = load_sources(hist_start)
@@ -654,7 +728,7 @@ def cmd_run():
     eac, eac_src = read_eac(cfg, eng, table)
     wk_geo, _ = clients(cfg)
     geo = lga_geometry(cfg, wk_geo, refresh="--full" in sys.argv)
-    manual = {"eac": eac, "eac_source": eac_src, "geo": geo, "linelist_note": ll_note,
+    manual = {"eac": eac, "eac_source": eac_src, "geo": geo, "linelist_note": ll_note, "cdr_linelist": cdr_linelist,
               "joint_ssv": read_manual(source(cfg, "joint_ssv", m["joint_ssv"])),
               "dqa": read_manual(source(cfg, "dqa", m["dqa"])),
               "ccmp": table(source(cfg, "ccmp", cfg["excel"]["ccmp"]))}
