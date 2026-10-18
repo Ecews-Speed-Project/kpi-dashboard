@@ -1217,6 +1217,11 @@ function stepsNDR(v){
     ["Transfer out",-gv(v,"ndr_wf_to")],["IIT",-gv(v,"ndr_wf_iit")],["Dead",-gv(v,"ndr_wf_dead")],["Gain/loss",gv(v,"ndr_wf_curr")-(pot-loss)],["TX_CURR (NDR)",gv(v,"ndr_wf_curr"),"total"]];
 }
 const iitEMR = v => div(gv(v,"wf_iit"), gv(v,"wf_prev")+gv(v,"wf_new"));
+// continuity measures: the quarter waterfall when treatment comes from the NDR line list (one source for every
+// IIT number), otherwise the NDR fiscal-year waterfall
+const WF = () => NDRT() ? {prev:"wf_prev",new:"wf_new",iit:"wf_iit",rtt:"wf_rtt",dead:"wf_dead",to:"wf_to",curr:"tx_curr",rate:iitEMR,
+    label:`${llQ()} · NDR line list`} : {prev:"ndr_wf_prev",new:"ndr_wf_new",iit:"ndr_wf_iit",rtt:"ndr_wf_rtt",dead:"ndr_wf_dead",to:"ndr_wf_to",curr:"ndr_wf_curr",rate:iitNDR,
+    label:`NDR TX_CURR, ${D.meta.fiscal_year} from 1 October`};
 const iitNDR = v => div(gv(v,"ndr_wf_iit"), gv(v,"ndr_wf_prev")+gv(v,"ndr_wf_new"));
 const llQ = () => (qOf(dOf(D.meta.linelist_as_of||D.meta.as_of))||{}).label || "";
 
@@ -1225,18 +1230,25 @@ const AC = D.appt_clients || {cols:[], rows:[], dict:{}};
 const ACOL = c => AC.cols.indexOf(c)+4, acv = (r,c) => { const x=r[ACOL(c)]; return (AC.dict||{})[c] ? AC.dict[c][x] : x; };
 const AMIN = AC.rows.reduce((m,r)=>r[ACOL("appt")]<m?r[ACOL("appt")]:m, "9999-12-31"), AMAX = AC.rows.reduce((m,r)=>r[ACOL("appt")]>m?r[ACOL("appt")]:m, "0000-01-01");
 let ACAT = 0, AFLAG = "", AQ = "", ARNG = null, ADIM = "state";
-const ACL = {datim:"DATIM",art_no:"ART no.",hosp_no:"Hospital no.",status:"EMR status",appt:"Appointment",last_pickup:"Last pickup",
+const ACL = {uniq:"In TX_CURR_Unique",datim:"DATIM",art_no:"ART no.",hosp_no:"Hospital no.",status:"EMR status",appt:"Appointment",last_pickup:"Last pickup",
   refill_days:"Refill days",regimen_line:"Regimen line",vl_value:"Last VL",vl_date:"VL date",flags:"Follow-up flags"};
 function apptPreset(k){ const t=dOf(D.meta.as_of), me=iso(new Date(t.getFullYear(), t.getMonth()+1, 0));
   if(k==="rest") return {s:D.meta.as_of, e:me};
   if(k==="next"){ return {s:iso(new Date(t.getFullYear(), t.getMonth()+1, 1)), e:iso(new Date(t.getFullYear(), t.getMonth()+2, 0))}; }
-  return {s:D.meta.fy_start, e:me}; }                                   // default: 1 October to the end of this month
+  // default: the current quarter's IIT window - appointments from 28 days before the quarter start (a client 28 days
+  // late in the quarter missed an appointment then) to the end of this month
+  const q=qOf(dOf(LLD()))||qOf(t), qs=dOf(q?q.start:D.meta.fy_start); qs.setDate(qs.getDate()-28);
+  return {s:iso(qs), e:me}; }
 const apptRng = () => ARNG || (ARNG = apptPreset("fy"));
 const LLD = () => D.meta.linelist_as_of||D.meta.as_of;
 // as of the linelist date, no pickup since the appointment: under 28 days late = missed appointment, 28+ days = IIT
 const LATE = () => { const x=dOf(LLD()); x.setDate(x.getDate()-28); return iso(x); };
-const aMissed = r => r[3]===1 && acv(r,"appt") > LATE() && acv(r,"appt") < LLD();
-const aIIT = r => r[3]===1 && acv(r,"appt") <= LATE();
+// NDR line list: IIT is the NDR's own status (inactive, not transferred or dead), the same rule as the waterfall;
+// missed = still active but the appointment has passed with no pickup. CDR line list: by days late.
+const aStat = r => String(acv(r,"status")||"").toLowerCase();
+const aMissed = r => NDRT() ? (aStat(r)==="active" && acv(r,"appt") < LLD()) : (r[3]===1 && acv(r,"appt") > LATE() && acv(r,"appt") < LLD());
+const aIIT = r => NDRT() ? ["ltfu","lost to followup","lost to follow up"].includes(aStat(r)) : (r[3]===1 && acv(r,"appt") <= LATE());
+const aUniq = r => acv(r,"uniq")==="Yes";
 const ACATS = [["Scheduled",()=>true],["Missed (under 28 days)",aMissed],["IIT (28+ days)",aIIT]];
 const aFlag = (r,k) => !k || (k==="any" ? !!acv(r,"flags") : String(acv(r,"flags")).includes(k));
 function apptList(f=F){ const sexI=f.sex?DM.sex.indexOf(f.sex):-1, {s:a,e:b}=apptRng();
@@ -1276,12 +1288,12 @@ function appointmentsSection(v){
     ${show.length?"":`<tr><td colspan="${cols.length+3}" class="empty">No clients for this selection.</td></tr>`}</tbody></table></div>`;
   return `<section class="c3d">${secH("Appointments and service-delivery gaps",`Next pharmacy appointment from the EMR linelist (as of ${fmtDate(LLD())}); biometric status from the NDR line list`)}
    <div class="dimbar"><span class="eyebrow">Appointment dates</span><label>From <input type="date" id="appt-from" value="${a}" min="${AMIN}" max="${AMAX}"></label><label>To <input type="date" id="appt-to" value="${b}" min="${AMIN}" max="${AMAX}"></label>
-    <span class="seg"><button data-arng="fy" aria-pressed="${a===D.meta.fy_start}">From 1 October</button><button data-arng="rest">Rest of this month</button><button data-arng="next">Next month</button></span>
+    <span class="seg"><button data-arng="fy" aria-pressed="${a===apptPreset("fy").s}">This quarter (from 28 days before it starts)</button><button data-arng="rest">Rest of this month</button><button data-arng="next">Next month</button></span>
     <span class="drillnote">Appointments available ${fmtDate(AMIN)} – ${fmtDate(AMAX)}</span></div>
    <div class="kpis" style="margin-top:12px">${kpi(n(all.length),"Scheduled",`${fmtDate(a)} – ${fmtDate(b)}`)}${kpi(n(c(all,"Biometrics")),"Scheduled with a biometric issue","flag for capture / follow-up at the visit")}
     ${kpi(n(c(all,"VL")),"Scheduled with a VL gap","VL due, unsuppressed or awaiting result")}
-    ${kpi(noPast?"—":n(mis.length),"Missed appointment",noPast?`appointments after the linelist date (${fmtDate(LLD())}) cannot be judged yet`:`no pickup yet, under 28 days late`)}
-    ${kpi(noPast?"—":n(iit.length),"IIT",noPast?"28+ days late":`no pickup 28+ days after the appointment`)}${kpi(noPast?"—":n(c([...mis,...iit],"Biometrics")),"Missed or IIT with a biometric issue")}</div>
+    ${kpi(noPast?"—":n(mis.length),"Missed appointment",noPast?`appointments after the linelist date (${fmtDate(LLD())}) cannot be judged yet`:NDRT()?"appointment passed, no pickup yet, still active in the NDR":`no pickup yet, under 28 days late`)}
+    ${kpi(noPast?"—":n(iit.length),"IIT",noPast?"28+ days late":NDRT()?`inactive in the NDR · ${n(iit.filter(aUniq).length)} in TX_CURR_Unique (the waterfall counts these)`:`no pickup 28+ days after the appointment`)}${kpi(noPast?"—":n(c([...mis,...iit],"Biometrics")),"Missed or IIT with a biometric issue")}</div>
    <p class="drillnote">As of the linelist date (${fmtDate(LLD())}), a client with no pickup since the appointment is a <b>missed appointment</b> while under 28 days late (appointment after ${fmtDate(LATE())}) and <b>IIT</b> once 28 days or more have passed. Appointments after the linelist date show once a newer linelist arrives.${a<LLD()?` The linelist holds each client's <b>next</b> appointment, so for past dates only clients who have not come back are left; clients who came on time already show their following appointment.`:""}</p>
    ${table}${list}</section>`;
 }
@@ -1315,11 +1327,11 @@ function artPage(){
    <section class="c3d">${secH(`Continuity of treatment — NDR TX_CURR, ${D.meta.fiscal_year} to date`,"From 1 October: TX_CURR at the end of Q4 (NDR TX_CURR rule) to NDR TX_CURR now")}
      ${dOf(P.end)<FYS?`<div class="empty">No data for ${esc(P.label)}: the NDR waterfall starts on 1 October ${esc(D.meta.fiscal_year)}.</div>`:MEAS.includes("ndr_wf_prev")?waterfallFrom(stepsNDR(v), `IIT rate ${pct(iitNDR(v),2)} = IIT ÷ (TX_CURR at end of Q4 + TX_NEW). Both TX_CURR bars use the NDR TX_CURR rule (valid unique print or under 15); TX_NEW, transfers and deaths from NDR line-list dates since 1 October. Print status is as of the NDR file.`):`<div class="empty">Needs the NDR line list with active and inactive clients.</div>`}</section></div>
 `}
-   <section class="c3d">${secH("IIT and IIT rate by facility",`NDR TX_CURR, ${D.meta.fiscal_year} from 1 October · click to drill · rows by paediatric (<20) / adult`)}${pivot("iit",[C("TX_CURR end Q4",V("ndr_wf_prev"),0,0,"ndr_wf_prev"),C("TX_NEW",V("ndr_wf_new")),
-     C("IIT",V("ndr_wf_iit")),C("IIT rate",iitNDR,1,x=>{const r=iitNDR(x); return r==null?null:r<=.01?"good":r<=.02?"warning":"critical";}),C("RTT",V("ndr_wf_rtt")),C("Dead",V("ndr_wf_dead")),C("TO",V("ndr_wf_to")),
-     C("TX_CURR (NDR)",V("ndr_wf_curr")),...(NDRT()?[]:[C(`IIT (EMR, ${llQ()})`,V("wf_iit")),C("IIT rate (EMR)",iitEMR,1)])],["org","paed","sex","age"])}</section>
+   <section class="c3d">${secH("IIT and IIT rate by facility",`${WF().label} · same numbers as the waterfall · click to drill · rows by paediatric (<20) / adult`)}${pivot("iit",[C("TX_CURR end of last quarter",V(WF().prev),0,0,WF().prev),C("TX_NEW",V(WF().new)),
+     C("IIT",V(WF().iit)),C("IIT rate",WF().rate,1,x=>{const r=WF().rate(x); return r==null?null:r<=.01?"good":r<=.02?"warning":"critical";}),C("RTT",V(WF().rtt)),C("Dead",V(WF().dead)),C("TO",V(WF().to)),
+     C("TX_CURR now",V(WF().curr)),...(NDRT()?[]:[C(`IIT (EMR, ${llQ()})`,V("wf_iit")),C("IIT rate (EMR)",iitEMR,1)])],["org","paed","sex","age"])}</section>
    <div class="grid g2"><section class="c3d">${secH("TX_CURR by age and sex","NDR TX_CURR")}${pyramid("tx_curr")}</section>
-   <section class="c3d">${secH("IIT by age and sex",`NDR, ${D.meta.fiscal_year} from 1 October`)}${pyramid("ndr_wf_iit")}</section></div>
+   <section class="c3d">${secH("IIT by age and sex",WF().label)}${pyramid(NDRT()?"wf_iit":"ndr_wf_iit")}</section></div>
    <div class="grid g2"><section class="c3d">${secH("TX_CURR by regimen line","With viral load results (EMR)")}<div class="tw"><table><thead><tr><th>Regimen line</th><th class="n">TX_CURR</th><th class="n">VL results</th><th class="n">Suppressed</th><th class="n">Unsuppressed</th><th class="n">VLS</th></tr></thead><tbody>
      ${lines.map(([k,x])=>`<tr><td>${esc(k)}</td><td class="n">${n(x.tx_regline)}</td><td class="n">${n(x.vlr_regline)}</td><td class="n">${n(x.vls_regline)}</td><td class="n">${n((x.vlr_regline||0)-(x.vls_regline||0))}</td><td class="n">${rpct(x.vls_regline,x.vlr_regline)}</td></tr>`).join("")}</tbody></table></div></section>
    <section class="c3d">${secH("TX_CURR by regimen","EMR")}<div class="tw" style="max-height:330px"><table><thead><tr><th>Regimen</th><th class="n">TX_CURR</th><th class="n">Share</th></tr></thead><tbody>
@@ -1424,21 +1436,21 @@ function eacSection(){
 }
 
 /* ---------- Viral load: the whole flow ---------- */
-function vlRow(label, x){ const pend=Math.max(0,gv(x,"vl_sample")-gv(x,"vl_result"));
+function vlRow(label, x){ const pend=gv(x,"vl_pending");
   return `<tr><td>${label}</td><td class="n">${n(x.tx_curr_emr)}</td><td class="n">${n(x.vl_eligible)}</td><td class="n">${n(x.vl_sample)}</td><td class="n">${rpct(x.vl_sample,x.vl_eligible)}</td>
-   <td class="n">${n(x.vl_result)}</td><td class="n">${rpct(x.vl_result,x.vl_eligible,0)}</td><td class="n">${n(x.vl_suppressed)}</td><td class="n">${rpct(x.vl_suppressed,x.vl_result)}</td><td class="n">${n(x.vl_unsuppressed)}</td><td class="n">${rpct(x.vl_unsuppressed,x.vl_result)}</td>
+   <td class="n">${n(x.vl_result)}</td><td class="n">${rpct(x.vl_result,x.vl_eligible)}</td><td class="n">${n(x.vl_suppressed)}</td><td class="n">${rpct(x.vl_suppressed,x.vl_result)}</td><td class="n">${n(x.vl_unsuppressed)}</td><td class="n">${rpct(x.vl_unsuppressed,x.vl_result)}</td>
    <td class="n">${n(x.vl_llv)}</td><td class="n">${rpct(x.vl_llv,x.vl_result)}</td><td class="n">${n(x.vl_undetectable)}</td><td class="n">${rpct(x.vl_undetectable,x.vl_result)}</td><td class="n">${n(pend)}</td></tr>`; }
 const VLHEAD = `<thead><tr><th></th><th class="n">TX_CURR</th><th class="n">Eligible</th><th class="n">Sample collected</th><th class="n">Sample rate</th><th class="n">Results</th><th class="n">Coverage</th><th class="n">Suppressed</th><th class="n">VLS</th><th class="n">Unsuppressed ≥1000</th><th class="n">Unsupp. rate</th><th class="n">LLV</th><th class="n">LLV rate</th><th class="n">Undetectable</th><th class="n">U=U rate</th><th class="n">Pending</th></tr></thead>`;
 function vlPage(){
   if(WIN||(WIN=windowSet()), !HAS("ll")) return context()+noData("Viral load figures");
-  const v=agg(), E=c=>evaluate(c,v), ip=E("IPI_VLS_ON_ART"), pend=Math.max(0,gv(v,"vl_sample")-gv(v,"vl_result"));
+  const v=agg(), E=c=>evaluate(c,v), ip=E("IPI_VLS_ON_ART"), pend=gv(v,"vl_pending");
   const ga=agg({...F,age:""},{by:"age"}), bands=AGEBANDS().filter(a=>ga.has(a)&&a!=="Unknown"&&(ga.get(a).vl_eligible||0)>0);
   const grp=[["All ages",{...F}],["Paediatric & adolescent (<20)",{...F,age:"<20"}],["Adult (20+)",{...F,age:"20+"}]];
   const st=STATES.filter(s=>!F.state||s===F.state);
-  return context()+flowRow([fs("TX_CURR (EMR)",v.tx_curr_emr),fs("Eligible ≥180 days",v.vl_eligible),fs("Sample collected",v.vl_sample,"Sample collected in the 12 months to the linelist date"),
+  return context()+flowRow([fs("TX_CURR (EMR)",v.tx_curr_emr),fs("VL eligible",v.vl_eligible),fs("Sample collected",v.vl_sample,"Sample collected in the 12 months to the linelist date"),
      fr("Sample collection rate",v.vl_sample,v.vl_eligible),fs("Result received",v.vl_result),fr("Coverage",v.vl_result,v.vl_eligible),fs("Suppressed <1000",v.vl_suppressed),
      fr("Suppression rate",v.vl_suppressed,v.vl_result),fs("Unsuppressed ≥1000",v.vl_unsuppressed),fr("Unsuppressed rate",v.vl_unsuppressed,v.vl_result),fs("LLV 50–999",v.vl_llv),fr("LLV rate",v.vl_llv,v.vl_result),fs("Undetectable <50",v.vl_undetectable),fr("Undetectable rate",v.vl_undetectable,v.vl_result),
-     fs("Pending result",pend,"Samples collected minus results received")])+`
+     fs("Pending result",pend,"Sample collected in the 12 months with no result on or after it")])+`
    <div class="kpis">${kpi(pct(ip.value),"VLS on ART (IPI)",`${D.meta.quarter.slice(-2)} milestone ${pct(ip.target,0)}`,ip.status,"Suppressed ÷ TX_CURR (EMR)")}${kpi(n(v.vl_unsuppressed),"Unsuppressed ≥1000","need EAC and a repeat VL")}</div>
    <section class="c3d">${secH("Paediatric & adolescent vs adult","Same flow for <20 and 20+ (EMR linelist)")}<div class="tw"><table>${VLHEAD}<tbody>${grp.map(([l,f])=>vlRow(l,agg(f))).join("")}</tbody></table></div></section>
    <section class="c3d">${secH("By state")}<div class="tw"><table>${VLHEAD}<tbody>${st.map(s=>vlRow(esc(s),agg({...F,state:s,lga:"",fac:""}))).join("")}<tr class="total">${vlRow(esc(filterText()),v).slice(4)}</tbody></table></div></section>
@@ -1448,7 +1460,7 @@ function vlPage(){
      ${hbars(bands.map(b=>{const x=ga.get(b), c=div(x.vl_suppressed,x.vl_result); return {l:b+" yrs",v:c,tick:.95,txt:`<b>${pct(c)}</b> of ${n(x.vl_result)}`,c:`var(--bar-${rateStatus(c,.95)})`};}),{max:1})}</section></div>
    <section class="c3d">${secH("Viral load by facility","Every facility · switch to org unit to drill state → LGA → facility, or rows by paediatric / adult, sex or age")}${pivot("vl",[C("TX_CURR",V("tx_curr_emr"),0,0,"tx_curr_emr"),C("Eligible",V("vl_eligible")),C("Sample",V("vl_sample")),
      C("Sample rate",RV("vl_sample","vl_eligible"),1),C("Results",V("vl_result")),C("Coverage",RV("vl_result","vl_eligible"),1,x=>rateStatus(div(x.vl_result,x.vl_eligible),.95)),C("Suppressed",V("vl_suppressed")),
-     C("VLS",RV("vl_suppressed","vl_result"),1,x=>rateStatus(div(x.vl_suppressed,x.vl_result),.95)),C("Unsuppressed",V("vl_unsuppressed")),C("Unsupp. rate",RV("vl_unsuppressed","vl_result"),1),C("LLV",V("vl_llv")),C("U=U rate",RV("vl_undetectable","vl_result"),1),C("Pending",x=>Math.max(0,(x.vl_sample||0)-(x.vl_result||0)))],["org","paed","sex","age"],"facility")}</section>
+     C("VLS",RV("vl_suppressed","vl_result"),1,x=>rateStatus(div(x.vl_suppressed,x.vl_result),.95)),C("Unsuppressed",V("vl_unsuppressed")),C("Unsupp. rate",RV("vl_unsuppressed","vl_result"),1),C("LLV",V("vl_llv")),C("U=U rate",RV("vl_undetectable","vl_result"),1),C("Pending",V("vl_pending"))],["org","paed","sex","age"],"facility")}</section>
    ${unsuppressedSection()}
    ${eacSection()}`;
 }
@@ -1577,7 +1589,7 @@ function ahdPage(){
   const ga=agg({...F,age:""},{by:"age"}), older=[...ga.entries()].filter(([b])=>!["<1","1-4","5-9","Unknown"].includes(b)).reduce((a,[,x])=>a+(Ax(x,"confirmed")||0),0);
   const lab={n:"New clients",a:"Already on ART",both:"New + already on ART"}[s];
   // entry point of the "already on ART" cascade: unsuppressed (EMR, VL >= 1000) + returned to treatment (NDR, FY)
-  const entryA=EMRA?gv(v,"ahde_entry"):gv(v,"vl_unsuppressed")+gv(v,"ndr_wf_rtt"), entry=s==="n"?A("enrolled"):s==="a"?entryA:A("enrolled")+entryA;
+  const entryA=EMRA?gv(v,"ahde_entry"):gv(v,"vl_unsuppressed")+gv(v,WF().rtt), entry=s==="n"?A("enrolled"):s==="a"?entryA:A("enrolled")+entryA;
   const funnel=(rows)=>hbars(rows.map(([l,x])=>({l, v:x, txt:`<b>${n(x)}</b>`})),{color:"var(--s1)"});
   const statePair=(k2,l2)=>{const st=STATES.filter(x=>!F.state||x===F.state).map(x=>({x,v:agg({...F,state:x,lga:"",fac:""})})); const val=(vv,k)=>Ax(vv,k)||0;
     const mx=Math.max(...st.flatMap(r=>[val(r.v,"confirmed"),val(r.v,k2)]),1);
@@ -1643,8 +1655,8 @@ function bioTrend(){
   const last=ds.at(-1), wk4=ds.filter(d=>dOf(d)<=new Date(dOf(last).getTime()-27*DAY)).at(-1), rc=ds.find(d=>d>="2026-08-31"), first=ds[0];
   const row=(k,l)=>{const L=get(k).get(last), ch=d=>{const x=d?get(k).get(d):null; return x==null||L==null?"—":`${L-x<=0?"▼":"▲"} ${n(Math.abs(L-x))}`;};
     return `<tr><td>${l}</td><td class="n">${n(L)}</td><td class="n">${ch(wk4)}</td><td class="n">${rc&&rc!==last?ch(rc):"—"}</td><td class="n">${ch(first)}</td></tr>`;};
-  return `<div class="grid g2"><div><h3 class="minih">Not counted, by reason</h3>${lineChart(ser,{yMin:0,label:"Unusable prints by week"})}</div>
-    <div><h3 class="minih">Unique share of TX_CURR</h3>${lineChart([share],{fmt:x=>pct(x,1),label:"Unique share by week"})}</div></div>
+  return `<div class="grid g2"><div><h3 class="minih">Not counted, by reason</h3>${lineChart(ser,{yMin:0,label:"Unusable prints by week",weekly:true})}</div>
+    <div><h3 class="minih">Unique share of TX_CURR</h3>${lineChart([share],{fmt:x=>pct(x,1),label:"Unique share by week",weekly:true})}</div></div>
    <div class="tw" style="margin-top:8px"><table><thead><tr><th>Reason</th><th class="n">Now (${fmtDate(last)})</th><th class="n">Change, last 4 weeks</th><th class="n">Since the NDR rule change (week of ${rc?fmtDate(rc):"31 Aug 2026"})</th><th class="n">Since ${fmtDate(first)}</th></tr></thead><tbody>
    ${BIOX.map(([k,l])=>row(k,l)).join("")}${row("bio_unusable","No usable print (Fingerprint Valid = No)")}</tbody></table></div>
    <p class="drillnote">▼ = fewer clients blocked (remediation working). The NDR tightened "Fingerprint Valid" at the end of August 2026 (about 19,000 more prints marked not valid on 31 Aug), so weeks before and after that date are not like-for-like. The weekly NDR files from before October 2026 were active-only downloads.</p>`;
@@ -1790,7 +1802,7 @@ function methodsPage(){
       ["Transfer out / IIT / dead / stopped", "active last quarter, now that status", `${n(v.wf_to)} / ${n(v.wf_iit)} / ${n(v.wf_dead)} / ${n(v.wf_stopped)}`],
       ["IIT rate (EMR)", "IIT ÷ (previous TX_CURR + TX_NEW)", pct(iitEMR(v),2)],
       [`<b>NDR waterfall and IIT (${esc(D.meta.fiscal_year)} from 1 October)</b>`, "", ""],
-      ["TX_CURR end Q4 / now", `NDR TX_CURR rule (valid unique print or under 15) with ${cb("prev_status28")} / ${cb("status28")} = Active`, `${n(v.ndr_wf_prev)} / ${n(v.ndr_wf_curr)}`],
+      ["TX_CURR end Q4 / now", `TX_CURR_Unique rule (valid unique print, not a suppressed duplicate, not waiting for adjudication; or under 15) with ${cb("prev_status28")} / ${cb("status28")} = Active`, `${n(v.ndr_wf_prev)} / ${n(v.ndr_wf_curr)}`],
       ["TX_NEW / TI / TO / dead", `ART start, transfer-in, transfer-out and death dates since 1 October`, `${n(v.ndr_wf_new)} / ${n(v.ndr_wf_ti)} / ${n(v.ndr_wf_to)} / ${n(v.ndr_wf_dead)}`],
       ["IIT (NDR) and rate", "active last quarter, inactive now, not TO or dead · ÷ (previous + TX_NEW)", `${n(v.ndr_wf_iit)} · ${pct(iitNDR(v),2)}`],
       ["Appointments scheduled", `active or IIT, ${c("next_appt")} in the range picked on Current on Treatment (${fmtDate(apptRng().s)} – ${fmtDate(apptRng().e)})`, n(apptList().length)],
@@ -1884,15 +1896,15 @@ function trendsPage(){
   const snapDays = new Set(["tx_curr_emr","tx_curr","pbs_active"].flatMap(m=>[...get(m).keys()])).size;
   return `<p class="drillnote" style="margin:0">One point per week (week ending Sunday). Dashed lines are <b>estimated</b> week-ends rebuilt from today's linelist (ART start, last pickup + refill + 28 days, outcome dates); clients who lapsed and came back look continuously active, so earlier weeks run slightly high. Solid lines are <b>exact</b> snapshots saved by each live run (${snapDays} so far; one per day). Trend lines follow the state / LGA / facility filter; sex and age filters do not apply here.</p>
    <section class="c3d">${secH("Current on treatment","Week-end TX_CURR")}${lineChart([ser("tx_curr_est","EMR TX_CURR (estimated)","var(--s1)",true), ser("tx_curr_emr","EMR TX_CURR (snapshot)","var(--s1)"),
-     ...(D.meta.tx_curr_source==="NDR"?[ser("tx_curr","NDR TX_CURR, valid prints + <15 (snapshot)","var(--s2)")]:[])],{label:"TX_CURR trend"})}</section>
+     ...(D.meta.tx_curr_source==="NDR"?[ser("tx_curr","TX_CURR_Unique (NDR snapshot)","var(--s2)")]:[])],{label:"TX_CURR trend",weekly:true})}</section>
    <section class="c3d">${secH("TX_NEW and IIT by week","Linelist ART start dates; IIT = refill + 28 days lapsed in the week")}${monthlyPick("trend",[{k:"n",l:"TX_NEW",num:"tx_new_q"},{k:"i",l:"IIT",num:"iit_q"}],F,"week")}</section>
    <div class="grid g2"><section class="c3d">${secH("Biometric coverage","Captured ÷ active")}${lineChart([ratio("pbs_baseline_est","pbs_active","Coverage of today's cohort by capture date (estimated)","var(--s2)",true),
-       ratio("pbs_baseline","pbs_active","Coverage (snapshot)","var(--s2)")],{fmt:v=>pct(v,0),label:"PBS coverage trend"})}
+       ratio("pbs_baseline","pbs_active","Coverage (snapshot)","var(--s2)")],{fmt:v=>pct(v,0),label:"PBS coverage trend",weekly:true})}
      <p class="drillnote">The estimated line uses today's active clients and their capture dates, so it shows how coverage of the current cohort was built up.</p></section>
    <section class="c3d">${secH("Biometric quality","Snapshots: unique share of active, and adjudication backlog")}${lineChart([ratio("pbs_valid","pbs_active","Valid ÷ active","var(--s1)"),
-       ratio("pbs_adjudication","pbs_active","Awaiting adjudication ÷ active","var(--bar-critical)")],{fmt:v=>pct(v,1),yMin:0,label:"PBS quality trend"})}</section></div>
-   <div class="grid g2"><section class="c3d">${secH("Viral load","Snapshots")}${lineChart([ratio("vl_suppressed","vl_result","VLS among results","var(--s1)"),ratio("vl_result","tx_curr_emr","Results ÷ TX_CURR (EMR)","var(--s2)")],{fmt:v=>pct(v,1),label:"VL trend"})}</section>
-   <section class="c3d">${secH("Clients in IIT","Snapshots of the current IIT stock")}${lineChart([ser("iit_now","In IIT","var(--bar-critical)")],{label:"IIT stock trend"})}</section></div>`;
+       ratio("pbs_adjudication","pbs_active","Awaiting adjudication ÷ active","var(--bar-critical)")],{fmt:v=>pct(v,1),yMin:0,label:"PBS quality trend",weekly:true})}</section></div>
+   <div class="grid g2"><section class="c3d">${secH("Viral load","Snapshots")}${lineChart([ratio("vl_suppressed","vl_result","VLS among results","var(--s1)"),ratio("vl_result","tx_curr_emr","Results ÷ TX_CURR (EMR)","var(--s2)")],{fmt:v=>pct(v,1),label:"VL trend",weekly:true})}</section>
+   <section class="c3d">${secH("Clients in IIT","Snapshots of the current IIT stock")}${lineChart([ser("iit_now","In IIT","var(--bar-critical)")],{label:"IIT stock trend",weekly:true})}</section></div>`;
 }
 function naomiPage(){
   if(!D.naomi.length) return context()+`<section class="c3d empty">No Naomi file loaded. Put it at data/manual/naomi_estimates.xlsx and rerun the pipeline.</section>`;

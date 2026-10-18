@@ -20,6 +20,7 @@ Project home: `C:\Users\CalebGwaza\OneDrive - Excellence Community Education Wel
 | Scheduled updates | Task Scheduler task "SPEED dashboard update" runs on weekdays at 07:45 and 13:45. |
 | New NDR PBS export | Every week, download the **active + inactive (all status)** PBS line list from the NDR portal and drop it in `inbox\` as `pbs_all_<YYYY-MM-DD>_all_status.xlsx`. It drives every treatment number (`treatment_source: ndr`). The newest file wins, and older exports are saved to history and removed after the next run. |
 | Older NDR PBS files | `python scripts\import_ndr_history.py <folder or zip>` saves dated copies of past weekly files (named like `PBS Line List_13thJuly2026.xlsx`) for earlier periods and the weekly trend lines. Default folder: Downloads. |
+| Check the numbers agree | `python run_pipeline.py run --cached --export`, then `python scripts\check_consistency.py`: TX_CURR, waterfall, biometric categories, MMD / DSD and VL cross-checked by state. |
 | Sign-in | People enter their email at `/login`; allowed domains and extra addresses are under `access:` in `config\settings.yaml`. Sign-ins are logged in `logsccess.log`. |
 | New targets / Naomi | Drop them in `inbox\` (`FY*Target*.xlsx`, `naomi*.xlsx`). |
 | Facility name mismatch | It's listed on the Data flow page. Add it under `facility_aliases` in `config\settings.yaml`. |

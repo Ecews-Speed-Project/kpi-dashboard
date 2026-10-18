@@ -717,7 +717,7 @@ def ndr_waterfall(pbs: pd.DataFrame, c: dict, q_start: dt.date, as_of: dt.date) 
     d["age"] = age_bands(d[c["age"]]) if c.get("age") in d else UNKNOWN_AGE
     x = _pbs_flags(d, c)
     u15 = pd.to_numeric(d[c["age"]], errors="coerce") < 15 if c.get("age") in d else False
-    countable = (x["valid"] & (x["dt"] != "duplicate")) | u15          # NDR TX_CURR rule
+    countable = (x["valid"] & (x["dt"] != "duplicate") & (x["fp"] != "adjudicationwaiting")) | u15   # TX_CURR_Unique rule
     act_now, act_prev = _col(d, c, "status28") == "active", _col(d, c, "prev_status28") == "active"
     now, prev = act_now & countable, act_prev & countable
     inq = lambda k: (lambda s: (s >= q_start) & (s <= as_of))(_dates(d[c[k]])) if c.get(k) in d else pd.Series(False, index=d.index)
@@ -809,7 +809,7 @@ def eac_clients(df: pd.DataFrame, c: dict, since: dt.date) -> pd.DataFrame:
 
 
 APPT_COLS = ["datim", "art_no", "hosp_no", "status", "appt", "last_pickup", "refill_days", "regimen_line",
-             "vl_value", "vl_date", "flags"]
+             "vl_value", "vl_date", "flags", "uniq"]
 
 
 def appointment_clients(ll: pd.DataFrame, lc: dict, pbs: pd.DataFrame, pc: dict, ll_date: dt.date,
@@ -864,6 +864,8 @@ def appointment_clients(ll: pd.DataFrame, lc: dict, pbs: pd.DataFrame, pc: dict,
         "state": sel[lc["state"]], "facility": sel[lc["facility"]], "sex": norm_sex(sel[lc["sex"]]),
         "age": age_bands(sel[lc["age"]]) if lc.get("age") in sel else UNKNOWN_AGE,
         "nopick": nopick[sel.index].astype(int), "status": txt("status"),
+        # in the TX_CURR_Unique cohort (valid unique print or under 15), as the waterfall
+        "uniq": emr_unique(sel, lc, pd.Series(True, index=sel.index)).map({True: "Yes", False: "No"}),
         "datim": txt("datim"), "art_no": txt("art_no"), "hosp_no": txt("hosp_no"),
         "appt": _iso(appt[sel.index]), "last_pickup": _iso(pickup[sel.index]),
         "refill_days": txt("refill_days"), "regimen_line": txt("regimen_line"),

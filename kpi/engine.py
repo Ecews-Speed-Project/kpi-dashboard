@@ -254,7 +254,7 @@ def encode_appt_clients(cl: pd.DataFrame, master: pd.DataFrame) -> dict:
     cl = attach_master(cl, master, "appt_clients", {})
     fac_idx = {f: i for i, f in enumerate(facility_order(master)["facility"])}
     sex_i, age_i = {"F": 0, "M": 1, "U": 2}, {a: i for i, a in enumerate(AGE_BANDS + [UNKNOWN_AGE])}
-    dcols = ("datim", "status", "refill_days", "regimen_line", "flags")
+    dcols = ("datim", "status", "refill_days", "regimen_line", "flags", "uniq")
     lookup = {k: sorted(cl[k].astype(str).unique().tolist()) for k in dcols}
     idx = {k: {v: i for i, v in enumerate(lookup[k])} for k in dcols}
     rows = [[int(fac_idx[r["facility"]]), sex_i.get(r["sex"], 2), age_i.get(r["age"], len(AGE_BANDS)), int(r["nopick"])]
