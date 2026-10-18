@@ -265,6 +265,7 @@ columns:
     last_pickup: lastdrugpickupdate
     sex: sex
     age: currentage
+    dob: dateofbirth                 # suppressed duplicates: demographic twin test (sex + date of birth + ART start)
     unique_flag: ndr_unique          # quarter files only: the NDR TX_CURR_Unique classification (q4_algo 1-4)
 
 # Dashboard sign-in (serve_dashboard.py): who may open the dashboard.

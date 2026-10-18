@@ -657,7 +657,7 @@ const RV = (a,b) => v => div(v[a]??0, v[b]);
 
 /* ---------- TX_CURR source label ---------- */
 const TXL = () => D.meta.tx_curr_source==="NDR" ? "TX_CURR (NDR)" : "TX_CURR";
-const TXTIP = () => D.meta.tx_curr_source==="NDR" ? "NDR TX_CURR as CDC measures it: active clients with a valid recognised print (portal 'Unique' = valid minus duplicates) plus every active client under 15 regardless of print status" : "";
+const TXTIP = () => D.meta.tx_curr_source==="NDR" ? "TX_CURR_Unique, as the NDR / PHIS3 summary: enrolled (valid unique print) + ABIS duplicate kept + every active client under 15 whatever the print status. Adjudication waiting, suppressed duplicates, invalid prints and clients with no baseline print are not counted." : "";
 
 /* ---------- KPI summary: achievement in the selected period (one section; replaces the old
    KPI chart + Conventional targets pair, which showed the same thing) ---------- */
@@ -1615,6 +1615,51 @@ function pbsCsv(rows){
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"}));
   a.download=`pbs_followup_${PBSCAT}_${(F.fac||F.lga||F.state||"SPEED").replace(/[^\w-]+/g,"_")}_${D.meta.as_of}.csv`; a.click(); URL.revokeObjectURL(a.href);
 }
+
+/* ---------- biometrics: categories as the NDR / PHIS3 TX_CURR_Unique summary ---------- */
+const BIOX = [["bio_aw","Adjudication waiting","var(--bar-critical)"],["bio_noprint","No baseline print","var(--s2)"],["bio_invalid","Invalid prints","#8A5FB8"],["bio_dup_supp","Duplicate suppressed","var(--s3)"]];
+function bioCards(v){ const g=k=>v[k]||0, act=g("pbs_active"), uq=g("tx_curr");
+  return `${kpi(n(act),"TX_CURR (NDR)","active clients")}${kpi(n(uq),"TX_CURR_Unique","counted by the NDR",rateStatus(div(uq,act),.95))}${kpi(pct(div(uq,act)),"Unique share","ref. 95%",rateStatus(div(uq,act),.95))}
+   ${kpi(n(act-uq),"Gap to close","active but not counted")}${kpi(n(g("bio_aw")),"Adjudication waiting","15+ · cause not yet known")}${kpi(n(g("bio_noprint")),"No baseline print","15+ · capture needed")}
+   ${kpi(n(g("bio_invalid")),"Invalid prints","15+ · NO_VALID_DATA · recapture")}${kpi(n(g("bio_dup_supp")),"Duplicate suppressed","15+ · ABIS match")}${kpi(n(g("bio_cat2")),"Category 2","under 15 · waiting · baseline captured · counted")}`; }
+function bioWaterfall(v){ const g=k=>v[k]||0;
+  return waterfallFrom([["TX_CURR (NDR)",g("pbs_active"),"total"],...BIOX.map(([k,l])=>[l,-g(k)]),["TX_CURR Unique",g("tx_curr"),"total"]],
+    `Category 1 = active clients with a unique print (enrolled + ABIS duplicate kept) once adjudication waiting is removed; Category 2 = under-15s waiting for adjudication with a baseline print, added back with every under-15. Counted: under 15 ${n(g("bio_u15"))} + enrolled ${n(g("bio_enrolled"))} + duplicate kept ${n(g("bio_dup_kept"))} = ${n(g("tx_curr"))}.`); }
+function awCallout(v){ const g=k=>v[k]||0, st=STATES.filter(s=>!F.state||s===F.state);
+  return `<section class="c3d" style="border-left:4px solid var(--bar-critical)">${secH("Adjudication waiting — the open question","What is causing it is not yet known")}
+   <p>${n(g("bio_aw"))} active clients aged 15+ have a baseline print that the national ABIS has not resolved (status <b>ADJUDICATIONWAITING</b>). They are on treatment but not counted in TX_CURR_Unique.
+   The cause is not yet established, so every state is expected to manage its list and bring it to the review: which facilities, since when, and what was found.</p>
+   <div class="kpis">${st.map(s=>{const x=agg({...F,state:s}); return kpi(n(x.bio_aw||0), s, `${pct(div(x.bio_aw||0,x.pbs_active),1)} of active · ${n(x.tier1_aw_contact||0)} seen in the last 3 months`);}).join("")}</div></section>`; }
+const bioCols = () => [C("TX_CURR",V("pbs_active"),0,0,"pbs_active"),C("Under 15",V("bio_u15")),C("Enrolled",V("bio_enrolled")),C("Dup. kept",V("bio_dup_kept")),
+  C("Dup. suppressed",V("bio_dup_supp")),C("Adjudication waiting",V("bio_aw")),C("Invalid prints",V("bio_invalid")),C("No print",V("bio_noprint")),
+  C("TX_CURR_Unique",V("tx_curr")),C("Unique %",RV("tx_curr","pbs_active"),1,x=>rateStatus(div(x.tx_curr,x.pbs_active),.95)),C("Category 2",V("bio_cat2"))];
+function bioTrend(){
+  const T=trendAgg(), get=m=>T[m]||new Map(), ds=[...get("pbs_active").keys()].sort();
+  if(!ds.length) return `<div class="empty">No weekly NDR files yet.</div>`;
+  const ser=BIOX.map(([k,l,c])=>({l,c,pts:ds.filter(d=>get(k).has(d)).map(d=>({d,v:get(k).get(d)}))})).filter(x=>x.pts.length);
+  const share={l:"TX_CURR_Unique ÷ TX_CURR",c:"var(--s1)",pts:ds.filter(d=>get("tx_curr").has(d)).map(d=>({d,v:div(get("tx_curr").get(d),get("pbs_active").get(d))}))};
+  const at=d=>Object.fromEntries(BIOX.map(([k])=>[k,get(k).get(d)]));
+  // compare now with 4 weeks ago, with the first week after the NDR rule change (31 Aug 2026), and with the first week on record
+  const last=ds.at(-1), wk4=ds.filter(d=>dOf(d)<=new Date(dOf(last).getTime()-27*DAY)).at(-1), rc=ds.find(d=>d>="2026-08-31"), first=ds[0];
+  const row=(k,l)=>{const L=get(k).get(last), ch=d=>{const x=d?get(k).get(d):null; return x==null||L==null?"—":`${L-x<=0?"▼":"▲"} ${n(Math.abs(L-x))}`;};
+    return `<tr><td>${l}</td><td class="n">${n(L)}</td><td class="n">${ch(wk4)}</td><td class="n">${rc&&rc!==last?ch(rc):"—"}</td><td class="n">${ch(first)}</td></tr>`;};
+  return `<div class="grid g2"><div><h3 class="minih">Not counted, by reason</h3>${lineChart(ser,{yMin:0,label:"Unusable prints by week"})}</div>
+    <div><h3 class="minih">Unique share of TX_CURR</h3>${lineChart([share],{fmt:x=>pct(x,1),label:"Unique share by week"})}</div></div>
+   <div class="tw" style="margin-top:8px"><table><thead><tr><th>Reason</th><th class="n">Now (${fmtDate(last)})</th><th class="n">Change, last 4 weeks</th><th class="n">Since the NDR rule change (week of ${rc?fmtDate(rc):"31 Aug 2026"})</th><th class="n">Since ${fmtDate(first)}</th></tr></thead><tbody>
+   ${BIOX.map(([k,l])=>row(k,l)).join("")}${row("bio_unusable","No usable print (Fingerprint Valid = No)")}</tbody></table></div>
+   <p class="drillnote">▼ = fewer clients blocked (remediation working). The NDR tightened "Fingerprint Valid" at the end of August 2026 (about 19,000 more prints marked not valid on 31 Aug), so weeks before and after that date are not like-for-like. The weekly NDR files from before October 2026 were active-only downloads.</p>`;
+}
+function bioTiers(v){ const g=k=>v[k]||0, st=STATES.filter(s=>!F.state||s===F.state), per=st.map(s=>agg({...F,state:s}));
+  const T=[["Tier 1","Adjudication waiting, picked up drugs in the last 3 months","tier1_aw_contact","Contactable: escalate the list to the PBS / ABIS team for adjudication; confirm identity at the next visit"],
+    ["Tier 2","Adjudication waiting, not seen for 3 months","tier2_aw_trace","Trace and bring back to care, then follow up adjudication"],
+    ["Tier 3","Duplicate suppressed, demographic twin counted (sex + date of birth + ART start)","tier3_dup_twin","Same client recorded twice: merge or close the extra record"],
+    ["Tier 4","Duplicate suppressed, no twin in our data","tier4_dup_abis","Matched to a record elsewhere in the national ABIS gallery: attribution question for the NDR team"],
+    ["Tier 5a","Invalid prints (NO_VALID_DATA)","tier5_invalid","Recapture the prints at the next visit"],
+    ["Tier 5b","No baseline print captured","tier5_noprint","Capture the baseline print, or document an exemption"]];
+  return `<div class="tw"><table><thead><tr><th>Tier</th><th>Who</th><th class="n">${esc(F.state||SPEED)}</th>${st.length>1?st.map(s=>`<th class="n">${esc(s)}</th>`).join(""):""}<th>Action</th></tr></thead><tbody>
+   ${T.map(([t,who,k,act])=>`<tr><td><b>${t}</b></td><td style="white-space:normal">${who}</td><td class="n">${MEAS.includes(k)?n(g(k)):"—"}</td>${st.length>1?per.map(x=>`<td class="n">${MEAS.includes(k)?n(x[k]||0):"—"}</td>`).join(""):""}<td style="white-space:normal">${act}</td></tr>`).join("")}
+   </tbody></table></div><p class="drillnote">Tier 3 / 4 need the date of birth in the NDR file. The client follow-up list below has the names-free client details for each group.</p>`;
+}
 function pbsPage(){
   const v=agg(), src=D.meta.pbs_source, ndr=src==="ndr", g=k=>v[k]||0;
   const cov=div(v.pbs_baseline,v.pbs_active), rc=div(v.pbs_recapture,v.pbs_baseline), unique=g("pbs_valid")-g("pbs_duplicate");
@@ -1659,11 +1704,22 @@ function pbsPage(){
       <td>${esc(r[ci("fp_status")])}</td><td>${esc(r[ci("dup_type")])}</td><td>${esc(r[ci("match")])}</td><td class="n">${esc(r[ci("captured")])}</td><td class="n">${esc(r[ci("last_pickup")])}</td>
       <td style="white-space:normal">${r[3].split(";").filter(c=>c!==PBSCAT).map(c=>esc(PC.cats[c])).join(", ")}</td></tr>`).join("")}
     ${show.length?"":`<tr><td colspan="12" class="empty">No clients in this category for the current filter.</td></tr>`}</tbody></table></div>`;
+  const followUp = `<section class="c3d">${secH("Client follow-up list","Client-level data — keep this page within the programme team")}${!STOCK?`<div class="empty">The client list is for the current NDR file only.</div>`:PC.rows.length?list:`<div class="empty">No client list: ${D.meta.archived?"archived copies carry no client identifiers — open the live dashboard (open_dashboard.bat) for the list":ndr?"no clients need follow-up":"needs the NDR PBS line list"}.</div>`}</section>`;
+   if(ndr) return context()+`<p class="drillnote" style="margin:0">Source: NDR PBS line list (inbox), one category per active client, as the NDR / PHIS3 TX_CURR_Unique summary.</p>
+    <div class="kpis">${bioCards(v)}</div>
+    <section class="c3d">${secH("Where we stand: TX_CURR to TX_CURR_Unique", `NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)} · active clients`)}${bioWaterfall(v)}</section>
+    ${awCallout(v)}
+    <section class="c3d">${secH("Unique print categories by state, LGA and facility","Click a state or LGA to drill down · sort any column")}${pivot("bio",bioCols(),["org","sex","age"])}</section>
+    <section class="c3d">${secH("Unusable prints and remediation — weekly trend","Active clients the NDR does not count, by reason · one point per week from the NDR files")}${bioTrend()}</section>
+    <section class="c3d">${secH("Remediation plan: who to reach, and how","Tiers from the FY26Q3 adjudication work · counts from the current NDR file")}${bioTiers(v)}</section>
+    <section class="c3d">${secH("Recapture","Baseline prints recaptured and matched")}<div class="kpis">${kpi(n(v.pbs_baseline),"Baseline captured",pct(cov)+" of active")}${kpi(pct(rc),"Recapture coverage","ref. 95%",rateStatus(rc,.95))}
+      ${kpi(pct(div(v.pbs_match,v.pbs_recapture)),"Match rate")}${kpi(n(v.pbs_nomatch),"No match")}${kpi(n(v.pbs_nobase),"No base")}${kpi(n(v.pbs_mismatch),"Mis-match","duplicate type")}</div></section>
+    ${followUp}`;
   return context()+`<p class="drillnote" style="margin:0">${srcNote}</p><div class="kpis">${cards}</div>
    ${ndr?`<div class="grid g2"><section class="c3d">${secH("From active to unique","Each bar is a share of active clients")}${funnel}</section><section class="c3d">${secH("Where clients are stuck","Active clients by follow-up need (a client can appear twice)")}${issues}</section></div>`:""}
    <section class="c3d">${secH("Breakdown","Click a state or LGA to drill down · sort any column")}${pivot("pbs",cols,["org","sex","age"])}</section>
    ${ndr?txcurrReflection(v):""}
-   <section class="c3d">${secH("Client follow-up list","Client-level data — keep this page within the programme team")}${!STOCK?`<div class="empty">The client list is for the current NDR file only.</div>`:PC.rows.length?list:`<div class="empty">No client list: ${D.meta.archived?"archived copies carry no client identifiers — open the live dashboard (open_dashboard.bat) for the list":ndr?"no clients need follow-up":"needs the NDR PBS line list"}.</div>`}</section>`;
+   ${followUp}`;
 }
 
 /* ---------- how it's calculated: every number traced to its source ---------- */

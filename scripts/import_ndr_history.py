@@ -28,7 +28,7 @@ import pandas as pd  # noqa: E402
 import run_pipeline as rp  # noqa: E402
 from etl.dhis2_client import clean_state  # noqa: E402
 from etl.sources import read_excel  # noqa: E402
-from kpi.engine import TREND_MEASURES, attach_master  # noqa: E402
+from kpi.engine import TREND_MEASURES, attach_master, set_aliases  # noqa: E402
 from kpi.measures import Period, linelist_cube, pbs_cube, quarter_start  # noqa: E402
 
 MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
@@ -73,6 +73,7 @@ def candidates(paths: list[Path]) -> dict[dt.date, tuple[Path, str | None]]:
 
 
 def master_list() -> pd.DataFrame:
+    set_aliases(rp.settings().get("facility_aliases"))       # facility names as the pipeline matches them
     cache = ROOT / "data" / "raw" / "cache"
     fac = pd.concat([pd.read_parquet(cache / "fac_m.parquet"), pd.read_parquet(cache / "fac_w.parquet")],
                     ignore_index=True).drop_duplicates("facility_key")
@@ -85,7 +86,7 @@ def main(argv: list[str]) -> None:
     rp.load_env()
     cfg = rp.settings()
     cols = cfg["columns"]
-    paths = [Path(a) for a in argv] or [Path.home() / "Downloads"]
+    paths = [Path(a) for a in argv if not a.startswith("--")] or [Path.home() / "Downloads"]
     fy_start = dt.date.fromisoformat(str(cfg["fy_start"]))
     start = (pd.Timestamp(fy_start) - pd.DateOffset(months=cfg["reporting"].get("history_months", 12))).date()
     src = rp.SOURCES
@@ -107,7 +108,7 @@ def main(argv: list[str]) -> None:
     print(f"{len(found)} dated NDR files from {start} on")
     for d, (path, member) in found.items():
         iso = d.isoformat()
-        if iso in have_ndr and iso in have_ll:
+        if iso in have_ndr and iso in have_ll and "--resnap" not in sys.argv:
             print(f"  {iso}: already saved, skipped")
             continue
         with tempfile.TemporaryDirectory() as tmp:
@@ -127,7 +128,7 @@ def main(argv: list[str]) -> None:
         qfile = d in qends and all_status and prev_act >= 0.8 * act
         if qfile:
             ll["quarter_file"] = f"NDR PBS line list {iso}"
-        if iso not in have_ll:
+        if iso not in have_ll or ("--resnap" in sys.argv and (src / f"linelist_{iso}.parquet").exists()):   # --resnap: refresh with today's rules
             rp._as_text(ll).to_parquet(src / f"linelist_{iso}.parquet", index=False)
         # that week's stock figures for the trend lines
         p = Period(as_of=d, fy_start=fy_start)
@@ -149,5 +150,37 @@ def main(argv: list[str]) -> None:
         print(f"trend history: {new['date'].nunique()} weeks added")
 
 
+def refresh_trends() -> None:
+    """Recompute the biometric trend figures (TX_CURR_Unique, categories, unusable prints) for every date in the
+    trend history from the saved NDR copies (each date uses the newest copy on or before it)."""
+    cfg = rp.settings()
+    pc = cfg["columns"]["pbs_all"]
+    copies = sorted((dt.date.fromisoformat(f.stem.split("_")[1]), f) for f in rp.SOURCES.glob("ndr_*.parquet"))
+    hist = pd.read_csv(rp.HISTORY, dtype={"date": str})
+    bio = [m for m in TREND_MEASURES if m.startswith(("pbs_", "bio_")) or m == "tx_curr"]
+    dates = sorted(set(hist["date"]) | {d.isoformat() for d, _ in copies})
+    master, cache, out = master_list(), {}, []
+    for ds in dates:
+        d = dt.date.fromisoformat(ds)
+        use = [f for cd, f in copies if cd <= d]
+        if not use:
+            continue
+        f = use[-1]
+        if f not in cache:
+            x = pbs_cube(pd.read_parquet(f), pc)
+            x = x[x["period"].fillna("") == ""] if "period" in x else x
+            x = pd.concat([x[x["measure"] != "ndr_tx_curr"], x[x["measure"] == "ndr_tx_curr"].assign(measure="tx_curr")])
+            x = attach_master(x[x["measure"].isin(bio)], master, "ndr_history", {})
+            cache[f] = x.groupby(["state", "facility", "measure"])["value"].sum().reset_index()
+        out.append(cache[f].assign(date=ds))
+    new = pd.concat(out, ignore_index=True)
+    keep = hist[~(hist["date"].isin(set(new["date"])) & hist["measure"].isin(bio))]
+    pd.concat([keep, new[["date", "state", "facility", "measure", "value"]]], ignore_index=True)       .sort_values(["date", "state", "facility", "measure"]).to_csv(rp.HISTORY, index=False)
+    print(f"biometric trend refreshed for {new['date'].nunique()} dates from {len(cache)} NDR copies")
+
+
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    if "--refresh-trends" in sys.argv:
+        refresh_trends()
+    else:
+        main(sys.argv[1:])

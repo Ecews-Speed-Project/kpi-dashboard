@@ -316,7 +316,9 @@ def ndr_linelist(pbs: pd.DataFrame, cdr: pd.DataFrame, cfg: dict, file_date: dt.
         return out
 
     refill = pd.to_numeric(col("daysofarvrefill"), errors="coerce")
-    valid = col("fingerprint valid").astype(str).str.upper().eq("YES") & ~col("duplicate_type").astype(str).str.lower().eq("duplicate")
+    # unique print, as TX_CURR_Unique: valid, not suppressed as a duplicate, not waiting for adjudication
+    valid = (col("fingerprint valid").astype(str).str.upper().eq("YES") & ~col("duplicate_type").astype(str).str.lower().eq("duplicate")
+             & ~col("fingerprintstatus").astype(str).str.upper().eq("ADJUDICATIONWAITING"))
     out = pd.DataFrame({
         "unique_id": col("unique_id").astype(str), "period": file_date.isoformat(),
         "state": col("statename"), "lga": col("lganame"), "facilityname": col("facilityname"),

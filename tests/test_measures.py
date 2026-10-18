@@ -68,9 +68,11 @@ def test_pbs_cards_follow_ndr_portal():
     assert (v["pbs_active"], v["pbs_baseline"], v["pbs_valid"], v["pbs_invalid"]) == (6, 5, 4, 1)
     assert (v["pbs_duplicate"], v["pbs_mismatch"], v["pbs_fp_duplicate"], v["pbs_adjudication"]) == (1, 1, 2, 1)
     assert v["pbs_valid"] - v["pbs_duplicate"] == 3          # portal "Unique"
-    assert v["ndr_tx_curr"] == 3                              # valid minus confirmed duplicate (all 15+ here)
+    assert v["ndr_tx_curr"] == 2          # valid, minus the confirmed duplicate and the adjudication waiting (all 15+ here)
     kid = df.iloc[[5]].assign(currentage=9)                   # not captured, but under 15 -> counted
     assert pbs_cube(kid, c).query("measure == 'ndr_tx_curr'")["value"].sum() == 1
+    waiting_kid = df.iloc[[3]].assign(currentage=12)          # under 15 waiting for adjudication -> counted
+    assert pbs_cube(waiting_kid, c).query("measure == 'ndr_tx_curr'")["value"].sum() == 1
     cl = pbs_clients(df, c).set_index("unique_id")["cats"]
     assert cl["U5"] == "nocap" and set(cl["U1"].split(";")) == {"dup", "fpdup", "nomatch"}
     assert "U0" not in cl.index

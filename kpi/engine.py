@@ -301,7 +301,8 @@ def encode_vl_clients(cl: pd.DataFrame, master: pd.DataFrame) -> dict:
 
 
 TREND_MEASURES = ["tx_curr", "tx_curr_emr", "iit_now", "vl_result", "vl_suppressed", "pbs_active", "pbs_baseline",
-                  "pbs_valid", "pbs_duplicate", "pbs_adjudication", "pbs_recapture"]
+                  "pbs_valid", "pbs_duplicate", "pbs_adjudication", "pbs_recapture",
+                  "bio_aw", "bio_noprint", "bio_invalid", "bio_dup_supp", "bio_unusable"]
 
 
 def snapshot_rows(cube: pd.DataFrame, as_of: dt.date) -> pd.DataFrame:

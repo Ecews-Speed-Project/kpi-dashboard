@@ -928,21 +928,52 @@ def pbs_cube(pbs: pd.DataFrame, c: dict) -> pd.DataFrame:
     if c.get("last_pickup") in d and c.get("art_start") in d:
         masks["pbs_returned_refill"] = active & (_datetimes(d[c["last_pickup"]]) > _datetimes(d[c["art_start"]]))
     if c.get("valid") in d:
-        # NDR TX_CURR (CDC): valid recognised prints - the portal's "Unique" (valid minus
-        # duplicate type "Duplicate") - plus every active client under 15 whatever the print status
-        under15 = pd.to_numeric(d[c["age"]], errors="coerce") < 15 if c.get("age") in d else False
-        masks["ndr_tx_curr"] = active & ((x["valid"] & (x["dt"] != "duplicate")) | under15)
+        # TX_CURR_Unique, as the NDR / PHIS3 summary: every active client sits in one category.
+        #   counted:  under 15 (any print status - this includes the under-15s waiting for adjudication
+        #             with a baseline print, "Category 2"), enrolled (valid unique print), ABIS duplicate kept
+        #   excluded: adjudication waiting, duplicate suppressed (portal duplicate type "Duplicate"),
+        #             invalid prints (NO_VALID_DATA), no baseline print captured
+        under15 = (pd.to_numeric(d[c["age"]], errors="coerce") < 15) if c.get("age") in d else pd.Series(False, index=d.index)
+        adult = active & ~under15
+        aw, dup, enr, inv = fp == "adjudicationwaiting", fp == "duplicate", fp == "enrolled", fp == "no_valid_data"
+        supp = x["dt"] == "duplicate"
+        cats = {
+            "bio_u15": active & under15,
+            "bio_enrolled": adult & enr & ~supp,
+            "bio_dup_kept": adult & dup & ~supp,
+            "bio_dup_supp": adult & supp & ~aw,
+            "bio_aw": adult & aw,
+            "bio_invalid": adult & inv & ~supp,
+        }
+        taken = pd.concat(list(cats.values()), axis=1).any(axis=1)
+        cats["bio_noprint"] = adult & ~taken                           # no baseline print (or no usable status)
+        masks.update(cats)
+        masks["bio_cat2"] = active & under15 & aw & base                # Category 2: under 15, waiting, baseline captured
+        masks["bio_unusable"] = active & ~x["valid"]                    # no usable print (Fingerprint Valid = No)
+        masks["ndr_tx_curr"] = cats["bio_u15"] | cats["bio_enrolled"] | cats["bio_dup_kept"]
         if c.get("unique_flag") in d:   # a quarter file carries the NDR's own unique classification
             masks["ndr_tx_curr"] = active & (_norm(d[c["unique_flag"]]).eq("yes") | under15)
         excl = active & ~masks["ndr_tx_curr"]
         masks["ndr_excl"] = excl
-        masks["ndr_excl_adj"] = excl & (fp == "adjudicationwaiting")
-        masks["ndr_excl_dup"] = excl & ~(fp == "adjudicationwaiting") & ((x["dt"] == "duplicate") | (fp == "duplicate"))
+        masks["ndr_excl_adj"] = excl & aw
+        masks["ndr_excl_dup"] = excl & ~aw & (supp | dup)
         masks["ndr_excl_nocap"] = excl & ~base & ~masks["ndr_excl_adj"] & ~masks["ndr_excl_dup"]   # no print captured
         masks["ndr_excl_other"] = excl & ~masks["ndr_excl_adj"] & ~masks["ndr_excl_dup"] & ~masks["ndr_excl_nocap"]
         if c.get("last_pickup") in d:          # excluded clients still picking up drugs (last 3 months)
             lp = _datetimes(d[c["last_pickup"]])
-            masks["ndr_excl_refill"] = excl & (lp >= lp.max() - pd.Timedelta(days=91))
+            recent = lp >= lp.max() - pd.Timedelta(days=91)
+            masks["ndr_excl_refill"] = excl & recent
+            # remediation tiers (FY26Q3 adjudication work): who to reach, and how
+            masks["tier1_aw_contact"] = cats["bio_aw"] & recent         # waiting, picked up drugs in the last 3 months
+            masks["tier2_aw_trace"] = cats["bio_aw"] & ~recent          # waiting, not seen for 3 months: trace
+            if all(c.get(k) in d for k in ("dob", "sex", "art_start")):
+                twin_key = (d[c["dob"]].astype(str) + "|" + d[c["sex"]].astype(str).str.upper().str[:1] + "|" + d[c["art_start"]].astype(str))
+                kept_keys = set(twin_key[masks["ndr_tx_curr"]])
+                twin = twin_key.isin(kept_keys)
+                masks["tier3_dup_twin"] = cats["bio_dup_supp"] & twin    # demographic twin counted: same client twice
+                masks["tier4_dup_abis"] = cats["bio_dup_supp"] & ~twin   # matched elsewhere in the national ABIS gallery
+            masks["tier5_invalid"] = cats["bio_invalid"]                 # recapture
+            masks["tier5_noprint"] = cats["bio_noprint"]                 # baseline capture or exemption
     return _long(d, masks)
 
 
