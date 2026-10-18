@@ -664,7 +664,9 @@ def cmd_run():
         fac_w = facility_lookup(wk, *lv, match=h["orgunit_match"])
         fac_m = facility_lookup(mo, *lv, match=h["orgunit_match"])
         weekly = extract_instance(wk, h["tables"], "weekly", pull_from, end, fac_w, h["dataname_field"])
-        monthly = extract_instance(mo, h["tables"], "monthly", pull_from, end, fac_m, h["dataname_field"])
+        from etl.dhis2_client import site_types
+        community = {ou for ou, t in site_types(mo, h["level_facility"]).items() if t == "Community"}
+        monthly = extract_instance(mo, h["tables"], "monthly", pull_from, end, fac_m, h["dataname_field"], community)
         if not full:
             old_w, old_m = pd.read_parquet(cache / "weekly.parquet"), pd.read_parquet(cache / "monthly.parquet")
             # Cached periods starting before pull_from + freshly pulled periods (DHIS2 returns

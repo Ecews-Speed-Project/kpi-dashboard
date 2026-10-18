@@ -39,6 +39,9 @@ def main() -> int:
         # treatment breakdowns add up to TX_CURR
         ("MMD bands add up to TX_CURR", s("mmd_lt3", "mmd_3", "mmd_45", "mmd_6"), g("tx_curr_emr")),
         ("DSD groups add up to TX_CURR", s("dsd_fac", "dsd_com", "dsd_none"), g("tx_curr_emr")),
+        # EMR vs NDR comparison: both sides add up to their TX_CURR
+        ("Comparison NDR side: EMR records counted twice (same client entered twice in the CDR)", g("tx_curr"), s("conc_both", "conc_ndr_emr_inactive", "conc_ndr_missing")),
+        ("Comparison: in both + EMR only = EMR TX_CURR (CDR)", s("conc_both", "conc_emr_ndr_inactive", "conc_emr_ndr_noprint", "conc_emr_missing"), g("tx_curr_cdr")),
         # viral load
         ("Suppressed + unsuppressed = results", s("vl_suppressed", "vl_unsuppressed"), g("vl_result")),
         ("LLV + undetectable = suppressed", s("vl_llv", "vl_undetectable"), g("vl_suppressed")),
@@ -53,7 +56,7 @@ def main() -> int:
     for name, a, b in checks:
         diff = (a - b).round()
         ok = (diff.abs() <= 0.5).all()
-        if name.startswith("Waterfall gain/loss"):
+        if name.startswith(("Waterfall gain/loss", "Comparison NDR side")):
             print(f"INFO  {name}: " + ", ".join(f"{k} {int(v):+,}" for k, v in (b - a).round().items()))
             continue
         bad += not ok

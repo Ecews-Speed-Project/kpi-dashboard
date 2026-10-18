@@ -91,14 +91,17 @@ def test_concurrence_links_on_datim_and_art_number():
     ndr = pd.DataFrame({"datimcode": "d1", "patientartnumber": ["a1 ", "A2", "A4", "A9", "A5"],     # case/space differences
                         "currentstatus28": ["Active", "Inactive", "Active", "Active", "Active"],
                         "fingerprint valid": ["YES", "YES", "YES", "YES", "NO"],
-                        "fingerprintstatus": ["ENROLLED", "ENROLLED", "ENROLLED", "ADJUDICATIONWAITING", ""],
+                        "fingerprintstatus": ["ENROLLED", "ENROLLED", "ENROLLED", "ENROLLED", ""],
                         "duplicate_type": ""}).assign(statename="Delta", facilityname="F1", sex="F", currentage=30)
     rows, clients = concurrence(ll, lc, ndr, pc)
     v = rows.groupby("measure")["value"].sum()
     assert v.to_dict() == {"conc_both": 1, "conc_emr_ndr_inactive": 1, "conc_emr_ndr_noprint": 1, "conc_emr_missing": 1,
                            "conc_ndr_emr_inactive": 1, "conc_ndr_missing": 1}
     assert len(clients) == 5 and "firstname" not in clients and all(clients["reason"] != "")
-    assert "ADJUDICATIONWAITING" in clients.set_index("art_no").loc["A9", "reason"]
+    # waiting for adjudication (15+) is not in NDR TX_CURR_Unique, so it is not an "NDR only" client
+    aw = ndr.assign(fingerprintstatus=["ENROLLED", "ENROLLED", "ENROLLED", "ADJUDICATIONWAITING", ""])
+    v_aw = concurrence(ll, lc, aw, pc)[0].groupby("measure")["value"].sum()
+    assert v_aw.get("conc_ndr_missing", 0) == 0
 
     # levels 2-3: punctuation and leading zeros ignored, one-to-one within the site
     ll2 = pd.DataFrame({"datimcode": "D1", "pepid": ["DELGHO00914", "133", "77"],

@@ -176,9 +176,10 @@ def clean_state(name: str | None) -> str | None:
 
 
 def extract_instance(client: DHIS2, tables: dict, which: str, start: dt.date, end: dt.date,
-                     fac: pd.DataFrame, dataname_field: str = "name") -> pd.DataFrame:
+                     fac: pd.DataFrame, dataname_field: str = "name", community: set | None = None) -> pd.DataFrame:
     """Pull every configured table from one instance into the long format
-    expected by period_merge."""
+    expected by period_merge. community: org units outside the Health Facility group; on the monthly
+    instance their PMTCT rows are community PMTCT (table PMTCT_COMM), as the cPMTCT favourite."""
     de = client.data_elements
     coc = client.category_option_combos
     out = []
@@ -202,6 +203,8 @@ def extract_instance(client: DHIS2, tables: dict, which: str, start: dt.date, en
         raw["disagg"] = raw["categoryOptionCombo"].map(coc).fillna("")
         raw = raw.merge(fac, on="orgUnit", how="left")
         raw["table"] = table
+        if community and which == "monthly" and table == "PMTCT":
+            raw.loc[raw["orgUnit"].isin(community), "table"] = "PMTCT_COMM"
         out.append(raw[["table", "period", "facility_key", "state", "lga", "facility",
                         "dataname", "disagg", "value"]])
     df = pd.concat(out, ignore_index=True) if out else pd.DataFrame(

@@ -727,13 +727,13 @@ function concurrenceSection(v){
     ${show.length?"":`<tr><td colspan="${cols.length+3}" class="empty">No clients in this category for the current filter.</td></tr>`}</tbody></table></div>`
     : `<div class="empty">${D.meta.archived?"Archived copies carry no client line list — open the live dashboard.":"No client differences."}</div>`;
   return `<section class="c3d">${secH("EMR vs NDR TX_CURR concurrence","Client by client on DATIM code + ART number (EMR pepid = NDR PatientARTNumber; punctuation and leading zeros ignored when needed, one-to-one within a site)")}
-   <div class="kpis">${kpi(n(v.tx_curr_emr),"EMR TX_CURR","central-repository linelist")}${kpi(n(v.tx_curr),"NDR TX_CURR","valid unique prints + <15",null,TXTIP())}
+   <div class="kpis">${kpi(n(v[EMRK()]),"EMR TX_CURR","central-repository linelist (CDR)")}${kpi(n(v.tx_curr),"NDR TX_CURR","TX_CURR_Unique",null,TXTIP())}
     ${kpi(n(both),"In both",`${pct(rate)} concurrence`,rateStatus(rate,.95),"In both ÷ in either")}
     ${kpi(n(emrOnly),"EMR TX_CURR, not NDR TX_CURR",`${n(g("conc_emr_ndr_inactive"))} NDR-inactive · ${n(g("conc_emr_ndr_noprint"))} no valid print · ${n(g("conc_emr_missing"))} not on NDR`)}
     ${kpi(n(ndrOnly),"NDR TX_CURR, not EMR TX_CURR",`${n(g("conc_ndr_emr_inactive"))} EMR-inactive · ${n(g("conc_ndr_missing"))} not in EMR linelist`)}</div>
    <div class="concbars"><div class="legend"><span><span class="sw" style="background:var(--bar-good)"></span>In both</span><span><span class="sw" style="background:var(--s1)"></span>EMR TX_CURR only</span><span><span class="sw" style="background:var(--s2)"></span>NDR TX_CURR only</span></div>
    <div class="hbars">${bars}</div></div>
-   ${pivot("conc",[C("EMR TX_CURR",V("tx_curr_emr"),0,0,"tx_curr_emr"),C("NDR TX_CURR",V("tx_curr")),C("In both",V("conc_both")),C("Concurrence",cr,1,x=>rateStatus(cr(x),.95)),
+   ${pivot("conc",[C("EMR TX_CURR",V(EMRK()),0,0,EMRK()),C("NDR TX_CURR",V("tx_curr")),C("In both",V("conc_both")),C("Concurrence",cr,1,x=>rateStatus(cr(x),.95)),
      C("EMR act./NDR inact.",V("conc_emr_ndr_inactive")),C("EMR act./no valid print",V("conc_emr_ndr_noprint")),C("EMR act./not on NDR",V("conc_emr_missing")),
      C("NDR TX_CURR/EMR inact.",V("conc_ndr_emr_inactive")),C("NDR TX_CURR/not in EMR",V("conc_ndr_missing"))],["org","sex","age"])}
    ${list}</section>`;
@@ -1341,10 +1341,10 @@ function appointmentsSection(v){
 /* ---------- Current on treatment ---------- */
 /* a past period with a saved copy: stock figures only (flows need the files of that quarter) */
 function artSnapshot(){ const v=agg();
-  return `<div class="kpis">${kpi(n(v.tx_curr),TXL(),SNN?`NDR file of ${fmtDate(SNN.slice(2))}`:"no NDR copy for this period",null,TXTIP())}${kpi(n(v.tx_curr_emr),"TX_CURR (EMR)",SNL?`linelist of ${fmtDate(SNL.slice(2))}`:"no linelist copy for this period")}
+  return `<div class="kpis">${kpi(n(v.tx_curr),TXL(),SNN?`NDR file of ${fmtDate(SNN.slice(2))}`:"no NDR copy for this period",null,TXTIP())}${kpi(n(v.tx_curr_emr),NDRT()?"TX_CURR (treatment line list)":"TX_CURR (EMR)",SNL?`linelist of ${fmtDate(SNL.slice(2))}`:"no linelist copy for this period")}
     ${kpi(pct(div(v.mmd3,v.tx_curr_emr)),"On 3+ month refills")}${kpi(pct(div(v.tx_curr,v.plhiv_est)),"Saturation (Naomi)","ref. 90.25%",rateStatus(div(v.tx_curr,v.plhiv_est),.9025))}</div>
-   <div class="grid g2"><section class="c3d">${secH("TX_CURR by age and sex")}${pyramid("tx_curr")}</section><section class="c3d">${secH("TX_CURR (EMR) by age and sex")}${pyramid("tx_curr_emr")}</section></div>
-   <section class="c3d">${secH("TX_CURR by facility","From the saved copies dated in this period")}${pivot("artsnap",[C("TX_CURR",V("tx_curr"),0,0,"tx_curr"),C("TX_CURR (EMR)",V("tx_curr_emr")),C("3+ month refills",V("mmd3")),C("Refill share",RV("mmd3","tx_curr_emr"),1)],["org","paed","sex","age"])}</section>
+   <div class="grid g2"><section class="c3d">${secH("TX_CURR by age and sex")}${pyramid("tx_curr")}</section><section class="c3d">${secH(NDRT()?"TX_CURR (treatment line list) by age and sex":"TX_CURR (EMR) by age and sex")}${pyramid("tx_curr_emr")}</section></div>
+   <section class="c3d">${secH("TX_CURR by facility","From the saved copies dated in this period")}${pivot("artsnap",[C("TX_CURR",V("tx_curr"),0,0,"tx_curr"),C(NDRT()?"TX_CURR (line list)":"TX_CURR (EMR)",V("tx_curr_emr")),C("3+ month refills",V("mmd3")),C("Refill share",RV("mmd3","tx_curr_emr"),1)],["org","paed","sex","age"])}</section>
    <p class="drillnote">Waterfalls, IIT and appointments are built from the current linelist and NDR file only.</p>`; }
 function trendsBlock(){ return `<details class="c3d trends"${TROPEN?" open":""}><summary data-trends>${secH("Trends — weekly","TX_CURR, TX_NEW / IIT, biometrics and viral load week by week · click to open or close")}</summary>${TROPEN?trendsPage():""}</details>`; }
 function artPage(){
@@ -1488,11 +1488,11 @@ function vlPage(){
   const ga=agg({...F,age:""},{by:"age"}), bands=AGEBANDS().filter(a=>ga.has(a)&&a!=="Unknown"&&(ga.get(a).vl_eligible||0)>0);
   const grp=[["All ages",{...F}],["Paediatric & adolescent (<20)",{...F,age:"<20"}],["Adult (20+)",{...F,age:"20+"}]];
   const st=STATES.filter(s=>!F.state||s===F.state);
-  return context()+flowRow([fs("TX_CURR (EMR)",v.tx_curr_emr),fs("VL eligible",v.vl_eligible),fs("Sample collected",v.vl_sample,"Sample collected in the 12 months to the linelist date"),
+  return context()+flowRow([fs(TXE(),v.tx_curr_emr),fs("VL eligible",v.vl_eligible),fs("Sample collected",v.vl_sample,"Sample collected in the 12 months to the linelist date"),
      fr("Sample collection rate",v.vl_sample,v.vl_eligible),fs("Result received",v.vl_result),fr("Coverage",v.vl_result,v.vl_eligible),fs("Suppressed <1000",v.vl_suppressed),
      fr("Suppression rate",v.vl_suppressed,v.vl_result),fs("Unsuppressed ≥1000",v.vl_unsuppressed),fr("Unsuppressed rate",v.vl_unsuppressed,v.vl_result),fs("LLV 50–999",v.vl_llv),fr("LLV rate",v.vl_llv,v.vl_result),fs("Undetectable <50",v.vl_undetectable),fr("Undetectable rate",v.vl_undetectable,v.vl_result),
      fs("Pending result",pend,"Sample collected in the 12 months with no result on or after it")])+`
-   <div class="kpis">${kpi(pct(ip.value),"VLS on ART (IPI)",`${D.meta.quarter.slice(-2)} milestone ${pct(ip.target,0)}`,ip.status,"Suppressed ÷ TX_CURR (EMR)")}${kpi(n(v.vl_unsuppressed),"Unsuppressed ≥1000","need EAC and a repeat VL")}</div>
+   <div class="kpis">${kpi(pct(ip.value),"VLS on ART (IPI)",`${D.meta.quarter.slice(-2)} milestone ${pct(ip.target,0)}`,ip.status,"Suppressed ÷ "+TXE())}${kpi(n(v.vl_unsuppressed),"Unsuppressed ≥1000","need EAC and a repeat VL")}</div>
    <section class="c3d">${secH("Paediatric & adolescent vs adult","Same flow for <20 and 20+ (EMR linelist)")}<div class="tw"><table>${VLHEAD}<tbody>${grp.map(([l,f])=>vlRow(l,agg(f))).join("")}</tbody></table></div></section>
    <section class="c3d">${secH("By state")}<div class="tw"><table>${VLHEAD}<tbody>${st.map(s=>vlRow(esc(s),agg({...F,state:s,lga:"",fac:""}))).join("")}<tr class="total">${vlRow(esc(filterText()),v).slice(4)}</tbody></table></div></section>
    <div class="grid g2"><section class="c3d">${secH("VL coverage by age band","Reference line at 95%")}
@@ -1537,7 +1537,7 @@ function pmtctPage(){
      <p class="drillnote">Repeat infant tests (second test or more): ${n(v.pmtct_eid_repeat)} — not counted in EID.</p></section>
    <section class="c3d">${secH("AP3 — children and adolescents (0–19)","Testing, case finding, initiation, continuity and viral load for clients under 20")}
      ${flowRow([fs("HTS_TST",w.hts_tst),fs("HTS_TST_POS",w.hts_tst_pos),fr("Yield",w.hts_tst_pos,w.hts_tst),fs("TX_NEW",w.tx_new_q),fr("Linkage",w.tx_new_q,w.hts_tst_pos),
-       fs("TX_CURR (EMR)",w.tx_curr_emr),fs("IIT",w.wf_iit),fs("Eligible",w.vl_eligible),fs("Results",w.vl_result),fr("Coverage",w.vl_result,w.vl_eligible),fs("Suppressed",w.vl_suppressed),fr("VLS",w.vl_suppressed,w.vl_result),fs("Unsuppressed ≥1000",w.vl_unsuppressed)])}
+       fs(TXE(),w.tx_curr_emr),fs("IIT",w.wf_iit),fs("Eligible",w.vl_eligible),fs("Results",w.vl_result),fr("Coverage",w.vl_result,w.vl_eligible),fs("Suppressed",w.vl_suppressed),fr("VLS",w.vl_suppressed,w.vl_result),fs("Unsuppressed ≥1000",w.vl_unsuppressed)])}
      <div class="grid g3" style="margin-top:12px"><div>${secH("HTS_TST by age")}${bar("hts_tst")}</div><div>${secH("HTS_TST_POS by age")}${bar("hts_tst_pos")}</div><div>${secH("TX_NEW by age")}${bar("tx_new_q")}</div></div>
      <div class="tw" style="margin-top:12px"><table>${VLHEAD}<tbody>${STATES.filter(s=>!F.state||s===F.state).map(s=>vlRow(esc(s),agg({...a3,state:s,lga:"",fac:""}))).join("")}<tr class="total">${vlRow("Under 20",w).slice(4)}</tbody></table></div>
      ${ap3Waterfalls()}
@@ -1581,7 +1581,7 @@ function tbScreenEMR(v,tt,tp,ta){
    <div class="grid g2" style="margin-top:12px"><div><h3 class="minih">Diagnostics among those screened</h3><div class="tw"><table><thead><tr><th>Test</th><th class="n">Done</th><th class="n">Positive</th><th class="n">Positivity</th></tr></thead><tbody>
      ${dx.map(([l,a,b,w])=>`<tr><td>${l}</td><td class="n">${n(v[a])}</td><td class="n">${n(v[b])} <span class="drillnote">${w}</span></td><td class="n">${rpct(v[b],v[a])}</td></tr>`).join("")}</tbody></table></div></div>
     <div><h3 class="minih">Current TB status of clients on ART</h3>${hbars(status.map(([l,k,c])=>({l,v:v[k]||0,c,txt:`<b>${n(v[k])}</b> · ${rpct(v[k],v.tx_curr_emr)}`})))}</div></div>
-   <div class="tw" style="margin-top:12px"><table><thead><tr><th>State</th><th class="n">TX_CURR (EMR)</th><th class="n">Screened</th><th class="n">Coverage</th><th class="n">Presumptive</th><th class="n">Yield</th><th class="n">Tested</th><th class="n">Diagnosed</th><th class="n">Rx started</th><th class="n">TX_TB (N, DHIS2)</th></tr></thead><tbody>
+   <div class="tw" style="margin-top:12px"><table><thead><tr><th>State</th><th class="n">${TXE()}</th><th class="n">Screened</th><th class="n">Coverage</th><th class="n">Presumptive</th><th class="n">Yield</th><th class="n">Tested</th><th class="n">Diagnosed</th><th class="n">Rx started</th><th class="n">TX_TB (N, DHIS2)</th></tr></thead><tbody>
     ${st.map(([l,x,t])=>`<tr${t?' class="total"':""}><td>${l}</td><td class="n">${n(x.tx_curr_emr)}</td><td class="n">${n(x.tbs_screened)}</td><td class="n">${rpct(x.tbs_screened,x.tx_curr_emr)}</td><td class="n">${n(x.tbs_presumptive)}</td><td class="n">${rpct(x.tbs_presumptive,x.tbs_screened)}</td>
       <td class="n">${n(x.tbs_tested)}</td><td class="n">${n(x.tbs_diagnosed)}</td><td class="n">${n(x.tbs_tx_started)}</td><td class="n">${n(x.tx_tb_num)}</td></tr>`).join("")}</tbody></table></div>
    <div class="grid g2" style="margin-top:12px"><div>${pyramid("tbs_diagnosed",{title:"TB diagnosed by age and sex (EMR)"})}</div><div>${pyramid("tbs_tx_started",{title:"TB treatment started by age and sex (EMR)"})}</div></div>
@@ -1936,7 +1936,7 @@ function trendsPage(){
   const ratio = (a,b,l,c,dash=false) => ({l,c,dash,pts:[...get(b)].map(([d,den])=>({d, v: den ? (get(a).get(d)||0)/den : null}))});
   const snapDays = new Set(["tx_curr_emr","tx_curr","pbs_active"].flatMap(m=>[...get(m).keys()])).size;
   return `<p class="drillnote" style="margin:0">One point per week (week ending Sunday). Dashed lines are <b>estimated</b> week-ends rebuilt from today's linelist (ART start, last pickup + refill + 28 days, outcome dates); clients who lapsed and came back look continuously active, so earlier weeks run slightly high. Solid lines are <b>exact</b> snapshots saved by each live run (${snapDays} so far; one per day). Trend lines follow the state / LGA / facility filter; sex and age filters do not apply here.</p>
-   <section class="c3d">${secH("Current on treatment","Week-end TX_CURR")}${lineChart([ser("tx_curr_est","EMR TX_CURR (estimated)","var(--s1)",true), ser("tx_curr_emr","EMR TX_CURR (snapshot)","var(--s1)"),
+   <section class="c3d">${secH("Current on treatment","Week-end TX_CURR")}${lineChart([ser("tx_curr_est","EMR TX_CURR (estimated)","var(--s1)",true), ser(EMRK(),"EMR TX_CURR, CDR line list (snapshot)","var(--s1)"),
      ...(D.meta.tx_curr_source==="NDR"?[ser("tx_curr","TX_CURR_Unique (NDR snapshot)","var(--s2)")]:[])],{label:"TX_CURR trend",weekly:true})}</section>
    <section class="c3d">${secH("TX_NEW and IIT by week","Linelist ART start dates; IIT = refill + 28 days lapsed in the week")}${monthlyPick("trend",[{k:"n",l:"TX_NEW",num:"tx_new_q"},{k:"i",l:"IIT",num:"iit_q"}],F,"week")}</section>
    <div class="grid g2"><section class="c3d">${secH("Biometric coverage","Captured ÷ active")}${lineChart([ratio("pbs_baseline_est","pbs_active","Coverage of today's cohort by capture date (estimated)","var(--s2)",true),
@@ -2038,6 +2038,9 @@ const MLAB = {pmtct_art:"Pregnant women living with HIV on ART (PMTCT_ART)", pmt
 const mlab = m => MLAB[m] || m.toUpperCase();
 // treatment numbers follow reporting.treatment_source: the NDR line list, or the CDR (central repository) line list
 const NDRT = () => D.meta.treatment_source==="ndr";
+// the EMR's own TX_CURR (CDR line list) vs the treatment cohort's TX_CURR (NDR when treatment_source is ndr)
+const EMRK = () => NDRT() && MEAS.includes("tx_curr_cdr") ? "tx_curr_cdr" : "tx_curr_emr";
+const TXE = () => NDRT() ? "TX_CURR" : "TX_CURR (EMR)";
 const srcOf = i => NDRT() ? String(i.source||"").replace(/Central repository(?: \(linelist\))?/g, "NDR line list") : i.source;
 /* evaluate with the period cut at another end date (weekly progress) */
 function atEnd(end, fn){

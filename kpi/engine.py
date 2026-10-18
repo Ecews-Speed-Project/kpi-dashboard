@@ -302,7 +302,7 @@ def encode_vl_clients(cl: pd.DataFrame, master: pd.DataFrame) -> dict:
 
 TREND_MEASURES = ["tx_curr", "tx_curr_emr", "iit_now", "vl_result", "vl_suppressed", "pbs_active", "pbs_baseline",
                   "pbs_valid", "pbs_duplicate", "pbs_adjudication", "pbs_recapture",
-                  "bio_aw", "bio_noprint", "bio_invalid", "bio_dup_supp", "bio_unusable"]
+                  "bio_aw", "bio_noprint", "bio_invalid", "bio_dup_supp", "bio_unusable", "tx_curr_cdr"]
 
 
 def snapshot_rows(cube: pd.DataFrame, as_of: dt.date) -> pd.DataFrame:
@@ -426,6 +426,15 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
     parts = [dcube,
              attach_master(linelist_cube(linelist, cols["linelist"], p_ll, history_start, today=as_of), master, "linelist", dq),
              attach_master(pbs_cube(pbs_src, pc), master, "pbs", dq)]
+    # treatment from the NDR: the CDR line list still gives the EMR's own TX_CURR (same unique rule), so
+    # EMR and NDR can be compared - tx_curr_cdr / emr_active_cdr, as of the CDR line list date
+    cdr = manual.get("cdr_linelist")
+    if cdr is not None and len(cdr):
+        cd = linelist_date(cdr, cols["linelist"], as_of)
+        x = linelist_cube(cdr, cols["linelist"], Period(as_of=cd, fy_start=p.fy_start), None, today=cd)
+        x = x[(x["period"].fillna("") == "") & (x["mod"].fillna("") == "") & x["measure"].isin(["tx_curr_emr", "emr_active"])]
+        parts.append(attach_master(x.assign(measure=x["measure"].map({"tx_curr_emr": "tx_curr_cdr", "emr_active": "emr_active_cdr"})),
+                                   master, "cdr_linelist", dq))
     # Past periods: stock figures from the saved dated copies (one per month), period "SL<date>" /
     # "SN<date>". Quarter-relative flows (waterfall, appointments) come from today's files only.
     ndr_date = None

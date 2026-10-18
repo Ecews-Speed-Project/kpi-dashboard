@@ -134,6 +134,7 @@ DHIS_MEASURES = {
     "pmtct_art_comm":      [Term("PMTCT_COMM", "Community_PMTCT_ART_Already_on_ART", "Community"),
                             Term("PMTCT_COMM", "Community_PMTCT_ART_New_on_ART", "Community")],
     # weekly instance: PMTCT_EID; monthly instance splits it into first / second test
+    # (community PMTCT on the monthly instance: see the loop after this table)
     "pmtct_eid":      [Term("PMTCT_EID", n) for n in ("PMTCT_EID", "PMTCT_EID_First Test")],   # first test (deck / DATIM)
     "pmtct_eid_pos":  [Term("PMTCT_EID", "PMTCT_HEI_POS")],
     "tb_prev_num":    [Term("TB", f"TB_PREV_NUM_{s} enrolled on ART") for s in ("Newly", "Previously")],
@@ -414,6 +415,23 @@ def _dhis_facts(merged: pd.DataFrame) -> pd.DataFrame:
 _UNIQUE: dict = {}
 
 
+# Community PMTCT on the MONTHLY instance has no dataset of its own: community sites (TBAs, faith and
+# maternity homes - org units outside the "Health Facility" group, mostly level 5) report the standard
+# PMTCT elements, as the cPMTCT favourite shows. The pull files those rows as table PMTCT_COMM, so they
+# replace the weekly Community_PMTCT values of that facility and month, and count as community here.
+for _k in ("pmtct_stat_den", "pmtct_stat_num", "pmtct_stat_pos", "pmtct_art", "pmtct_pos_known", "pmtct_pos_new", "hts_tst", "hts_tst_pos"):
+    DHIS_MEASURES[_k] = DHIS_MEASURES[_k] + [Term("PMTCT_COMM", t.dataname, "Community" if t.mod == "Facility" else t.mod, t.coc, t.sign)
+                                             for t in DHIS_MEASURES[_k] if t.table == "PMTCT"]
+for _k, _base in (("pmtct_stat_den_comm", "pmtct_stat_den"), ("pmtct_stat_num_comm", "pmtct_stat_num"),
+                  ("pmtct_stat_pos_comm", "pmtct_stat_pos"), ("pmtct_art_comm", "pmtct_art"),
+                  ("hts_tst_comm", "hts_tst"), ("hts_tst_pos_comm", "hts_tst_pos")):
+    DHIS_MEASURES[_k] = DHIS_MEASURES[_k] + [t for t in DHIS_MEASURES[_base]
+                                             if t.table == "PMTCT_COMM" and not t.dataname.startswith("Community_")]
+
+# tables that hold the same data elements: PMTCT_COMM rows are community sites' share of the PMTCT dataset
+_TABLE_GROUP = {"PMTCT_COMM": "PMTCT"}
+
+
 def _term_rows(f: pd.DataFrame, t: Term) -> pd.DataFrame:
     """Facts feeding one Term (signed). Shared by the cube and the 'How it's calculated' breakdown.
     table "*" (DHIS2 indicator terms) = any table, each value counted once even when the same
@@ -423,8 +441,9 @@ def _term_rows(f: pd.DataFrame, t: Term) -> pd.DataFrame:
             # one table per data element and instance (rows are not unique on facility x
             # disagg, so de-duplicating rows would drop sub-facility values)
             src = f["source"] if "source" in f else pd.Series("", index=f.index)
-            first = f.assign(_s=src).groupby(["_s", "_dn"])["table"].transform("min")
-            _UNIQUE.clear(); _UNIQUE[id(f)] = f[f["table"] == first]
+            grp = f["table"].map(lambda x: _TABLE_GROUP.get(x, x))
+            first = f.assign(_s=src, _g=grp).groupby(["_s", "_dn"])["_g"].transform("min")
+            _UNIQUE.clear(); _UNIQUE[id(f)] = f[grp == first]
         base = _UNIQUE[id(f)]
         sel = base[base["_dn"] == _dn_key(pd.Series([t.dataname]))[0]]
     else:
@@ -1060,7 +1079,7 @@ def concurrence(ll: pd.DataFrame, lc: dict, pbs: pd.DataFrame, pc: dict) -> tupl
     x = _pbs_flags(pbs, pc)
     u15 = pd.to_numeric(pbs[pc["age"]], errors="coerce") < 15 if pc.get("age") in pbs else False
     n = pd.DataFrame({"key": _client_key(pbs[pc["datim"]], pbs[pc["art_no"]]), "act": x["active"],
-                      "counted": x["active"] & ((x["valid"] & (x["dt"] != "duplicate")) | u15),
+                      "counted": x["active"] & ((x["valid"] & (x["dt"] != "duplicate") & (x["fp"] != "adjudicationwaiting")) | u15),   # TX_CURR_Unique
                       "state": pbs[pc["state"]], "facility": pbs[pc["facility"]],
                       "sex": norm_sex(pbs[pc["sex"]]) if pc.get("sex") in pbs else "U",
                       "age": age_bands(pbs[pc["age"]]) if pc.get("age") in pbs else UNKNOWN_AGE,
