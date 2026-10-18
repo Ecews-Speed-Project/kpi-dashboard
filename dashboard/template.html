@@ -1261,6 +1261,46 @@ function apptCsv(rows){
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"})); const {s:x,e:y}=apptRng();
   a.download=`appointments_${["scheduled","missed","iit"][ACAT]}_${x}_${y}_${(F.fac||F.lga||F.state||"SPEED").replace(/[^\w-]+/g,"_")}.csv`; a.click(); URL.revokeObjectURL(a.href);
 }
+
+/* ---------- missed appointments: a call list per facility ----------
+   Missed = the appointment has passed with no pickup and the client is still active; a client becomes IIT
+   28 days after the appointment, so the list is ordered by the days left before that happens. */
+let CLFAC = "";
+const daysLate = r => Math.round((dOf(LLD()) - dOf(acv(r,"appt")))/DAY);
+const daysToIIT = r => Math.max(0, 28 - daysLate(r));
+const num0 = x => { const v=parseFloat(x); return x===""||x==null||isNaN(v) ? (x??"") : String(Math.round(v)); };   // "180.0" -> "180"
+function callRows(){ return apptList().filter(aMissed).sort((a,b)=>daysToIIT(a)-daysToIIT(b) || acv(a,"appt").localeCompare(acv(b,"appt"))); }
+function callCsv(rows, tag){
+  const head=["State","LGA","Facility","ART no.","Hospital no.","Sex","Age band","Appointment","Days late","Days before IIT","Last pickup","Refill days","Regimen line","Last VL","VL date","In TX_CURR_Unique","Follow-up flags","Called on","Outcome"];
+  const q=x=>`"${String(x??"").replaceAll('"','""')}"`;
+  const lines=[head.map(q).join(",")].concat(rows.map(r=>{const fc=FAC[r[0]]; return [fc.state,short(fc.lga),fc.facility,acv(r,"art_no"),acv(r,"hosp_no"),DM.sex[r[1]],AGE[r[2]],acv(r,"appt"),daysLate(r),daysToIIT(r),
+    acv(r,"last_pickup"),num0(acv(r,"refill_days")),acv(r,"regimen_line"),num0(acv(r,"vl_value")),acv(r,"vl_date"),acv(r,"uniq"),acv(r,"flags"),"",""].map(q).join(",");}));
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"}));
+  a.download=`call_list_missed_${String(tag).replace(/[^\w-]+/g,"_")}_${LLD()}.csv`; a.click(); URL.revokeObjectURL(a.href);
+}
+function missedCallList(){
+  if(!AC.rows.length || !NDRT()) return "";
+  const rows=callRows(), byF=new Map();
+  for(const r of rows){ let o=byF.get(r[0]); if(!o){o={n:0,u7:0,bio:0,vl:0};byF.set(r[0],o);} o.n++; if(daysToIIT(r)<=7)o.u7++; if(aFlag(r,"Biometrics"))o.bio++; if(aFlag(r,"VL"))o.vl++; }
+  const facs=[...byF.entries()].sort((a,b)=>b[1].u7-a[1].u7||b[1].n-a[1].n);
+  if(F.fac){ const i=FAC.findIndex(f=>f.facility===F.fac); if(i>=0) CLFAC=String(i); }
+  if(!CLFAC || !byF.has(+CLFAC)) CLFAC = facs.length ? String(facs[0][0]) : "";
+  const fi=+CLFAC, list=rows.filter(r=>r[0]===fi), u7=rows.filter(r=>daysToIIT(r)<=7).length;
+  const summary=`<div class="tw" style="max-height:340px"><table><thead><tr><th>Facility</th><th style="text-align:left">LGA</th><th style="text-align:left">State</th><th class="n">To call</th><th class="n">IIT within 7 days</th><th class="n">With biometric issue</th><th class="n">With VL gap</th></tr></thead><tbody>
+    ${facs.map(([i,o])=>`<tr${i===fi?' class="total"':""}><td><button class="drill" data-clfac="${i}">${esc(FAC[i].facility)}</button></td><td style="text-align:left">${esc(short(FAC[i].lga))}</td><td style="text-align:left">${esc(FAC[i].state)}</td><td class="n">${n(o.n)}</td><td class="n">${n(o.u7)}</td><td class="n">${n(o.bio)}</td><td class="n">${n(o.vl)}</td></tr>`).join("")}
+    ${facs.length?"":`<tr><td colspan="7" class="empty">No missed appointments for this filter.</td></tr>`}</tbody></table></div>`;
+  const pick=`<div class="dimbar" style="margin-top:14px"><span class="eyebrow">Call list</span><label>Facility <select id="cl-fac">${facs.map(([i,o])=>`<option value="${i}"${i===fi?" selected":""}>${esc(FAC[i].facility)} (${n(o.n)})</option>`).join("")}</select></label>
+    <button class="reset" id="cl-csv">Download this facility (${n(list.length)})</button><button class="reset" id="cl-csv-all">Download all facilities (${n(rows.length)})</button></div>`;
+  const tbl=`<div class="tw" style="max-height:480px;margin-top:8px"><table><thead><tr><th>#</th><th>ART no.</th><th>Hospital no.</th><th>Sex</th><th>Age</th><th>Appointment</th><th class="n">Days late</th><th class="n">Days before IIT</th><th>Last pickup</th><th class="n">Refill days</th><th>Last VL</th><th>Follow-up flags</th></tr></thead><tbody>
+    ${list.map((r,k)=>{const d=daysToIIT(r); return `<tr><td class="n">${k+1}</td><td>${esc(acv(r,"art_no"))}</td><td>${esc(acv(r,"hosp_no"))}</td><td>${DM.sex[r[1]]}</td><td>${esc(AGE[r[2]])}</td><td>${fmtDate(acv(r,"appt"))}</td>
+      <td class="n">${n(daysLate(r))}</td><td class="n">${chip(d<=7?"critical":d<=14?"warning":"good", d===0?"Due now":`${d} days`)}</td><td>${fmtDate(acv(r,"last_pickup"))}</td><td class="n">${esc(num0(acv(r,"refill_days")))}</td>
+      <td>${esc(num0(acv(r,"vl_value")))}${acv(r,"vl_date")?` <span class="drillnote">${fmtDate(acv(r,"vl_date"))}</span>`:""}</td><td style="white-space:normal;min-width:220px">${esc(acv(r,"flags"))}</td></tr>`;}).join("")}
+    ${list.length?"":`<tr><td colspan="12" class="empty">Pick a facility above.</td></tr>`}</tbody></table></div>`;
+  return `<section class="c3d">${secH("Missed appointments — call list by facility",`${n(rows.length)} clients to call across ${n(facs.length)} facilities · ${n(u7)} become IIT within 7 days · as of the NDR file of ${fmtDate(LLD())}`)}
+   <p class="drillnote" style="margin-top:0">Clients still active in the NDR whose pharmacy appointment (last pickup + refill days) has passed with no pickup. Each becomes IIT 28 days after the appointment, so the list starts with those closest to it ("Due now" = 28 days reached; the next NDR file will likely show them as IIT).
+   Appointment dates follow the range picked above. No names or phone numbers are held here: the facility finds each client in its EMR by ART or hospital number. The download adds empty "Called on" and "Outcome" columns for the facility team.</p>
+   ${summary}${pick}${tbl}</section>`;
+}
 function appointmentsSection(v){
   if(!AC.rows.length) return `<section class="c3d">${secH("Appointments and service-delivery gaps")}<div class="empty">${D.meta.archived?"Archived copies carry no client line list — open the live dashboard.":"No appointment data."}</div></section>`;
   const {s:a,e:b}=apptRng(), all=apptList(), mis=all.filter(aMissed), iit=all.filter(aIIT), c=(rows,k)=>rows.filter(r=>aFlag(r,k)).length;
@@ -1340,6 +1380,7 @@ function artPage(){
    ${mmdSection()}
    ${dsdSection()}
    ${appointmentsSection(v)}
+   ${missedCallList()}
    ${trendsBlock()}`;
 }
 
@@ -2138,6 +2179,7 @@ document.addEventListener("change", e=>{
   else if(e.target.dataset.pdimsel){ const st=PIVOT[e.target.dataset.pdimsel]; st.dim=e.target.value; st.sort=null; }
   else if(id==="appt-from"||id==="appt-to"){ const a=document.getElementById("appt-from").value, b=document.getElementById("appt-to").value; if(a&&b) ARNG={s:a<b?a:b, e:a<b?b:a}; }
   else if(id==="appt-dim") ADIM=e.target.value;
+  else if(id==="cl-fac") CLFAC=e.target.value;
   else if(id.startsWith("vlc-q-")) vst(id.slice(6)).q=e.target.value;
   else if(id==="eac-from"||id==="eac-to"){ const a=document.getElementById("eac-from").value, b=document.getElementById("eac-to").value; if(a&&b){ES.s=a<b?a:b; ES.e=a<b?b:a;} }
   else if(id==="eac-dim") ES.dim=e.target.value; else if(id==="eac-q") ES.q=e.target.value;
@@ -2158,6 +2200,9 @@ document.addEventListener("click", e=>{
   const ac=e.target.closest("[data-acat]"); if(ac){ACAT=+ac.dataset.acat; render(); return;}
   const af=e.target.closest("[data-aflag]"); if(af){AFLAG=af.dataset.aflag; render(); return;}
   if(e.target.closest("#appt-csv")){ apptCsv(apptSel()); return; }
+  const cf=e.target.closest("[data-clfac]"); if(cf){ CLFAC=cf.dataset.clfac; render(); return; }
+  if(e.target.closest("#cl-csv")){ callCsv(callRows().filter(r=>r[0]===+CLFAC), FAC[+CLFAC]?.facility||"facility"); return; }
+  if(e.target.closest("#cl-csv-all")){ callCsv(callRows(), F.fac||F.lga||F.state||"SPEED"); return; }
   const vc=e.target.closest("[data-vcat]"); if(vc){const [k,c]=vc.dataset.vcat.split("|"); vst(k).cat=c; render(); return;}
   const et=e.target.closest("[data-ethr]"); if(et){ES.thr=+et.dataset.ethr; render(); return;}
   const ea=e.target.closest("[data-eact]"); if(ea){ES.active=ea.dataset.eact==="1"; render(); return;}
