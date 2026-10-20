@@ -767,9 +767,57 @@ def cmd_run():
         master["site_type"] = fac["site_type"].values
     out = finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo=False, prev_quarter=pq, past=past)
     housekeeping(cfg, pbs_path, as_of)
+    publish_live(cfg)
     return out
+
+
+def publish_live(cfg: dict) -> bool:
+    """Copy the built dashboard (live/index.html, index.html.gz, version.json) to the hosting server over
+    SSH with the key in settings publish.key. Each file goes up under a temporary name and is then moved
+    into place, version.json last, so open pages never load a half-copied dashboard. A failed copy is
+    logged and does not fail the update (the server keeps the previous build)."""
+    import subprocess
+    pub = cfg.get("publish") or {}
+    if not pub.get("enabled"):
+        return False
+    host, user, path = pub.get("host", ""), pub.get("user", ""), str(pub.get("path", "")).rstrip("/")
+    key = str(Path(pub.get("key", "~/.ssh/speed_dashboard")).expanduser())
+    if not (host and user and path):
+        print("  publish: settings publish.host / user / path are not all set; skipped")
+        return False
+    live = folder(cfg, "live", "live")
+    files = ["index.html.gz", "index.html", "version.json"]          # version.json last: open pages reload after it
+    if not all((live / f).exists() for f in files):
+        print("  publish: live/ is incomplete; skipped")
+        return False
+    opts = ["-i", key, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20"]
+    target = f"{user}@{host}"
+    try:
+        # one scp per file to a temporary name, then one ssh command that moves them into place
+        for f in files:
+            subprocess.run(["scp", "-q", *opts, str(live / f), f"{target}:{path}/.{f}.uploading"],
+                           check=True, capture_output=True, text=True, timeout=900)
+        moves = " && ".join(f"mv -f '{path}/.{f}.uploading' '{path}/{f}'" for f in files)
+        subprocess.run(["ssh", *opts, target, moves], check=True, capture_output=True, text=True, timeout=120)
+        print(f"  publish: dashboard copied to {target}:{path}")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"  WARNING publish failed ({' '.join(e.cmd[:1])}): {(e.stderr or e.stdout or '').strip().splitlines()[-1:] or e.returncode}")
+    except Exception as e:
+        print(f"  WARNING publish failed: {type(e).__name__}: {e}")
+    return False
+
+
+def cmd_publish():
+    """python run_pipeline.py publish: copy the current live/ dashboard to the server now."""
+    load_env()
+    cfg = settings()
+    if not (cfg.get("publish") or {}).get("enabled"):
+        print("publish is off: set publish.enabled, user and path in config/settings.yaml once the server accepts the key")
+        sys.exit(1)
+    sys.exit(0 if publish_live(cfg) else 1)
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "demo"
-    {"demo": cmd_demo, "run": cmd_run, "discover": cmd_discover}[cmd]()
+    {"demo": cmd_demo, "run": cmd_run, "discover": cmd_discover, "publish": cmd_publish}[cmd]()

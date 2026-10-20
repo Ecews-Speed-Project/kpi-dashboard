@@ -270,6 +270,16 @@ columns:
     dob: dateofbirth                 # suppressed duplicates: demographic twin test (sex + date of birth + ART start)
     unique_flag: ndr_unique          # quarter files only: the NDR TX_CURR_Unique classification (q4_algo 1-4)
 
+# Hosting (option B): after each update, copy live/ to the server that serves the dashboard, over SSH.
+# The server admin adds the public key (C:\Users\<you>\.ssh\speed_dashboard.pub) to that user's
+# ~/.ssh/authorized_keys; then fill in user and path and set enabled: true. Test: python run_pipeline.py publish
+publish:
+  enabled: false
+  host: eboard.ecews.org
+  user: ""                       # SSH user on the server
+  path: ""                       # the server folder the dashboard is served from (its live/ folder)
+  key: ~/.ssh/speed_dashboard    # private key on this computer (no passphrase, so scheduled runs can use it)
+
 # Dashboard sign-in (serve_dashboard.py): who may open the dashboard.
 access:
   allowed_domains: [ecews.org]   # any address @ecews.org
