@@ -274,7 +274,9 @@ columns:
 # The server admin adds the public key (C:\Users\<you>\.ssh\speed_dashboard.pub) to that user's
 # ~/.ssh/authorized_keys; then fill in user and path and set enabled: true. Test: python run_pipeline.py publish
 publish:
-  enabled: false
+  git_branch: live               # after each update, push the figures-only dashboard (no client lists) to this
+                                 # GitHub branch for the Docker deployment; empty = off
+  enabled: false                 # SSH copy to a server (not used: the deployment reads the GitHub branch)
   host: eboard.ecews.org
   user: ""                       # SSH user on the server
   path: ""                       # the server folder the dashboard is served from (its live/ folder)

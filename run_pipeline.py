@@ -596,6 +596,8 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
     # demo builds never touch live\ (the served dashboard) or archive\
     path = (build(data, ROOT / "data" / "demo" / "out") if demo else
             build(data, folder(cfg, "live", "live"), folder(cfg, "archive", "archive")))
+    if not demo:
+        publish_git(cfg, data)
     print(f"{data['meta']['quarter']}  as of {as_of}  cube rows {len(data['cube']['rows']):,}  ->  {path}")
     return data, scorecard
 
@@ -771,6 +773,43 @@ def cmd_run():
     return out
 
 
+def publish_git(cfg: dict, data: dict) -> bool:
+    """Push the figures-only dashboard (no client lists) to the GitHub branch publish.git_branch ('live'):
+    index.html, index.html.gz, version.json and a README. The branch holds only the latest build (one
+    commit, force-pushed), so the repository does not grow with every update. Other systems (e.g. a
+    Docker deployment) take the dashboard from that branch. A failed push is logged; the update stands."""
+    import subprocess
+    pub = cfg.get("publish") or {}
+    branch = pub.get("git_branch")
+    if not branch:
+        return False
+    from dashboard.build import build_shared
+    out = ROOT / "data" / "shared_build"
+    build_shared(data, out)
+    m = data["meta"]
+    (out / "README.md").write_text(
+        f"# SPEED KPI dashboard - latest shared build\n\nGenerated {m['generated_at']} (data as of {m['as_of']}, {m['quarter']}).\n\n"
+        "Figures only: client-level lists (ART / hospital numbers) are removed. This branch holds just the latest build and is\n"
+        "replaced on every update. Serve `index.html` (or `index.html.gz` with `Content-Encoding: gzip`); `version.json` changes\n"
+        "with each build and open pages reload when it does. The code is on the `main` branch.\n", encoding="utf-8")
+    git = lambda *a, **k: subprocess.run(["git", "-C", str(ROOT), *a], check=True, capture_output=True, text=True, **k).stdout.strip()
+    try:
+        files = ["README.md", "index.html", "index.html.gz", "version.json"]
+        tree_in = "".join(f"100644 blob {git('hash-object', '-w', str(out / f))}\t{f}\n" for f in files)
+        tree = git("mktree", input=tree_in)
+        commit = git("commit-tree", tree, "-m", f"Dashboard build {m['generated_at']} ({m['quarter']}, data as of {m['as_of']})")
+        git("push", "--force", "-q", "origin", f"{commit}:refs/heads/{branch}", timeout=600)
+        git("fetch", "-q", "origin", branch, timeout=300)
+        git("prune", "--expire=now")          # drop the previous build's objects from the local repository
+        print(f"  published: figures-only dashboard pushed to GitHub branch '{branch}'")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"  WARNING git publish failed: {(e.stderr or e.stdout or '').strip().splitlines()[-1:] or e.returncode}")
+    except Exception as e:
+        print(f"  WARNING git publish failed: {type(e).__name__}: {e}")
+    return False
+
+
 def publish_live(cfg: dict) -> bool:
     """Copy the built dashboard (live/index.html, index.html.gz, version.json) to the hosting server over
     SSH with the key in settings publish.key. Each file goes up under a temporary name and is then moved
@@ -809,9 +848,17 @@ def publish_live(cfg: dict) -> bool:
 
 
 def cmd_publish():
-    """python run_pipeline.py publish: copy the current live/ dashboard to the server now."""
+    """python run_pipeline.py publish: push the current dashboard (figures only) to GitHub now, and copy
+    live/ to the server when SSH publishing is on."""
     load_env()
     cfg = settings()
+    if (cfg.get("publish") or {}).get("git_branch"):
+        import json
+        s = (folder(cfg, "live", "live") / "index.html").read_text(encoding="utf-8")
+        i = s.index("const D = ") + len("const D = ")
+        ok = publish_git(cfg, json.loads(s[i:s.index(";\nconst SPEED", i)]))
+        if not (cfg.get("publish") or {}).get("enabled"):
+            sys.exit(0 if ok else 1)
     if not (cfg.get("publish") or {}).get("enabled"):
         print("publish is off: set publish.enabled, user and path in config/settings.yaml once the server accepts the key")
         sys.exit(1)

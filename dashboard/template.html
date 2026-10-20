@@ -725,7 +725,7 @@ function concurrenceSection(v){
     <div class="tw" style="max-height:480px;margin-top:8px"><table><thead><tr><th>Facility</th><th>Sex</th><th>Age</th>${cols.map(c=>`<th>${esc(CCL[c]||c)}</th>`).join("")}</tr></thead><tbody>
     ${show.map(r=>`<tr><td>${esc(FAC[r[0]].facility)}</td><td>${DM.sex[r[1]]}</td><td>${esc(AGE[r[2]])}</td>${cols.map(c=>`<td${c==="reason"?' style="white-space:normal;min-width:260px"':""}>${esc(r[4+CC.cols.indexOf(c)])}</td>`).join("")}</tr>`).join("")}
     ${show.length?"":`<tr><td colspan="${cols.length+3}" class="empty">No clients in this category for the current filter.</td></tr>`}</tbody></table></div>`
-    : `<div class="empty">${D.meta.archived?"Archived copies carry no client line list — open the live dashboard.":"No client differences."}</div>`;
+    : `<div class="empty">${D.meta.archived||D.meta.shared?NOLIST():"No client differences."}</div>`;
   return `<section class="c3d">${secH("EMR vs NDR TX_CURR concurrence","Client by client on DATIM code + ART number (EMR pepid = NDR PatientARTNumber; punctuation and leading zeros ignored when needed, one-to-one within a site)")}
    <div class="kpis">${kpi(n(v[EMRK()]),"EMR TX_CURR","central-repository linelist (CDR)")}${kpi(n(v.tx_curr),"NDR TX_CURR","TX_CURR_Unique",null,TXTIP())}
     ${kpi(n(both),"In both",`${pct(rate)} concurrence`,rateStatus(rate,.95),"In both ÷ in either")}
@@ -1302,7 +1302,7 @@ function missedCallList(){
    ${summary}${pick}${tbl}</section>`;
 }
 function appointmentsSection(v){
-  if(!AC.rows.length) return `<section class="c3d">${secH("Appointments and service-delivery gaps")}<div class="empty">${D.meta.archived?"Archived copies carry no client line list — open the live dashboard.":"No appointment data."}</div></section>`;
+  if(!AC.rows.length) return `<section class="c3d">${secH("Appointments and service-delivery gaps")}<div class="empty">${D.meta.archived||D.meta.shared?NOLIST():"No appointment data."}</div></section>`;
   const {s:a,e:b}=apptRng(), all=apptList(), mis=all.filter(aMissed), iit=all.filter(aIIT), c=(rows,k)=>rows.filter(r=>aFlag(r,k)).length;
   const past=all.filter(r=>acv(r,"appt")<LLD()).length, noPast = a >= LLD();
   // table by level
@@ -1405,7 +1405,7 @@ function vlcCsv(rows, key){
 const VLCF = {vl: () => F, ap3: () => ({...F, age:"<20"})};
 function unsuppressedList(key){
   if(!STOCK) return `<div class="empty">The line list is for the current linelist only.</div>`;
-  if(!VC.rows.length) return `<div class="empty">${D.meta.archived?"Archived copies carry no client line list — open the live dashboard.":"No unsuppressed clients."}</div>`;
+  if(!VC.rows.length) return `<div class="empty">${D.meta.archived||D.meta.shared?NOLIST():"No unsuppressed clients."}</div>`;
   const f=VLCF[key](), st=vst(key), all=vlcList(f), cnt=k=>!k?all.length:all.filter(r=>vcv(r,"vl_band")===k||vcv(r,"repeat")===k).length;
   const sel=vlcSel(key,f), show=sel.slice(0,300), cols=VC.cols.filter(x=>x!=="datim");
   return `<div class="dimbar"><span class="eyebrow">Show</span><span class="seg" style="flex-wrap:wrap">${VCATS.map(([k,l])=>`<button data-vcat="${key}|${esc(k)}" aria-pressed="${st.cat===k}">${esc(l)} <b>${n(cnt(k))}</b></button>`).join("")}</span></div>
@@ -1446,7 +1446,7 @@ function eacCsv(rows){
 }
 function eacSection(){
   const head = secH("Enhanced adherence counselling (EAC)", EC.rows.length?`EAC line list (${esc(D.meta.eac_source||"")}) as of ${fmtDate(EACAS())} · latest EAC episode per client, as defined in EAC_Script_Version11`:"Modelled on EAC_Script_Version11");
-  if(!EC.rows.length) return `<section class="c3d">${head}<div class="empty">${D.meta.archived?"Archived copies carry no client line list — open the live dashboard.":"No EAC data yet: waiting for the CDR team to load the EAC line list (table <code>eac_linelist</code>, the output of EAC_Script_Version11 for every facility). This section fills in on the first run after it has data."}</div></section>`;
+  if(!EC.rows.length) return `<section class="c3d">${head}<div class="empty">${D.meta.archived||D.meta.shared?NOLIST():"No EAC data yet: waiting for the CDR team to load the EAC line list (table <code>eac_linelist</code>, the output of EAC_Script_Version11 for every facility). This section fills in on the first run after it has data."}</div></section>`;
   if(!STOCK) return `<section class="c3d">${head}<div class="empty">EAC figures are for the current EAC line list only.</div></section>`;
   const {s,e}=eacRange(), all=eacList(), t=eacSum(all);
   const flow = flowRow([fs(`High VL (≥${n(ES.thr)})`,t.n),fs("EAC started",t.st),fr("EAC uptake",t.st,t.n),fs("3 sessions (standard EAC)",t.s3),fr("Completed standard EAC",t.s3,t.st),
@@ -1757,7 +1757,7 @@ function pbsPage(){
       <td>${esc(r[ci("fp_status")])}</td><td>${esc(r[ci("dup_type")])}</td><td>${esc(r[ci("match")])}</td><td class="n">${esc(r[ci("captured")])}</td><td class="n">${esc(r[ci("last_pickup")])}</td>
       <td style="white-space:normal">${r[3].split(";").filter(c=>c!==PBSCAT).map(c=>esc(PC.cats[c])).join(", ")}</td></tr>`).join("")}
     ${show.length?"":`<tr><td colspan="12" class="empty">No clients in this category for the current filter.</td></tr>`}</tbody></table></div>`;
-  const followUp = `<section class="c3d">${secH("Client follow-up list","Client-level data — keep this page within the programme team")}${!STOCK?`<div class="empty">The client list is for the current NDR file only.</div>`:PC.rows.length?list:`<div class="empty">No client list: ${D.meta.archived?"archived copies carry no client identifiers — open the live dashboard (open_dashboard.bat) for the list":ndr?"no clients need follow-up":"needs the NDR PBS line list"}.</div>`}</section>`;
+  const followUp = `<section class="c3d">${secH("Client follow-up list","Client-level data — keep this page within the programme team")}${!STOCK?`<div class="empty">The client list is for the current NDR file only.</div>`:PC.rows.length?list:`<div class="empty">No client list: ${D.meta.archived||D.meta.shared?(D.meta.shared?"the shared dashboard carries no client identifiers — the list stays with the M&E team":"archived copies carry no client identifiers — open the live dashboard (open_dashboard.bat) for the list"):ndr?"no clients need follow-up":"needs the NDR PBS line list"}.</div>`}</section>`;
    if(ndr) return context()+`<p class="drillnote" style="margin:0">Source: NDR PBS line list (inbox), one category per active client, as the NDR / PHIS3 TX_CURR_Unique summary.</p>
     <div class="kpis">${bioCards(v)}</div>
     <section class="c3d">${secH("Where we stand: TX_CURR to TX_CURR_Unique", `NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)} · active clients`)}${bioWaterfall(v)}</section>
@@ -2038,6 +2038,8 @@ const MLAB = {pmtct_art:"Pregnant women living with HIV on ART (PMTCT_ART)", pmt
 const mlab = m => MLAB[m] || m.toUpperCase();
 // treatment numbers follow reporting.treatment_source: the NDR line list, or the CDR (central repository) line list
 const NDRT = () => D.meta.treatment_source==="ndr";
+// archived and shared (GitHub) copies carry figures only: the client lists stay on the M&E computer
+const NOLIST = () => D.meta.shared ? "Client-level lists are not part of the shared dashboard: they stay with the M&E team." : "Archived copies carry no client line list — open the live dashboard.";
 // the EMR's own TX_CURR (CDR line list) vs the treatment cohort's TX_CURR (NDR when treatment_source is ndr)
 const EMRK = () => NDRT() && MEAS.includes("tx_curr_cdr") ? "tx_curr_cdr" : "tx_curr_emr";
 const TXE = () => NDRT() ? "TX_CURR" : "TX_CURR (EMR)";

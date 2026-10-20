@@ -54,6 +54,24 @@ def _render(data: dict) -> str:
     return html.replace("/*__DATA__*/null", payload).replace("__LOGO__", logo_uri)
 
 
+CLIENT_LISTS = ("pbs_clients", "conc_clients", "appt_clients", "vl_clients", "eac_clients")
+
+
+def without_clients(data: dict, **flags) -> dict:
+    """The dashboard data with every client-level list emptied (ART / hospital numbers, statuses);
+    all figures, charts and tables stay. Used for archived copies and the shared (GitHub) build."""
+    out = dict(data, meta=dict(data["meta"], **flags))
+    for k in CLIENT_LISTS:
+        if k in out:
+            out[k] = dict(out[k], rows=[])
+    return out
+
+
+def build_shared(data: dict, out_dir: Path) -> Path:
+    """Figures-only dashboard (no client lists) for the public GitHub 'live' branch."""
+    return build(without_clients(data, shared=True), out_dir)
+
+
 def build(data: dict, out_dir: Path | None = None, archive_dir: Path | None = None) -> Path:
     out_dir = Path(out_dir or HERE / "out")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -70,7 +88,8 @@ def build(data: dict, out_dir: Path | None = None, archive_dir: Path | None = No
     os.replace(tmp, path)
     (out_dir / "version.json").write_text(json.dumps({"generated_at": data["meta"]["generated_at"],
                                                       "quarter": data["meta"]["quarter"],
-                                                      "demo": data["meta"].get("demo", False)}))
+                                                      "demo": data["meta"].get("demo", False),
+                                                      "client_lists": not data["meta"].get("shared", False)}))
     if archive_dir:
         archive_dir = Path(archive_dir)
         archive_dir.mkdir(parents=True, exist_ok=True)
@@ -78,10 +97,7 @@ def build(data: dict, out_dir: Path | None = None, archive_dir: Path | None = No
         tag = "_DEMO" if data["meta"].get("demo") else ""
         # Archived copies keep every figure but no client identifiers: the
         # biometrics follow-up list lives only in live/index.html.
-        arch = dict(data, meta=dict(data["meta"], archived=True))
-        for k in ("pbs_clients", "conc_clients", "appt_clients", "vl_clients", "eac_clients"):     # client-level lists stay in live\ only
-            if k in arch:
-                arch[k] = dict(arch[k], rows=[])
+        arch = without_clients(data, archived=True)          # client-level lists stay in live\ only
         name = f"SPEED_dashboard_{stamp}{tag}"
         with zipfile.ZipFile(archive_dir / f"{name}.zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
             z.writestr(f"{name}.html", _render(arch))
