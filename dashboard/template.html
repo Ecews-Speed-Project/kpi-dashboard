@@ -288,6 +288,7 @@ footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:
 .hscroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--gold) transparent;-webkit-overflow-scrolling:touch;padding-bottom:6px}
 .hscroll::-webkit-scrollbar{height:8px}.hscroll::-webkit-scrollbar-thumb{background:var(--gold);border-radius:4px}
 .hscroll svg{display:block;height:auto}
+.yaxw{position:relative}.yaxo{position:absolute;left:0;top:0;pointer-events:none}
 .hsnote{font-size:12.5px;color:var(--ink-3);font-style:italic;margin:2px 0 0}
 /* ---------- searchable dropdowns ---------- */
 .ssel{display:inline-block;max-width:100%}
@@ -423,7 +424,10 @@ function covered(through){ const s=dOf(P.start), e=dOf(P.end), t=dOf(through);
   return Math.max(0, Math.min(1, ((Math.min(e,t)-s)/DAY+1)/((e-s)/DAY+1))); }
 
 function facPass(i, f){ const x=FAC[i];
-  return (!f.state||x.state===f.state)&&(!f.lga||x.lga===f.lga)&&(!f.fac||x.facility===f.fac); }
+  return (!f.state||x.state===f.state)&&(!f.lga||x.lga===f.lga)&&(!f.fac||x.facility===f.fac)&&(!f.grp||(f.grp==="cscc")===isCscc(i)); }
+// site group: CSCC (key-population one-stop sites, "… CSCC" in the name) or general population site
+let ISC = null;
+const isCscc = i => (ISC || (ISC = FAC.map(x=>/cscc/i.test(x.facility))))[i];
 /* Age bands. HIV Testing Services and TB: one top band, 50+ = the "50+" reports plus 50-54 … 65+
    (each value carries a single band, so nothing is counted twice). Other pages: five-year bands
    up to 65+, no 50+ line. */
@@ -457,7 +461,7 @@ function agg(f=F, {by=null, months="q"}={}){
 }
 /* Naomi PLHIV for a filter: state level x sex x (<15 | 15+ | five-year band) */
 function plhiv(f){
-  if(!D.naomi.length || f.fac) return null;
+  if(!D.naomi.length || f.fac || f.grp) return null;
   let rows = D.naomi.filter(r=>!f.state||r.state===f.state);
   if(f.lga){ rows = rows.filter(r=>r.lga===f.lga); if(!rows.length) return null; }
   if(f.sex){ if(!rows.some(r=>r.sex===f.sex)) return null; rows=rows.filter(r=>r.sex===f.sex); }
@@ -656,8 +660,8 @@ const RV = (a,b) => v => div(v[a]??0, v[b]);
 
 
 /* ---------- TX_CURR source label ---------- */
-const TXL = () => D.meta.tx_curr_source==="NDR" ? "TX_CURR (NDR)" : "TX_CURR";
-const TXTIP = () => D.meta.tx_curr_source==="NDR" ? "TX_CURR_Unique, as the NDR / PHIS3 summary: enrolled (valid unique print) + ABIS duplicate kept + every active client under 15 whatever the print status. Adjudication waiting, suppressed duplicates, invalid prints and clients with no baseline print are not counted." : "";
+const TXL = () => D.meta.tx_curr_source==="NDR" ? "TX_CURR_Unique (NDR)" : "TX_CURR";
+const TXTIP = () => D.meta.tx_curr_source==="NDR" ? "TX_CURR_Unique, as the NDR / PHIS3 summary: enrolled (valid unique print) + ABIS duplicate kept + every active client under 15 whatever the print status. Adjudication waiting, duplicates, invalid prints and clients with no baseline print are not counted." : "";
 
 /* ---------- KPI summary: achievement in the selected period (one section; replaces the old
    KPI chart + Conventional targets pair, which showed the same thing) ---------- */
@@ -1131,7 +1135,7 @@ function txcurrReflection(v){
   if(!v.ndr_excl&&!v.pbs_active) return "";
   const st=STATES.filter(x=>!F.state||x===F.state).map(s=>[esc(s),agg({...F,state:s,lga:"",fac:""})]).concat([[esc(F.state?filterText():SPEED),v,1]]);
   return `<section class="c3d">${secH("TX_CURR reflection — active records vs unique TX_CURR","Why active NDR records are not in TX_CURR (valid unique print or under 15)")}
-   <div class="kpis">${kpi(n(v.pbs_active),"Active records (NDR)","CurrentStatus28 active")}${kpi(n(v.tx_curr),"Unique TX_CURR (NDR)")}${kpi(n(v.ndr_excl),"Excluded",`${pct(div(v.ndr_excl,v.pbs_active))} of active records`)}
+   <div class="kpis">${kpi(n(v.pbs_active),"All on treatment (NDR)","CurrentStatus28 active")}${kpi(n(v.tx_curr),"TX_CURR_Unique (NDR)")}${kpi(n(v.ndr_excl),"Excluded",`${pct(div(v.ndr_excl,v.pbs_active))} of active records`)}
     ${kpi(n(v.ndr_excl_adj),"Adjudication waiting",`${pct(div(v.ndr_excl_adj,v.ndr_excl))} of excluded`)}${kpi(n(v.ndr_excl_dup),"Duplicate (ABIS)",`${pct(div(v.ndr_excl_dup,v.ndr_excl))} of excluded`)}
     ${kpi(n(v.ndr_excl_nocap),"No print captured",`${pct(div(v.ndr_excl_nocap,v.ndr_excl))} of excluded`)}${kpi(n(v.ndr_excl_other),"Invalid prints / other",`${pct(div(v.ndr_excl_other,v.ndr_excl))} of excluded`)}${kpi(n(v.ndr_excl_refill),"Excluded but still refilling",`pickup in the last 3 months · ${pct(div(v.ndr_excl_refill,v.ndr_excl))}`)}</div>
    <div class="tw" style="margin-top:14px"><table><thead><tr><th>State</th><th class="n">NDR active</th><th class="n">Unique TX_CURR</th><th class="n">Excluded</th><th class="n">Exclusion rate</th><th class="n">Adjudication waiting</th><th class="n">Duplicate (ABIS)</th><th class="n">No print captured</th><th class="n">Invalid / other</th><th class="n">Still refilling</th></tr></thead><tbody>
@@ -1214,7 +1218,7 @@ function stepsEMR(v){
 function stepsNDR(v){
   const pot=gv(v,"ndr_wf_prev")+gv(v,"ndr_wf_rtt")+gv(v,"ndr_wf_new")+gv(v,"ndr_wf_ti"), loss=gv(v,"ndr_wf_to")+gv(v,"ndr_wf_iit")+gv(v,"ndr_wf_dead");
   return [["TX_CURR end Q4",gv(v,"ndr_wf_prev"),"total"],["RTT",gv(v,"ndr_wf_rtt")],["TX_NEW",gv(v,"ndr_wf_new")],["Transfer in",gv(v,"ndr_wf_ti")],["Potential",pot,"total"],
-    ["Transfer out",-gv(v,"ndr_wf_to")],["IIT",-gv(v,"ndr_wf_iit")],["Dead",-gv(v,"ndr_wf_dead")],["Gain/loss",gv(v,"ndr_wf_curr")-(pot-loss)],["TX_CURR (NDR)",gv(v,"ndr_wf_curr"),"total"]];
+    ["Transfer out",-gv(v,"ndr_wf_to")],["IIT",-gv(v,"ndr_wf_iit")],["Dead",-gv(v,"ndr_wf_dead")],["Gain/loss",gv(v,"ndr_wf_curr")-(pot-loss)],["TX_CURR_Unique (NDR)",gv(v,"ndr_wf_curr"),"total"]];
 }
 const iitEMR = v => div(gv(v,"wf_iit"), gv(v,"wf_prev")+gv(v,"wf_new"));
 // continuity measures: the quarter waterfall when treatment comes from the NDR line list (one source for every
@@ -1347,6 +1351,59 @@ function artSnapshot(){ const v=agg();
    <section class="c3d">${secH("TX_CURR by facility","From the saved copies dated in this period")}${pivot("artsnap",[C("TX_CURR",V("tx_curr"),0,0,"tx_curr"),C(NDRT()?"TX_CURR (line list)":"TX_CURR (EMR)",V("tx_curr_emr")),C("3+ month refills",V("mmd3")),C("Refill share",RV("mmd3","tx_curr_emr"),1)],["org","paed","sex","age"])}</section>
    <p class="drillnote">Waterfalls, IIT and appointments are built from the current linelist and NDR file only.</p>`; }
 function trendsBlock(){ return `<details class="c3d trends"${TROPEN?" open":""}><summary data-trends>${secH("Trends — weekly","TX_CURR, TX_NEW / IIT, biometrics and viral load week by week · click to open or close")}</summary>${TROPEN?trendsPage():""}</details>`; }
+/* ---------- Current on treatment: CSCC sites vs general population sites ----------
+   Same waterfall numbers as the page, split by site group; projections carry the quarter's pace so far forward. */
+function csccArt(v){
+  const W=WF(), ti=NDRT()?"wf_ti":"ndr_wf_ti", el=D.meta.elapsed_asof, curQ=llQ()===D.meta.quarter&&el>0;
+  const g=(x,k)=>x[k]||0, miss=f=>AC.rows.length?apptList(f).filter(aMissed).length:null;
+  const grp=(l,k,c)=>{ const f={...F,grp:k}, x=agg(f); return {l,k,c,f,x,sites:[...agg(f,{by:"facility"}).values()].filter(o=>g(o,W.curr)>0).length}; };
+  const G=[grp("CSCC sites","cscc","var(--s2)"), grp("General population sites","gen","var(--s1)")];
+  if(!G[0].sites) return "";
+  const A={l:"All sites",f:F,x:v,sites:G[0].sites+G[1].sites}, cols=[...G,A];
+  const chg=x=>g(x,W.curr)-g(x,W.prev), sg=d=>(d>0?"+":"")+n(d);
+  const rows=[
+    ["Sites with clients on treatment",o=>n(o.sites)],
+    ["TX_CURR end of last quarter",o=>n(g(o.x,W.prev))],
+    ["TX_NEW",o=>n(g(o.x,W.new))],["Returned to treatment (RTT)",o=>n(g(o.x,W.rtt))],["Transfer in",o=>n(g(o.x,ti))],
+    ["IIT",o=>n(g(o.x,W.iit))],["IIT rate",o=>pct(W.rate(o.x),2)],["Transfer out",o=>n(g(o.x,W.to))],["Dead",o=>n(g(o.x,W.dead))],
+    [`<b>${TXL()} now</b>`,o=>`<b>${n(g(o.x,W.curr))}</b>`],["Share of TX_CURR",o=>rpct(g(o.x,W.curr),g(v,W.curr))],
+    ["Net change this quarter",o=>`${sg(chg(o.x))} (${rpct(chg(o.x),g(o.x,W.prev))})`],
+    ["VL coverage",o=>rpct(g(o.x,"vl_result"),g(o.x,"vl_eligible"))],["VL suppression",o=>rpct(g(o.x,"vl_suppressed"),g(o.x,"vl_result"))],
+    ["On 3+ month refills",o=>rpct(g(o.x,"mmd3"),g(o.x,"tx_curr_emr"))],
+    ...(MEAS.includes("pbs_active")?[["Unique print ÷ active (NDR)",o=>rpct(g(o.x,"tx_curr"),g(o.x,"pbs_active"))],["Yet to capture",o=>n(bx(o.x,"pbs_nocap"))],["Adjudication waiting",o=>n(g(o.x,"pbs_adjudication"))]]:[]),
+    ...(AC.rows.length?[["Missed appointments (still active)",o=>n(miss(o.f))]]:[]),
+    ...(curQ?[[`<i>TX_NEW by ${fmtDate(D.meta.q_end)} at this pace</i>`,o=>`<i>${n(g(o.x,W.new)/el)}</i>`],[`<i>IIT by ${fmtDate(D.meta.q_end)} at this pace</i>`,o=>`<i>${n(g(o.x,W.iit)/el)}</i>`],
+      [`<i>TX_CURR on ${fmtDate(D.meta.q_end)} at this pace</i>`,o=>`<i>${n(g(o.x,W.prev)+chg(o.x)/el)}</i>`]]:[])];
+  // where each number sits: CSCC share of the total, as a split bar
+  const split=(l,k,fn)=>{ const a=fn?fn(G[0])||0:g(G[0].x,k), b=fn?fn(G[1])||0:g(G[1].x,k), t=a+b, p=t?a/t*100:0;
+    return `<div class="hb" data-tip="${esc(l)}: CSCC ${n(a)} · general population ${n(b)}"><span class="lab">${esc(l)}</span>
+     <span class="track" style="display:flex;overflow:hidden"><span style="width:${p}%;background:var(--s2)"></span><span style="flex:1;background:var(--s1)"></span></span>
+     <span class="val"><b>${t?p.toFixed(0):"—"}%</b> CSCC</span></div>`; };
+  const shares=[["TX_CURR",W.curr],["TX_NEW",W.new],["RTT",W.rtt],["IIT",W.iit],["Transfer out",W.to],["Dead",W.dead],
+    ...(MEAS.includes("pbs_baseline")?[["Yet to capture",null,o=>bx(o.x,"pbs_nocap")]]:[]),...(AC.rows.length?[["Missed appointments",null,o=>miss(o.f)]]:[])];
+  const trk=NDRT()||D.meta.tx_curr_source==="NDR"?"tx_curr":EMRK(), tline=o=>{ const T=trendAgg(o.f); return [...(T[trk]||new Map())].map(([d,val])=>({d,v:val})); };
+  const iitS=G.map(o=>({l:o.l,c:o.c,pts:[...(trendAgg(o.f).iit_now||new Map())].map(([d,val])=>({d,v:val}))}));
+  const sites=FAC.map((x,i)=>({x,i})).filter(o=>isCscc(o.i)&&facPass(o.i,F)).map(o=>({fc:o.x,f:{...F,state:o.x.state,lga:o.x.lga,fac:o.x.facility}}))
+    .map(o=>({...o,a:agg(o.f)})).filter(o=>g(o.a,W.curr)||g(o.a,W.prev)).sort((p,q)=>g(q.a,W.curr)-g(p.a,W.curr));
+  const sr=(l,x,f,t)=>`<tr${t?' class="total"':""}><td>${l}</td><td class="n">${n(g(x,W.prev))}</td><td class="n">${n(g(x,W.new))}</td><td class="n">${n(g(x,W.rtt))}</td><td class="n">${n(g(x,W.iit))}</td><td class="n">${pct(W.rate(x),2)}</td>
+    <td class="n">${n(g(x,W.curr))}</td><td class="n">${sg(chg(x))}</td><td class="n">${rpct(g(x,"vl_result"),g(x,"vl_eligible"))}</td><td class="n">${rpct(g(x,"vl_suppressed"),g(x,"vl_result"))}</td>
+    <td class="n">${MEAS.includes("pbs_active")?rpct(g(x,"tx_curr"),g(x,"pbs_active")):"—"}</td><td class="n">${AC.rows.length?n(miss(f)):"—"}</td></tr>`;
+  return `<section class="c3d">${secH("CSCC sites vs general population sites",`${W.label} · CSCC = key-population one-stop sites (“CSCC” in the facility name) · follows the state / LGA / sex / age filters`)}
+   <div class="kpis">${G.map(o=>kpi(n(g(o.x,W.curr)),`TX_CURR · ${o.l}`,`${rpct(g(o.x,W.curr),g(v,W.curr))} of all · ${n(o.sites)} sites`)).join("")}
+    ${G.map(o=>kpi(pct(W.rate(o.x),2),`IIT rate · ${o.l}`,`${n(g(o.x,W.iit))} IIT · ${n(g(o.x,W.rtt))} RTT`,W.rate(o.x)==null?null:W.rate(o.x)<=.01?"good":W.rate(o.x)<=.02?"warning":"critical")).join("")}</div>
+   <div class="grid g2"><div><div class="tw"><table><thead><tr><th></th>${cols.map(o=>`<th class="n">${esc(o.l)}</th>`).join("")}</tr></thead><tbody>
+     ${rows.map(([l,fn])=>`<tr><td>${l}</td>${cols.map(o=>`<td class="n">${fn(o)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+     ${curQ?`<p class="drillnote">Italic rows carry the pace of the first ${Math.round(el*100)}% of ${esc(D.meta.quarter)} to the end of the quarter (flows ÷ ${el.toFixed(2)}); early in a quarter they move a lot from week to week.</p>`:""}</div>
+    <div><div class="legend"><span><span class="sw" style="background:var(--s2)"></span>CSCC sites</span><span><span class="sw" style="background:var(--s1)"></span>General population sites</span></div>
+     <div class="hbars">${shares.map(([l,k,fn])=>split(l,k,fn)).join("")}</div>
+     <p class="drillnote">A CSCC share of IIT, transfers out or missed appointments above its share of TX_CURR means those sites lose clients faster than the rest.</p></div></div></section>
+   <div class="grid g2">${G.map(o=>`<section class="c3d">${secH(`Continuity of treatment — ${o.l}`,W.label)}${waterfallFrom(NDRT()?stepsEMR(o.x):stepsNDR(o.x),`IIT rate ${pct(W.rate(o.x),2)}.`)}</section>`).join("")}</div>
+   <div class="grid g2">${G.map(o=>`<section class="c3d">${secH(`TX_CURR by age and sex — ${o.l}`)}${pyramid(trk==="tx_curr"?"tx_curr":"tx_curr_emr",{f:o.f})}</section>`).join("")}</div>
+   <div class="grid g2">${G.map(o=>`<section class="c3d">${secH(`Weekly TX_CURR — ${o.l}`,"Snapshots saved by each run")}${lineChart([{l:o.l,c:o.c,pts:tline(o)}],{label:`TX_CURR ${o.l}`,weekly:true})}</section>`).join("")}</div>
+   ${iitS.some(s=>s.pts.length)?`<section class="c3d">${secH("Clients in IIT by week — CSCC vs general population","Snapshots of the current IIT stock")}${lineChart(iitS,{label:"IIT stock by site group",weekly:true})}</section>`:""}
+   <section class="c3d">${secH("CSCC sites, one by one",W.label)}<div class="tw"><table><thead><tr><th>CSCC site</th><th class="n">TX_CURR end of last Q</th><th class="n">TX_NEW</th><th class="n">RTT</th><th class="n">IIT</th><th class="n">IIT rate</th><th class="n">TX_CURR now</th><th class="n">Net change</th><th class="n">VL coverage</th><th class="n">VLS</th><th class="n">Unique ÷ active</th><th class="n">Missed appts</th></tr></thead><tbody>
+    ${sites.map(o=>sr(esc(o.fc.facility),o.a,o.f)).join("")}${sr("All CSCC sites",G[0].x,G[0].f,1)}${sr("General population sites",G[1].x,G[1].f,1)}</tbody></table></div></section>`;
+}
 function artPage(){
   if(WIN||(WIN=windowSet()), !STOCK) return context()+(HAS()?artSnapshot():noData("TX_CURR, the waterfalls, IIT and appointments"))+trendsBlock();
   const v=agg(), E=c=>evaluate(c,v), cur=E("NIPI_TX_CURR"), txn=E("TX_NEW"), sat=div(v.tx_curr,v.plhiv_est), demog=F.sex||F.age;
@@ -1367,6 +1424,7 @@ function artPage(){
    <section class="c3d">${secH(`Continuity of treatment — NDR TX_CURR, ${D.meta.fiscal_year} to date`,"From 1 October: TX_CURR at the end of Q4 (NDR TX_CURR rule) to NDR TX_CURR now")}
      ${dOf(P.end)<FYS?`<div class="empty">No data for ${esc(P.label)}: the NDR waterfall starts on 1 October ${esc(D.meta.fiscal_year)}.</div>`:MEAS.includes("ndr_wf_prev")?waterfallFrom(stepsNDR(v), `IIT rate ${pct(iitNDR(v),2)} = IIT ÷ (TX_CURR at end of Q4 + TX_NEW). Both TX_CURR bars use the NDR TX_CURR rule (valid unique print or under 15); TX_NEW, transfers and deaths from NDR line-list dates since 1 October. Print status is as of the NDR file.`):`<div class="empty">Needs the NDR line list with active and inactive clients.</div>`}</section></div>
 `}
+   ${F.fac?"":csccArt(v)}
    <section class="c3d">${secH("IIT and IIT rate by facility",`${WF().label} · same numbers as the waterfall · click to drill · rows by paediatric (<20) / adult`)}${pivot("iit",[C("TX_CURR end of last quarter",V(WF().prev),0,0,WF().prev),C("TX_NEW",V(WF().new)),
      C("IIT",V(WF().iit)),C("IIT rate",WF().rate,1,x=>{const r=WF().rate(x); return r==null?null:r<=.01?"good":r<=.02?"warning":"critical";}),C("RTT",V(WF().rtt)),C("Dead",V(WF().dead)),C("TO",V(WF().to)),
      C("TX_CURR now",V(WF().curr)),...(NDRT()?[]:[C(`IIT (EMR, ${llQ()})`,V("wf_iit")),C("IIT rate (EMR)",iitEMR,1)])],["org","paed","sex","age"])}</section>
@@ -1670,25 +1728,28 @@ function pbsCsv(rows){
 }
 
 /* ---------- biometrics: categories as the NDR / PHIS3 TX_CURR_Unique summary ---------- */
-const BIOX = [["bio_aw","Adjudication waiting","var(--bar-critical)"],["bio_noprint","No baseline print","var(--s2)"],["bio_invalid","Invalid prints","#8A5FB8"],["bio_dup_supp","Duplicate suppressed","var(--s3)"]];
-function bioCards(v){ const g=k=>v[k]||0, act=g("pbs_active"), uq=g("tx_curr");
-  return `${kpi(n(act),"TX_CURR (NDR)","active clients")}${kpi(n(uq),"TX_CURR_Unique","counted by the NDR",rateStatus(div(uq,act),.95))}${kpi(pct(div(uq,act)),"Unique share","ref. 95%",rateStatus(div(uq,act),.95))}
-   ${kpi(n(act-uq),"Gap to close","active but not counted")}${kpi(n(g("bio_aw")),"Adjudication waiting","15+ · cause not yet known")}${kpi(n(g("bio_noprint")),"No baseline print","15+ · capture needed")}
-   ${kpi(n(g("bio_invalid")),"Invalid prints","15+ · NO_VALID_DATA · recapture")}${kpi(n(g("bio_dup_supp")),"Duplicate suppressed","15+ · ABIS match")}${kpi(n(g("bio_cat2")),"Category 2","under 15 · waiting · baseline captured · counted")}`; }
-function bioWaterfall(v){ const g=k=>v[k]||0;
-  return waterfallFrom([["TX_CURR (NDR)",g("pbs_active"),"total"],...BIOX.map(([k,l])=>[l,-g(k)]),["TX_CURR Unique",g("tx_curr"),"total"]],
-    `Category 1 = active clients with a unique print (enrolled + ABIS duplicate kept) once adjudication waiting is removed; Category 2 = under-15s waiting for adjudication with a baseline print, added back with every under-15. Counted: under 15 ${n(g("bio_u15"))} + enrolled ${n(g("bio_enrolled"))} + duplicate kept ${n(g("bio_dup_kept"))} = ${n(g("tx_curr"))}.`); }
+// reasons a client on treatment is not counted, all ages, as the NDR PBS analytics page (Yet to capture = active − captured)
+const BIOX = [["pbs_adjudication","Adjudication waiting","var(--bar-critical)"],["pbs_nocap","Yet to capture","var(--s2)"],["pbs_invalid","Invalid prints","#8A5FB8"],["pbs_duplicate","Duplicate","var(--s3)"]];
+const bx = (x,k) => k==="pbs_nocap" ? (x.pbs_active||0)-(x.pbs_baseline||0) : k==="bio_u15back" ? (x.tx_curr||0)-BIOX.reduce((a,[q])=>a-bx(x,q),x.pbs_active||0) : (x[k]||0);
+function bioCards(v){ const g=k=>bx(v,k), act=g("pbs_active"), uq=g("tx_curr");
+  return `${kpi(n(act),"All on treatment (NDR)","active clients")}${kpi(n(uq),"TX_CURR_Unique","counted by the NDR",rateStatus(div(uq,act),.95))}${kpi(pct(div(uq,act)),"Unique share","ref. 95%",rateStatus(div(uq,act),.95))}
+   ${kpi(n(act-uq),"Gap to close","on treatment but not counted")}${kpi(n(g("pbs_adjudication")),"Adjudication waiting","ADJUDICATIONWAITING · cause not yet known")}${kpi(n(g("pbs_nocap")),"Yet to capture","no baseline print · capture needed")}
+   ${kpi(n(g("pbs_invalid")),"Invalid prints","NO_VALID_DATA · recapture")}${kpi(n(g("pbs_duplicate")),"Duplicate","duplicate type · ABIS match")}${kpi(n(g("bio_u15back")),"Under 15, counted anyway","in the groups above, but every under-15 counts")}`; }
+function bioWaterfall(v){ const g=k=>bx(v,k);
+  return waterfallFrom([["All on treatment (NDR)",g("pbs_active"),"total"],...BIOX.map(([k,l])=>[l,-g(k)]),["Under 15 added back",g("bio_u15back")],["TX_CURR Unique",g("tx_curr"),"total"]],
+    `Same figures as the NDR PBS analytics page (all ages). Every active client under 15 counts whatever the print status, so the under-15s inside the four groups are added back (${n(g("bio_cat2"))} of them are Category 2: waiting for adjudication with a baseline print). Counted: under 15 ${n(g("bio_u15"))} + enrolled ${n(g("bio_enrolled"))} + ABIS duplicate kept ${n(g("bio_dup_kept"))} = ${n(g("tx_curr"))}.`); }
 function awCallout(v){ const g=k=>v[k]||0, st=STATES.filter(s=>!F.state||s===F.state);
   return `<section class="c3d" style="border-left:4px solid var(--bar-critical)">${secH("Adjudication waiting — the open question","What is causing it is not yet known")}
-   <p>${n(g("bio_aw"))} active clients aged 15+ have a baseline print that the national ABIS has not resolved (status <b>ADJUDICATIONWAITING</b>). They are on treatment but not counted in TX_CURR_Unique.
+   <p>${n(g("pbs_adjudication"))} active clients have a baseline print that the national ABIS has not resolved (status <b>ADJUDICATIONWAITING</b>). Those aged 15+ (${n(g("bio_aw"))}) are on treatment but not counted in TX_CURR_Unique; under-15s count anyway.
    The cause is not yet established, so every state is expected to manage its list and bring it to the review: which facilities, since when, and what was found.</p>
-   <div class="kpis">${st.map(s=>{const x=agg({...F,state:s}); return kpi(n(x.bio_aw||0), s, `${pct(div(x.bio_aw||0,x.pbs_active),1)} of active · ${n(x.tier1_aw_contact||0)} seen in the last 3 months`);}).join("")}</div></section>`; }
-const bioCols = () => [C("TX_CURR",V("pbs_active"),0,0,"pbs_active"),C("Under 15",V("bio_u15")),C("Enrolled",V("bio_enrolled")),C("Dup. kept",V("bio_dup_kept")),
-  C("Dup. suppressed",V("bio_dup_supp")),C("Adjudication waiting",V("bio_aw")),C("Invalid prints",V("bio_invalid")),C("No print",V("bio_noprint")),
+   <div class="kpis">${st.map(s=>{const x=agg({...F,state:s}); return kpi(n(x.pbs_adjudication||0), s, `${pct(div(x.pbs_adjudication||0,x.pbs_active),1)} of active · ${n(x.tier1_aw_contact||0)} seen in the last 3 months`);}).join("")}</div></section>`; }
+const bioCols = () => [C("All on treatment",V("pbs_active"),0,0,"pbs_active"),C("Adjudication waiting",V("pbs_adjudication")),C("Yet to capture",x=>bx(x,"pbs_nocap")),
+  C("Invalid prints",V("pbs_invalid")),C("Duplicate",V("pbs_duplicate")),C("Under 15 added back",x=>bx(x,"bio_u15back")),
   C("TX_CURR_Unique",V("tx_curr")),C("Unique %",RV("tx_curr","pbs_active"),1,x=>rateStatus(div(x.tx_curr,x.pbs_active),.95)),C("Category 2",V("bio_cat2"))];
 function bioTrend(){
   const T=trendAgg(), get=m=>T[m]||new Map(), ds=[...get("pbs_active").keys()].sort();
   if(!ds.length) return `<div class="empty">No weekly NDR files yet.</div>`;
+  T.pbs_nocap=new Map([...get("pbs_active")].map(([d,a])=>[d,a-(get("pbs_baseline").get(d)||0)]));
   const ser=BIOX.map(([k,l,c])=>({l,c,pts:ds.filter(d=>get(k).has(d)).map(d=>({d,v:get(k).get(d)}))})).filter(x=>x.pts.length);
   const share={l:"TX_CURR_Unique ÷ TX_CURR",c:"var(--s1)",pts:ds.filter(d=>get("tx_curr").has(d)).map(d=>({d,v:div(get("tx_curr").get(d),get("pbs_active").get(d))}))};
   const at=d=>Object.fromEntries(BIOX.map(([k])=>[k,get(k).get(d)]));
@@ -1696,22 +1757,22 @@ function bioTrend(){
   const last=ds.at(-1), wk4=ds.filter(d=>dOf(d)<=new Date(dOf(last).getTime()-27*DAY)).at(-1), rc=ds.find(d=>d>="2026-08-31"), first=ds[0];
   const row=(k,l)=>{const L=get(k).get(last), ch=d=>{const x=d?get(k).get(d):null; return x==null||L==null?"—":`${L-x<=0?"▼":"▲"} ${n(Math.abs(L-x))}`;};
     return `<tr><td>${l}</td><td class="n">${n(L)}</td><td class="n">${ch(wk4)}</td><td class="n">${rc&&rc!==last?ch(rc):"—"}</td><td class="n">${ch(first)}</td></tr>`;};
-  return `<div class="grid g2"><div><h3 class="minih">Not counted, by reason</h3>${lineChart(ser,{yMin:0,label:"Unusable prints by week",weekly:true})}</div>
+  return `<div class="grid g2"><div><h3 class="minih">Not counted, by reason (all ages, as the NDR analytics page)</h3>${lineChart(ser,{yMin:0,label:"Unusable prints by week",weekly:true})}</div>
     <div><h3 class="minih">Unique share of TX_CURR</h3>${lineChart([share],{fmt:x=>pct(x,1),label:"Unique share by week",weekly:true})}</div></div>
    <div class="tw" style="margin-top:8px"><table><thead><tr><th>Reason</th><th class="n">Now (${fmtDate(last)})</th><th class="n">Change, last 4 weeks</th><th class="n">Since the NDR rule change (week of ${rc?fmtDate(rc):"31 Aug 2026"})</th><th class="n">Since ${fmtDate(first)}</th></tr></thead><tbody>
    ${BIOX.map(([k,l])=>row(k,l)).join("")}${row("bio_unusable","No usable print (Fingerprint Valid = No)")}</tbody></table></div>
    <p class="drillnote">▼ = fewer clients blocked (remediation working). The NDR tightened "Fingerprint Valid" at the end of August 2026 (about 19,000 more prints marked not valid on 31 Aug), so weeks before and after that date are not like-for-like. The weekly NDR files from before October 2026 were active-only downloads.</p>`;
 }
 function bioTiers(v){ const g=k=>v[k]||0, st=STATES.filter(s=>!F.state||s===F.state), per=st.map(s=>agg({...F,state:s}));
-  const T=[["Tier 1","Adjudication waiting, picked up drugs in the last 3 months","tier1_aw_contact","Contactable: escalate the list to the PBS / ABIS team for adjudication; confirm identity at the next visit"],
-    ["Tier 2","Adjudication waiting, not seen for 3 months","tier2_aw_trace","Trace and bring back to care, then follow up adjudication"],
-    ["Tier 3","Duplicate suppressed, demographic twin counted (sex + date of birth + ART start)","tier3_dup_twin","Same client recorded twice: merge or close the extra record"],
-    ["Tier 4","Duplicate suppressed, no twin in our data","tier4_dup_abis","Matched to a record elsewhere in the national ABIS gallery: attribution question for the NDR team"],
-    ["Tier 5a","Invalid prints (NO_VALID_DATA)","tier5_invalid","Recapture the prints at the next visit"],
-    ["Tier 5b","No baseline print captured","tier5_noprint","Capture the baseline print, or document an exemption"]];
+  const T=[["Tier 1","Adjudication waiting (15+), picked up drugs in the last 3 months","tier1_aw_contact","Contactable: escalate the list to the PBS / ABIS team for adjudication; confirm identity at the next visit"],
+    ["Tier 2","Adjudication waiting (15+), not seen for 3 months","tier2_aw_trace","Trace and bring back to care, then follow up adjudication"],
+    ["Tier 3","Duplicate (15+), demographic twin counted (sex + date of birth + ART start)","tier3_dup_twin","Same client recorded twice: merge or close the extra record"],
+    ["Tier 4","Duplicate (15+), no twin in our data","tier4_dup_abis","Matched to a record elsewhere in the national ABIS gallery: attribution question for the NDR team"],
+    ["Tier 5a","Invalid prints (15+, NO_VALID_DATA)","tier5_invalid","Recapture the prints at the next visit"],
+    ["Tier 5b","Yet to capture (15+, no baseline print)","tier5_noprint","Capture the baseline print, or document an exemption"]];
   return `<div class="tw"><table><thead><tr><th>Tier</th><th>Who</th><th class="n">${esc(F.state||SPEED)}</th>${st.length>1?st.map(s=>`<th class="n">${esc(s)}</th>`).join(""):""}<th>Action</th></tr></thead><tbody>
    ${T.map(([t,who,k,act])=>`<tr><td><b>${t}</b></td><td style="white-space:normal">${who}</td><td class="n">${MEAS.includes(k)?n(g(k)):"—"}</td>${st.length>1?per.map(x=>`<td class="n">${MEAS.includes(k)?n(x[k]||0):"—"}</td>`).join(""):""}<td style="white-space:normal">${act}</td></tr>`).join("")}
-   </tbody></table></div><p class="drillnote">Tier 3 / 4 need the date of birth in the NDR file. The client follow-up list below has the names-free client details for each group.</p>`;
+   </tbody></table></div><p class="drillnote">Tiers count clients aged 15+ only: under-15s are counted in TX_CURR_Unique whatever the print status. Tier 3 / 4 need the date of birth in the NDR file. The client follow-up list below has the names-free client details for each group.</p>`;
 }
 function pbsPage(){
   const v=agg(), src=D.meta.pbs_source, ndr=src==="ndr", g=k=>v[k]||0;
@@ -1720,7 +1781,7 @@ function pbsPage(){
   if(src==="none") return context()+`<section class="c3d empty">No biometrics source. Drop the NDR PBS line list in inbox\\ (pbs_all*.xlsx) or check the linelist's pbs column.</section>`;
   const srcNote = ndr ? `Source: NDR PBS line list (inbox). Cards follow the NDR PBS portal: Captured = fingerprint enrolled, Valid = fingerprint valid, Invalid = NO_VALID_DATA, Duplicate = duplicate type "Duplicate", Unique = Valid − Duplicate.`
     : `Source: central-repository linelist (pbs / recapture flags). Adjudication, validity and duplicates need the NDR PBS line list — drop it in inbox\\ to see them.`;
-  const cards = ndr ? `${kpi(n(v.pbs_active),"Active in programme (NDR)","CurrentStatus28 active · not yet checked for unique prints · coverage denominator")}${kpi(n(v.pbs_baseline),"Captured")}${kpi(n(g("pbs_active")-g("pbs_baseline")),"Yet to capture","","")}
+  const cards = ndr ? `${kpi(n(v.pbs_active),"All on treatment (NDR)","CurrentStatus28 active · not yet checked for unique prints · coverage denominator")}${kpi(n(v.pbs_baseline),"Captured")}${kpi(n(g("pbs_active")-g("pbs_baseline")),"Yet to capture","","")}
      ${kpi(pct(cov),"Coverage","ref. 95%",rateStatus(cov,.95))}${kpi(n(v.pbs_valid),"Valid")}${kpi(n(v.pbs_invalid),"Invalid","NO_VALID_DATA")}
      ${kpi(n(v.pbs_duplicate),"Duplicate","duplicate type")}${kpi(n(unique),"Unique","valid − duplicate")}${kpi(pct(div(unique,v.pbs_baseline)),"Captured & valid unique")}
      ${kpi(n(v.pbs_adjudication),"Awaiting adjudication","ADJUDICATIONWAITING")}${kpi(n(v.pbs_fp_duplicate),"ABIS-flagged duplicates","FingerPrintStatus DUPLICATE")}${kpi(n(v.pbs_mismatch),"Mis-match","duplicate type")}
@@ -1728,20 +1789,20 @@ function pbsPage(){
     : `${kpi(n(v.pbs_active),"Active in programme (EMR)")}${kpi(n(v.pbs_baseline),"Captured")}${kpi(n(g("pbs_active")-g("pbs_baseline")),"Yet to capture")}
      ${kpi(pct(cov),"Coverage","ref. 95%",rateStatus(cov,.95))}${kpi(n(v.pbs_recapture),"Recaptured")}${kpi(pct(rc),"Recapture coverage","ref. 95%",rateStatus(rc,.95))}`;
   const funnel = ndr ? hbars([
-      {l:"Active in programme", v:g("pbs_active"), c:"var(--bar-none)"},
+      {l:"All on treatment", v:g("pbs_active"), c:"var(--bar-none)"},
       {l:"Captured", v:g("pbs_baseline"), txt:`<b>${n(v.pbs_baseline)}</b> · ${pct(cov)} of active`},
       {l:"Enrolled cleanly", v:g("pbs_enrolled"), txt:`<b>${n(v.pbs_enrolled)}</b> · ${pct(div(v.pbs_enrolled,v.pbs_baseline))} of captured`},
       {l:"Valid", v:g("pbs_valid"), txt:`<b>${n(v.pbs_valid)}</b> · ${pct(div(v.pbs_valid,v.pbs_baseline))} of captured`},
       {l:"Unique", v:unique, txt:`<b>${n(unique)}</b> · ${pct(div(unique,v.pbs_active))} of active`, c:`var(--bar-${rateStatus(div(unique,v.pbs_active),.95)})`},
     ],{max:Math.max(g("pbs_active"),1)}) + `<p class="drillnote">Captured but not cleanly enrolled = awaiting adjudication ${n(v.pbs_adjudication)} + ABIS-flagged duplicate ${n(v.pbs_fp_duplicate)} + invalid ${n(v.pbs_invalid)}.</p>` : "";
   const issues = ndr ? hbars([["Not captured",g("pbs_active")-g("pbs_baseline")],["Awaiting adjudication",g("pbs_adjudication")],["ABIS-flagged duplicate",g("pbs_fp_duplicate")],
-      ["Recapture no match",g("pbs_nomatch")],["Mis-match",g("pbs_mismatch")],["Invalid prints",g("pbs_invalid")],["Duplicate (confirmed)",g("pbs_duplicate")],["Recapture no base",g("pbs_nobase")]]
+      ["Recapture no match",g("pbs_nomatch")],["Mis-match",g("pbs_mismatch")],["Invalid prints",g("pbs_invalid")],["Duplicate",g("pbs_duplicate")],["Recapture no base",g("pbs_nobase")]]
       .map(([l,x])=>({l, v:x, c:"var(--bar-critical)"}))) : "";
-  const cols = ndr ? [C("Active",V("pbs_active"),0,0,"pbs_active"),C("Captured",V("pbs_baseline")),C("Coverage",RV("pbs_baseline","pbs_active"),1,v=>rateStatus(div(v.pbs_baseline,v.pbs_active),.95)),
+  const cols = ndr ? [C("All on treatment",V("pbs_active"),0,0,"pbs_active"),C("Captured",V("pbs_baseline")),C("Coverage",RV("pbs_baseline","pbs_active"),1,v=>rateStatus(div(v.pbs_baseline,v.pbs_active),.95)),
       C("Yet to capture",v=>(v.pbs_active||0)-(v.pbs_baseline||0)),C("Valid",V("pbs_valid")),C("Invalid",V("pbs_invalid")),C("Adjudication",V("pbs_adjudication")),C("ABIS dup.",V("pbs_fp_duplicate")),
       C("Duplicate",V("pbs_duplicate")),C("Mis-match",V("pbs_mismatch")),C("Unique",v=>(v.pbs_valid||0)-(v.pbs_duplicate||0)),C("Recapture %",RV("pbs_recapture","pbs_baseline"),1,v=>rateStatus(div(v.pbs_recapture,v.pbs_baseline),.95)),
       C("Match %",RV("pbs_match","pbs_recapture"),1),C("No match",V("pbs_nomatch"))]
-    : [C("Active",V("pbs_active"),0,0,"pbs_active"),C("Captured",V("pbs_baseline")),C("Coverage",RV("pbs_baseline","pbs_active"),1,v=>rateStatus(div(v.pbs_baseline,v.pbs_active),.95)),
+    : [C("All on treatment",V("pbs_active"),0,0,"pbs_active"),C("Captured",V("pbs_baseline")),C("Coverage",RV("pbs_baseline","pbs_active"),1,v=>rateStatus(div(v.pbs_baseline,v.pbs_active),.95)),
       C("Yet to capture",v=>(v.pbs_active||0)-(v.pbs_baseline||0)),C("Recaptured",V("pbs_recapture")),C("Recapture %",RV("pbs_recapture","pbs_baseline"),1,v=>rateStatus(div(v.pbs_recapture,v.pbs_baseline),.95))];
   // client follow-up list
   const all = pbsList(), counts = Object.fromEntries(Object.keys(PC.cats).map(k=>[k, all.filter(r=>r[3].split(";").includes(k)).length]));
@@ -1828,7 +1889,7 @@ function methodsPage(){
       ["− confirmed duplicates", `${cb("dup_type")} = Duplicate`, n(-g("pbs_duplicate"))],
       ["= valid unique (portal 'Unique')", "valid − duplicate", n(unique)],
       ["+ under 15 without a valid unique print", `${cb("age")} &lt; 15 and ${cb("status28")} = Active, added regardless of print status`, n(g("tx_curr")-unique)],
-      [`<b>${D.meta.tx_curr_source==="NDR"?"TX_CURR (NDR) — headline":"TX_CURR"}</b>`, "Scored against the TX_CURR target; used for saturation", n(v.tx_curr), 1],
+      [`<b>${D.meta.tx_curr_source==="NDR"?"TX_CURR_Unique (NDR) — headline":"TX_CURR"}</b>`, "Scored against the TX_CURR target; used for saturation", n(v.tx_curr), 1],
       ["TX_CURR (EMR)", `${c("status")} = Active or Actives (a variant label in some EMR extracts, counted as Active)`, n(v.tx_curr_emr)],
       ["Previous-quarter TX_CURR (EMR)", `${c("prev_status")} = Active`, n(v.prev_tx_curr)],
       ["TX_NEW (EMR)", `${c("art_start")} inside the selected dates, ${c("ti")} ≠ Yes, and in unique TX_CURR (active with a valid print, or under 15)`, n(v.tx_new_q)],
@@ -1843,7 +1904,7 @@ function methodsPage(){
       ["Transfer out / IIT / dead / stopped", "active last quarter, now that status", `${n(v.wf_to)} / ${n(v.wf_iit)} / ${n(v.wf_dead)} / ${n(v.wf_stopped)}`],
       ["IIT rate (EMR)", "IIT ÷ (previous TX_CURR + TX_NEW)", pct(iitEMR(v),2)],
       [`<b>NDR waterfall and IIT (${esc(D.meta.fiscal_year)} from 1 October)</b>`, "", ""],
-      ["TX_CURR end Q4 / now", `TX_CURR_Unique rule (valid unique print, not a suppressed duplicate, not waiting for adjudication; or under 15) with ${cb("prev_status28")} / ${cb("status28")} = Active`, `${n(v.ndr_wf_prev)} / ${n(v.ndr_wf_curr)}`],
+      ["TX_CURR end Q4 / now", `TX_CURR_Unique rule (valid unique print, not a duplicate, not waiting for adjudication; or under 15) with ${cb("prev_status28")} / ${cb("status28")} = Active`, `${n(v.ndr_wf_prev)} / ${n(v.ndr_wf_curr)}`],
       ["TX_NEW / TI / TO / dead", `ART start, transfer-in, transfer-out and death dates since 1 October`, `${n(v.ndr_wf_new)} / ${n(v.ndr_wf_ti)} / ${n(v.ndr_wf_to)} / ${n(v.ndr_wf_dead)}`],
       ["IIT (NDR) and rate", "active last quarter, inactive now, not TO or dead · ÷ (previous + TX_NEW)", `${n(v.ndr_wf_iit)} · ${pct(iitNDR(v),2)}`],
       ["Appointments scheduled", `active or IIT, ${c("next_appt")} in the range picked on Current on Treatment (${fmtDate(apptRng().s)} – ${fmtDate(apptRng().e)})`, n(apptList().length)],
@@ -1921,7 +1982,7 @@ function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false}
   const ticks=[0,.25,.5,.75,1].map(k=>lo+(hi-lo)*k), months=[...new Set(ds.map(d=>d.slice(0,7)))];
   const step=Math.ceil(months.length/Math.max(8,Math.floor(W/95)));
   return `<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="${esc(label)}">
-   ${ticks.map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--rule)" stroke-dasharray="2 3"/><text x="${pl-6}" y="${y(t)+4}" text-anchor="end" font-size="11">${fmt(t)}</text>`).join("")}
+   ${ticks.map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--rule)" stroke-dasharray="2 3"/><text class="yax" x="${pl-6}" y="${y(t)+4}" text-anchor="end" font-size="11">${fmt(t)}</text>`).join("")}<line class="yax" x1="${pl}" x2="${pl}" y1="${pt}" y2="${H-pb}" stroke="var(--ink-3)"/>
    ${weekly ? ds.map((d,i)=>{ const near = i<ds.length-1 && (dOf(ds[i+1])-dOf(d))/DAY<5;      // a short last week: label only the later point
        return `<line x1="${x(d)}" x2="${x(d)}" y1="${pt}" y2="${H-pb}" stroke="var(--rule-soft)"/>${near?"":`<text x="${x(d)}" y="${H-pb+18}" text-anchor="middle" font-size="11">${dOf(d).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</text>`}`; }).join("")
      : months.filter((_,i)=>i%step===0).map(m=>`<text x="${x(m+"-01")}" y="${H-pb+18}" text-anchor="middle" font-size="11">${monthLab(m)}</text>`).join("")}
@@ -1986,6 +2047,13 @@ function afterRender(){
     el.scrollLeft = el.scrollWidth;
     if(el.scrollWidth > el.clientWidth+4 && !(el.previousElementSibling||{}).classList?.contains("hsnote"))
       el.insertAdjacentHTML("beforebegin", `<p class="hsnote">◀ Scroll or swipe left for earlier months</p>`);
+    // a scrolled line chart keeps its y-axis in view: the axis labels are pinned to the left edge
+    const svg=el.querySelector("svg"), ax=svg?[...svg.querySelectorAll(".yax")]:[];
+    if(ax.length && el.scrollWidth > el.clientWidth+4 && !el.parentElement.classList.contains("yaxw")){
+      const vb=svg.viewBox.baseVal, k=svg.getBoundingClientRect().width/vb.width, w=+ax.find(t=>t.tagName==="line").getAttribute("x1")+1;
+      const wrap=document.createElement("div"); wrap.className="yaxw"; el.before(wrap); wrap.append(el);
+      wrap.insertAdjacentHTML("beforeend", `<svg class="yaxo" viewBox="0 0 ${w} ${vb.height}" width="${w*k}" height="${vb.height*k}" aria-hidden="true"><rect width="${w}" height="${vb.height}" fill="var(--card)" opacity=".94"/>${ax.map(t=>t.outerHTML).join("")}</svg>`);
+    }
   });
 }
 /* any dropdown with 6 or more choices gets a search box (type to filter, arrows + Enter to pick) */

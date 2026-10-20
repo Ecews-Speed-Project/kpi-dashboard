@@ -596,7 +596,7 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
     # demo builds never touch live\ (the served dashboard) or archive\
     path = (build(data, ROOT / "data" / "demo" / "out") if demo else
             build(data, folder(cfg, "live", "live"), folder(cfg, "archive", "archive")))
-    if not demo:
+    if not demo and "--no-publish" not in sys.argv:      # --no-publish: build locally only (testing)
         publish_git(cfg, data)
     print(f"{data['meta']['quarter']}  as of {as_of}  cube rows {len(data['cube']['rows']):,}  ->  {path}")
     return data, scorecard
@@ -875,6 +875,30 @@ def cmd_publish():
     sys.exit(0 if publish_live(cfg) else 1)
 
 
+def run_lock() -> None:
+    """One update at a time: two runs writing the caches together corrupt them. A second run exits;
+    a lock left by a run that died (its process is gone) is taken over."""
+    import atexit, os
+    lock = ROOT / "data" / ".run.lock"
+    if lock.exists():
+        try:
+            pid = int(lock.read_text().strip())
+            os.kill(pid, 0)                                   # raises if that process no longer exists
+            if sys.platform == "win32":                       # os.kill(pid, 0) can succeed for a reused pid: check it is python
+                import subprocess
+                out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout.lower()
+                if "python" not in out:
+                    raise OSError
+            print(f"Another update is already running (process {pid}); this one stops. Started {dt.datetime.fromtimestamp(lock.stat().st_mtime):%H:%M}.")
+            sys.exit(0)
+        except (ValueError, OSError, SystemError):
+            pass
+    lock.write_text(str(os.getpid()))
+    atexit.register(lambda: lock.unlink(missing_ok=True))
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "demo"
+    if cmd == "run":
+        run_lock()
     {"demo": cmd_demo, "run": cmd_run, "discover": cmd_discover, "publish": cmd_publish}[cmd]()
