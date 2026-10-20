@@ -783,13 +783,17 @@ def publish_git(cfg: dict, data: dict) -> bool:
     branch = pub.get("git_branch")
     if not branch:
         return False
-    from dashboard.build import build_shared
+    from dashboard.build import build, build_shared
     out = ROOT / "data" / "shared_build"
-    build_shared(data, out)
+    full = bool(pub.get("client_lists"))           # private repository only: the full dashboard with client lists
+    (build if full else build_shared)(data, out)
     m = data["meta"]
     (out / "README.md").write_text(
         f"# SPEED KPI dashboard - latest shared build\n\nGenerated {m['generated_at']} (data as of {m['as_of']}, {m['quarter']}).\n\n"
-        "Figures only: client-level lists (ART / hospital numbers) are removed. This branch holds just the latest build and is\n"
+        + ("Full dashboard, including client-level lists (ART / hospital numbers): keep this repository private and serve it\n"
+           "only behind the ECEWS sign-in page (serve_dashboard.py). " if full else
+           "Figures only: client-level lists (ART / hospital numbers) are removed. ")
+        + "This branch holds just the latest build and is\n"
         "replaced on every update. Serve `index.html` (or `index.html.gz` with `Content-Encoding: gzip`); `version.json` changes\n"
         "with each build and open pages reload when it does. The code is on the `main` branch.\n", encoding="utf-8")
     git = lambda *a, **k: subprocess.run(["git", "-C", str(ROOT), *a], check=True, capture_output=True, text=True, **k).stdout.strip()
@@ -803,7 +807,7 @@ def publish_git(cfg: dict, data: dict) -> bool:
         git("push", "--force", "-q", "origin", f"{commit}:refs/heads/{branch}", timeout=600)
         git("fetch", "-q", "origin", branch, timeout=300)
         git("prune", "--expire=now")          # drop the previous build's objects from the local repository
-        print(f"  published: figures-only dashboard pushed to GitHub branch '{branch}'")
+        print(f"  published: {'full dashboard (with client lists)' if full else 'figures-only dashboard'} pushed to GitHub branch '{branch}'")
         return True
     except subprocess.CalledProcessError as e:
         print(f"  WARNING git publish failed: {(e.stderr or e.stdout or '').strip().splitlines()[-1:] or e.returncode}")
