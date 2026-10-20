@@ -796,7 +796,9 @@ def publish_git(cfg: dict, data: dict) -> bool:
     try:
         files = ["README.md", "index.html", "index.html.gz", "version.json"]
         tree_in = "".join(f"100644 blob {git('hash-object', '-w', str(out / f))}\t{f}\n" for f in files)
-        tree = git("mktree", input=tree_in)
+        # bytes, not text: on Windows, text mode would add a carriage return to every file name
+        tree = subprocess.run(["git", "-C", str(ROOT), "mktree"], input=tree_in.encode("utf-8"), check=True,
+                              capture_output=True).stdout.decode().strip()
         commit = git("commit-tree", tree, "-m", f"Dashboard build {m['generated_at']} ({m['quarter']}, data as of {m['as_of']})")
         git("push", "--force", "-q", "origin", f"{commit}:refs/heads/{branch}", timeout=600)
         git("fetch", "-q", "origin", branch, timeout=300)
