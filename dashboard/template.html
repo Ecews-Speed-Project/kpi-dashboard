@@ -1399,10 +1399,31 @@ function csccArt(v){
    ${csccSites(G, W)}`;
 }
 function csccTrends(G){
-  const trk=NDRT()||D.meta.tx_curr_source==="NDR"?"tx_curr":EMRK(), T=G.map(o=>trendAgg(o.f)), pts=(t,m)=>[...(t[m]||new Map())].map(([d,v])=>({d,v}));
-  const iit=G.map((o,i)=>({l:o.l,c:o.c,pts:pts(T[i],"iit_now")}));
-  return `<div class="grid g2">${G.map((o,i)=>`<section class="c3d">${secH(`Weekly TX_CURR — ${o.l}`,"Snapshots saved by each run")}${lineChart([{l:o.l,c:o.c,pts:pts(T[i],trk)}],{label:`TX_CURR ${o.l}`,weekly:true})}</section>`).join("")}</div>
-   ${iit.some(s=>s.pts.length)?`<section class="c3d">${secH("Clients in IIT by week — CSCC vs general population","Snapshots of the current IIT stock")}${lineChart(iit,{label:"IIT stock by site group",weekly:true})}</section>`:""}`;
+  // two cards, each a weekly stacked bar: CSCC sites at the bottom, general population sites on top
+  const trk=NDRT()||D.meta.tx_curr_source==="NDR"?"tx_curr":EMRK(), T=G.map(o=>trendAgg(o.f));
+  const wkEnd = m => { const x=dOf(m); x.setDate(x.getDate()+6); const e=iso(x); return e > D.meta.as_of ? D.meta.as_of : e; };
+  const iit = G.map(o=>{ const m=new Map(); for(const [w,x] of agg(o.f,{by:"week",months:"all"})) if(w && x.iit_q) m.set(wkEnd(w), x.iit_q); return m; });
+  const lastN = (maps, n) => [...new Set(maps.flatMap(m=>[...m.keys()]))].sort().slice(-n);
+  const txw = lastN(T.map(t=>t[trk]||new Map()), 26), iw = lastN(iit, 13);
+  return `<div class="grid g2"><section class="c3d">${secH(`Weekly ${TXL()} — CSCC and general population`,"Snapshots saved by each run · week ending Sunday, the current week at the latest pull")}
+     ${stackWeeks(txw, G.map((o,i)=>({l:o.l,c:o.c,v:T[i][trk]||new Map()})))}</section>
+   <section class="c3d">${secH("Clients becoming IIT each week — CSCC and general population","Last refill + 28 days fell in that week · last 13 weeks")}
+     ${stackWeeks(iw, G.map((o,i)=>({l:o.l,c:o.c,v:iit[i]})))}
+     <p class="drillnote">Weekly count of clients who crossed into IIT. The quarter's IIT in the panels and waterfalls above (active at the end of last quarter, inactive now) is a related but separate count.</p></section></div>`;
+}
+function stackWeeks(weeks, groups, {fmt=n}={}){
+  if(!weeks.length) return `<div class="empty">No data yet.</div>`;
+  const tot=weeks.map(w=>groups.reduce((a,g)=>a+(g.v.get(w)||0),0)), mx=Math.max(...tot,1);
+  const W=Math.max(560,weeks.length*62), H=250, pt=22, pb=30, bw=(W-16)/weeks.length, y=v=>(H-pb-pt)*v/mx;
+  const bars=weeks.map((w,i)=>{ const x=8+i*bw+bw*.16, wd=bw*.68; let base=H-pb;
+    const segs=groups.map(g=>{ const v=g.v.get(w)||0, h=y(v); base-=h;
+      return `<rect x="${x}" y="${base}" width="${wd}" height="${Math.max(0,h-1)}" fill="${g.c}" rx="1.5"/>${h>15?`<text x="${x+wd/2}" y="${base+h/2+4}" text-anchor="middle" font-size="10" fill="#fff">${fmt(v)}</text>`:""}`; }).join("");
+    return `<g data-tip="${dLab(w)} · ${groups.map(g=>`${esc(g.l)} ${fmt(g.v.get(w)||0)}`).join(" · ")} · total ${fmt(tot[i])}">${segs}
+      <text class="vlab" x="${x+wd/2}" y="${H-pb-y(tot[i])-6}" text-anchor="middle" font-size="10.5">${fmt(tot[i])}</text>
+      <text x="${x+wd/2}" y="${H-pb+17}" text-anchor="middle" font-size="10.5">${dLab(w)}</text></g>`; }).join("");
+  return `<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="Weekly stacked bars">
+    <line x1="8" x2="${W-8}" y1="${H-pb}" y2="${H-pb}" stroke="var(--rule)"/>${bars}</svg></div>
+   <div class="legend">${groups.map(g=>`<span><span class="sw" style="background:${g.c}"></span>${esc(g.l)}</span>`).join("")}<span>bar top = total</span></div>`;
 }
 function csccSites(G, W){
   const g=(x,k)=>x[k]||0, chg=x=>g(x,W.curr)-g(x,W.prev), miss=f=>AC.rows.length?apptList(f).filter(aMissed).length:null;
