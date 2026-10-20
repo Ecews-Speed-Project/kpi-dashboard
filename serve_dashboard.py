@@ -15,6 +15,7 @@ Modified" reply, a new build is downloaded once. version.json is never cached.
     python serve_dashboard.py          # this computer only
     python serve_dashboard.py --lan    # also reachable from the office network
                                        # at http://<this-computer's-IP>:8765
+    python serve_dashboard.py --lan --port 5100 --no-browser    # on a server, another port
 """
 from __future__ import annotations
 
@@ -44,7 +45,7 @@ ROOT = Path(__file__).resolve().parent
 cfg = yaml.safe_load(open(ROOT / "config" / "settings.yaml", encoding="utf-8"))
 LIVE = ROOT / cfg.get("paths", {}).get("live", "live")
 LOGS = ROOT / cfg.get("paths", {}).get("logs", "logs")
-PORT = 8765
+PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else int(os.environ.get("DASH_PORT", 8765))
 ACCESS = cfg.get("access") or {}
 DOMAINS = [d.lower().lstrip("@") for d in ACCESS.get("allowed_domains", ["ecews.org"])]
 EMAILS = {e.lower() for e in ACCESS.get("allowed_emails", [])}
