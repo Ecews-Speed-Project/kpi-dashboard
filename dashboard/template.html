@@ -1408,15 +1408,15 @@ function csccTrends(G){
   const txAt = (m, d) => { const ks=[...m.keys()].sort(), k=ks.filter(x=>x<=d).at(-1) ?? ks[0]; return k ? m.get(k) : null; };
   const cut = (() => { const x=dOf(D.meta.as_of); x.setDate(x.getDate()-26*7); return iso(x); })();
   const rate = G.map((o,i)=>{ const pts=[]; for(const [w,x] of agg(o.f,{by:"week",months:"all"})){ if(!w||!x.iit_q) continue; const d=wkEnd(w), den=txAt(tx[i],d);
-      if(d>=cut && den) pts.push({d, v:x.iit_q/den*1000, n:x.iit_q}); } return {l:o.l, c:o.c, pts:pts.sort((a,b)=>a.d<b.d?-1:1)}; });
+      if(d>=cut && den) pts.push({d, v:x.iit_q/den, n:x.iit_q}); } return {l:o.l, c:o.c, pts:pts.sort((a,b)=>a.d<b.d?-1:1)}; });
   const small = (o,i) => `<h3 class="minih" style="margin-top:${i?14:4}px"><span class="sw" style="background:${o.c}"></span>${o.l}</h3>
      ${lineChart([{l:o.l,c:o.c,pts:[...tx[i]].filter(([d])=>d>=cut).map(([d,v])=>({d,v}))}],{label:`${TXL()} ${o.l}`,weekly:true,H:170,endLabel:true})}`;
   return `<div class="grid g2"><section class="c3d">${secH(`Weekly ${TXL()} — CSCC and general population`,"Snapshots saved by each run · last 26 weeks · each panel has its own scale")}
      ${G.map(small).join("")}</section>
-   <section class="c3d">${secH("Weekly IIT rate — CSCC vs general population","Clients crossing into IIT that week per 1,000 on treatment · last 26 weeks")}
-     ${lineChart(rate,{fmt:v=>v.toFixed(1),yMin:0,label:"Weekly IIT per 1,000 on treatment",weekly:true,endLabel:true})}
-     <div class="tw"><table><thead><tr><th>Week ending</th>${G.map(o=>`<th class="n">${o.k==="cscc"?"CSCC":"Gen. pop."} IIT</th><th class="n">per 1,000</th>`).join("")}</tr></thead><tbody>
-      ${[...new Set(rate.flatMap(s=>s.pts.map(p=>p.d)))].sort().slice(-4).reverse().map(d=>`<tr><td>${dLab(d)}</td>${rate.map(s=>{const p=s.pts.find(q=>q.d===d); return `<td class="n">${p?n(p.n):"—"}</td><td class="n">${p?p.v.toFixed(1):"—"}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div>
+   <section class="c3d">${secH("Weekly IIT rate — CSCC vs general population","Weekly IIT rate = clients crossing into IIT that week ÷ TX_CURR · last 26 weeks")}
+     ${lineChart(rate,{fmt:v=>pct(v,2),yMin:0,label:"Weekly IIT rate",weekly:true,endLabel:true})}
+     <div class="tw"><table><thead><tr><th>Week ending</th>${G.map(o=>`<th class="n">${o.k==="cscc"?"CSCC":"Gen. pop."} IIT</th><th class="n">IIT rate</th>`).join("")}</tr></thead><tbody>
+      ${[...new Set(rate.flatMap(s=>s.pts.map(p=>p.d)))].sort().slice(-4).reverse().map(d=>`<tr><td>${dLab(d)}</td>${rate.map(s=>{const p=s.pts.find(q=>q.d===d); return `<td class="n">${p?n(p.n):"—"}</td><td class="n">${p?pct(p.v,2):"—"}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div>
      <p class="drillnote">IIT here = last refill + 28 days fell in that week. A rate puts the two groups on one scale: the bigger group always has more IIT, the rate shows who loses clients faster. The quarter's IIT in the panels above (active at the end of last quarter, inactive now) is a related but separate count.</p></section></div>`;
 }
 function stackWeeks(weeks, groups, {fmt=n}={}){
