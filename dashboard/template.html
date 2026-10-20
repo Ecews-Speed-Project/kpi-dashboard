@@ -288,7 +288,15 @@ footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:
 .hscroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--gold) transparent;-webkit-overflow-scrolling:touch;padding-bottom:6px}
 .hscroll::-webkit-scrollbar{height:8px}.hscroll::-webkit-scrollbar-thumb{background:var(--gold);border-radius:4px}
 .hscroll svg{display:block;height:auto}
-.yaxw{position:relative}.yaxo{position:absolute;left:0;top:0;pointer-events:none}
+.yaxw{position:relative}
+.vs-head{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 12px}.vs-head div{flex:1 1 240px;border-left:4px solid;padding:4px 12px}
+.vs-head b{display:block;font-size:26px;line-height:1.1}.vs-head span{font-size:13px;color:var(--ink-2)}
+.vs table{width:100%}.vs td,.vs th{padding:5px 6px}.vs th .sw{margin-right:5px}.vs td small{color:var(--ink-3);margin-left:3px}
+.vs td.worse,.vs-share .worse{color:var(--bar-critical);font-weight:600}
+.vs-share{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px 22px}
+.vs-share>div{display:grid;grid-template-columns:110px 1fr 44px;align-items:center;gap:8px;font-size:13.5px}
+.vs-share .bar{position:relative;height:9px;border-radius:5px;background:var(--rule-soft)}.vs-share .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--s2)}
+.vs-share .bar b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink-2)}.vs-share .n{text-align:right}.yaxo{position:absolute;left:0;top:0;pointer-events:none}
 .hsnote{font-size:12.5px;color:var(--ink-3);font-style:italic;margin:2px 0 0}
 /* ---------- searchable dropdowns ---------- */
 .ssel{display:inline-block;max-width:100%}
@@ -489,6 +497,7 @@ const LABEL = {good:"On track",warning:"Watch",critical:"Off track",none:"No tar
 const chip = (s,t) => `<span class="chip s-${s}">${esc(t||LABEL[s])}</span>`;
 const dot = s => `<span class="dot d-${s}" title="${LABEL[s]}"></span>`;
 const fmtDate = s => new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+const dLab = d => { const x=dOf(d); return x.toLocaleDateString("en-GB",{day:"numeric",month:"short"})+"’"+String(x.getFullYear()).slice(2); };
 const monthLab = m => new Date(m+"-01T00:00:00").toLocaleDateString("en-GB",{month:"short",year:"numeric"});
 
 /* ---------- scoring (same rules as kpi/engine.py) ---------- */
@@ -895,7 +904,7 @@ function monthlyPick(id, opts, f=F, grain="month", nWeeks=26){
   let ms, sel, lab;
   if(wk){ const last=monOf(dOf(D.meta.linelist_as_of||D.meta.as_of)); ms=[]; for(let i=nWeeks-1;i>=0;i--){const x=dOf(last); x.setDate(x.getDate()-7*i); ms.push(iso(x));}
     const ps=dOf(P.start), pe=dOf(P.end); sel=new Set(ms.filter(m=>{const a=dOf(m), e=new Date(a.getTime()+6*DAY); return e>=ps&&a<=pe;}));
-    lab=m=>dOf(m).toLocaleDateString("en-GB",{day:"numeric",month:"short"}); }
+    lab=m=>dLab(m); }
   else { ms=[...new Set(PM.filter(p=>p.kind==="M"||p.kind==="W").map(p=>p.month))].sort(); sel=new Set([...(WIN||(WIN=windowSet()))].map(i=>PM[i].month));
     lab=m=>monthLab(m).replace(" 20"," ’"); }
   const val = m => { const x=g.get(m)||{}; return o.den ? div(x[o.num]||0, x[o.den]) : (x[o.num]||0); };
@@ -1354,54 +1363,54 @@ function trendsBlock(){ return `<details class="c3d trends"${TROPEN?" open":""}>
 /* ---------- Current on treatment: CSCC sites vs general population sites ----------
    Same waterfall numbers as the page, split by site group; projections carry the quarter's pace so far forward. */
 function csccArt(v){
-  const W=WF(), ti=NDRT()?"wf_ti":"ndr_wf_ti", el=D.meta.elapsed_asof, curQ=llQ()===D.meta.quarter&&el>0;
-  const g=(x,k)=>x[k]||0, miss=f=>AC.rows.length?apptList(f).filter(aMissed).length:null;
+  const W=WF(), ti=NDRT()?"wf_ti":"ndr_wf_ti", g=(x,k)=>x[k]||0, miss=f=>AC.rows.length?apptList(f).filter(aMissed).length:null;
   const grp=(l,k,c)=>{ const f={...F,grp:k}, x=agg(f); return {l,k,c,f,x,sites:[...agg(f,{by:"facility"}).values()].filter(o=>g(o,W.curr)>0).length}; };
   const G=[grp("CSCC sites","cscc","var(--s2)"), grp("General population sites","gen","var(--s1)")];
   if(!G[0].sites) return "";
-  const A={l:"All sites",f:F,x:v,sites:G[0].sites+G[1].sites}, cols=[...G,A];
-  const chg=x=>g(x,W.curr)-g(x,W.prev), sg=d=>(d>0?"+":"")+n(d);
-  const rows=[
-    ["Sites with clients on treatment",o=>n(o.sites)],
-    ["TX_CURR end of last quarter",o=>n(g(o.x,W.prev))],
-    ["TX_NEW",o=>n(g(o.x,W.new))],["Returned to treatment (RTT)",o=>n(g(o.x,W.rtt))],["Transfer in",o=>n(g(o.x,ti))],
-    ["IIT",o=>n(g(o.x,W.iit))],["IIT rate",o=>pct(W.rate(o.x),2)],["Transfer out",o=>n(g(o.x,W.to))],["Dead",o=>n(g(o.x,W.dead))],
-    [`<b>${TXL()} now</b>`,o=>`<b>${n(g(o.x,W.curr))}</b>`],["Share of TX_CURR",o=>rpct(g(o.x,W.curr),g(v,W.curr))],
-    ["Net change this quarter",o=>`${sg(chg(o.x))} (${rpct(chg(o.x),g(o.x,W.prev))})`],
-    ["VL coverage",o=>rpct(g(o.x,"vl_result"),g(o.x,"vl_eligible"))],["VL suppression",o=>rpct(g(o.x,"vl_suppressed"),g(o.x,"vl_result"))],
-    ["On 3+ month refills",o=>rpct(g(o.x,"mmd3"),g(o.x,"tx_curr_emr"))],
-    ...(MEAS.includes("pbs_active")?[["Unique print ÷ active (NDR)",o=>rpct(g(o.x,"tx_curr"),g(o.x,"pbs_active"))],["Yet to capture",o=>n(bx(o.x,"pbs_nocap"))],["Adjudication waiting",o=>n(g(o.x,"pbs_adjudication"))]]:[]),
-    ...(AC.rows.length?[["Missed appointments (still active)",o=>n(miss(o.f))]]:[]),
-    ...(curQ?[[`<i>TX_NEW by ${fmtDate(D.meta.q_end)} at this pace</i>`,o=>`<i>${n(g(o.x,W.new)/el)}</i>`],[`<i>IIT by ${fmtDate(D.meta.q_end)} at this pace</i>`,o=>`<i>${n(g(o.x,W.iit)/el)}</i>`],
-      [`<i>TX_CURR on ${fmtDate(D.meta.q_end)} at this pace</i>`,o=>`<i>${n(g(o.x,W.prev)+chg(o.x)/el)}</i>`]]:[])];
-  // where each number sits: CSCC share of the total, as a split bar
-  const split=(l,k,fn)=>{ const a=fn?fn(G[0])||0:g(G[0].x,k), b=fn?fn(G[1])||0:g(G[1].x,k), t=a+b, p=t?a/t*100:0;
-    return `<div class="hb" data-tip="${esc(l)}: CSCC ${n(a)} · general population ${n(b)}"><span class="lab">${esc(l)}</span>
-     <span class="track" style="display:flex;overflow:hidden"><span style="width:${p}%;background:var(--s2)"></span><span style="flex:1;background:var(--s1)"></span></span>
-     <span class="val"><b>${t?p.toFixed(0):"—"}%</b> CSCC</span></div>`; };
-  const shares=[["TX_CURR",W.curr],["TX_NEW",W.new],["RTT",W.rtt],["IIT",W.iit],["Transfer out",W.to],["Dead",W.dead],
-    ...(MEAS.includes("pbs_baseline")?[["Yet to capture",null,o=>bx(o.x,"pbs_nocap")]]:[]),...(AC.rows.length?[["Missed appointments",null,o=>miss(o.f)]]:[])];
-  const trk=NDRT()||D.meta.tx_curr_source==="NDR"?"tx_curr":EMRK(), tline=o=>{ const T=trendAgg(o.f); return [...(T[trk]||new Map())].map(([d,val])=>({d,v:val})); };
-  const iitS=G.map(o=>({l:o.l,c:o.c,pts:[...(trendAgg(o.f).iit_now||new Map())].map(([d,val])=>({d,v:val}))}));
+  const chg=x=>g(x,W.curr)-g(x,W.prev), sg=d=>(d>0?"+":"")+n(d), bio=MEAS.includes("pbs_active");
+  // rows: [label, value(o), rate(o) for comparison or null, higher-is-better?, smallest gap worth marking (default 1 point)]
+  const panel=(title,rows)=>`<div class="vs"><h3 class="minih">${title}</h3><table><tbody>${rows.map(([l,fv,rv,up,gap=.01])=>{
+      const r=rv?G.map(rv):null, worse=r&&r.every(x=>x!=null)&&Math.abs(r[0]-r[1])>=gap ? (up ? (r[0]<r[1]?0:1) : (r[0]>r[1]?0:1)) : -1;
+      return `<tr><td>${l}</td>${G.map((o,i)=>`<td class="n${i===worse?" worse":""}"${i===worse?' data-tip="The weaker of the two"':""}>${fv(o)}</td>`).join("")}</tr>`; }).join("")}</tbody></table></div>`;
+  const R=(a,b)=>o=>div(g(o.x,a),g(o.x,b));
+  const growth=[["End of last quarter",o=>n(g(o.x,W.prev))],["TX_NEW",o=>n(g(o.x,W.new))],["Returned (RTT)",o=>n(g(o.x,W.rtt))],["Transfer in",o=>n(g(o.x,ti))],
+    ["Net change",o=>`${sg(chg(o.x))} <small>${rpct(chg(o.x),g(o.x,W.prev))}</small>`,o=>div(chg(o.x),g(o.x,W.prev)),true]];
+  const losses=[["IIT",o=>n(g(o.x,W.iit))],["IIT rate",o=>pct(W.rate(o.x),2),o=>W.rate(o.x),false,.003],["Transfer out",o=>n(g(o.x,W.to))],["Dead",o=>n(g(o.x,W.dead))],
+    ...(AC.rows.length?[["Missed appointments",o=>n(miss(o.f)),o=>div(miss(o.f),g(o.x,W.curr)),false]]:[])];
+  const care=[["VL coverage",o=>rpct(g(o.x,"vl_result"),g(o.x,"vl_eligible")),R("vl_result","vl_eligible"),true],["VL suppression",o=>rpct(g(o.x,"vl_suppressed"),g(o.x,"vl_result")),R("vl_suppressed","vl_result"),true],
+    ["On 3+ month refills",o=>rpct(g(o.x,"mmd3"),g(o.x,"tx_curr_emr")),R("mmd3","tx_curr_emr"),true],
+    ...(bio?[["Unique prints ÷ active",o=>rpct(g(o.x,"tx_curr"),g(o.x,"pbs_active")),R("tx_curr","pbs_active"),true],["Yet to capture",o=>n(bx(o.x,"pbs_nocap")),o=>div(bx(o.x,"pbs_nocap"),g(o.x,"pbs_active")),false],
+      ["Adjudication waiting",o=>n(g(o.x,"pbs_adjudication")),R("pbs_adjudication","pbs_active"),false,.005]]:[])];
+  const head=`<thead><tr><th></th>${G.map(o=>`<th class="n"><span class="sw" style="background:${o.c}"></span>${o.k==="cscc"?"CSCC":"Gen. pop."}</th>`).join("")}</tr></thead>`;
+  // share of each number held by the CSCC sites, against their share of TX_CURR
+  const tot=x=>g(x,W.curr), base=div(tot(G[0].x),tot(G[0].x)+tot(G[1].x));
+  const shares=[["IIT",o=>g(o.x,W.iit)],["Transfer out",o=>g(o.x,W.to)],["Missed appts",o=>miss(o.f)||0],...(bio?[["Yet to capture",o=>bx(o.x,"pbs_nocap")]]:[]),["TX_NEW",o=>g(o.x,W.new)],["RTT",o=>g(o.x,W.rtt)]]
+    .filter(([l,fn])=>fn(G[0])+fn(G[1])>0).map(([l,fn])=>{ const a=fn(G[0]), p=a/(a+fn(G[1])); return {l,p,a}; });
+  const share=`<div class="vs-share">${shares.map(x=>`<div data-tip="${esc(x.l)}: ${n(x.a)} at CSCC sites = ${pct(x.p,0)} of the total (CSCC hold ${pct(base,0)} of TX_CURR)"><span>${esc(x.l)}</span>
+      <span class="bar"><i style="width:${(x.p*100).toFixed(1)}%"></i><b style="left:${(base*100).toFixed(1)}%"></b></span><span class="n${x.p>base*1.25?" worse":""}">${pct(x.p,0)}</span></div>`).join("")}</div>`;
+  return `<section class="c3d">${secH("CSCC sites vs general population sites",`${W.label} · CSCC = key-population one-stop sites (“CSCC” in the facility name)`)}
+   <div class="vs-head">${G.map(o=>`<div style="border-color:${o.c}"><b class="num">${n(g(o.x,W.curr))}</b><span>${o.l} · ${n(o.sites)} sites · ${rpct(g(o.x,W.curr),g(v,W.curr),0)} of ${TXL()}</span></div>`).join("")}</div>
+   <div class="grid g3 vs-grid">${[["Growth this quarter",growth],["Losses",losses],["Quality of care",care]].map(([t,rw])=>panel(t,rw).replace("<table>",`<table>${head}`)).join("")}</div>
+   <h3 class="minih" style="margin-top:14px">Share held by the CSCC sites</h3>${share}
+   <p class="drillnote">Red = the weaker of the two groups. In the bars, the mark is the CSCC share of ${TXL()} (${pct(base,0)}): a share of IIT, transfers out, missed appointments or prints still to capture above that mark means the CSCC sites carry more than their weight.</p></section>
+   <div class="grid g2">${G.map(o=>`<section class="c3d">${secH(`Continuity of treatment — ${o.l}`,W.label)}${waterfallFrom(NDRT()?stepsEMR(o.x):stepsNDR(o.x),`IIT rate ${pct(W.rate(o.x),2)}.`)}</section>`).join("")}</div>
+   <div class="grid g2">${G.map(o=>`<section class="c3d">${secH(`TX_CURR by age and sex — ${o.l}`)}${pyramid(NDRT()||D.meta.tx_curr_source==="NDR"?"tx_curr":"tx_curr_emr",{f:o.f})}</section>`).join("")}</div>
+   ${csccTrends(G)}
+   ${csccSites(G, W)}`;
+}
+function csccTrends(G){
+  const trk=NDRT()||D.meta.tx_curr_source==="NDR"?"tx_curr":EMRK(), T=G.map(o=>trendAgg(o.f)), pts=(t,m)=>[...(t[m]||new Map())].map(([d,v])=>({d,v}));
+  const iit=G.map((o,i)=>({l:o.l,c:o.c,pts:pts(T[i],"iit_now")}));
+  return `<div class="grid g2">${G.map((o,i)=>`<section class="c3d">${secH(`Weekly TX_CURR — ${o.l}`,"Snapshots saved by each run")}${lineChart([{l:o.l,c:o.c,pts:pts(T[i],trk)}],{label:`TX_CURR ${o.l}`,weekly:true})}</section>`).join("")}</div>
+   ${iit.some(s=>s.pts.length)?`<section class="c3d">${secH("Clients in IIT by week — CSCC vs general population","Snapshots of the current IIT stock")}${lineChart(iit,{label:"IIT stock by site group",weekly:true})}</section>`:""}`;
+}
+function csccSites(G, W){
+  const g=(x,k)=>x[k]||0, chg=x=>g(x,W.curr)-g(x,W.prev), miss=f=>AC.rows.length?apptList(f).filter(aMissed).length:null;
   const sites=FAC.map((x,i)=>({x,i})).filter(o=>isCscc(o.i)&&facPass(o.i,F)).map(o=>({fc:o.x,f:{...F,state:o.x.state,lga:o.x.lga,fac:o.x.facility}}))
     .map(o=>({...o,a:agg(o.f)})).filter(o=>g(o.a,W.curr)||g(o.a,W.prev)).sort((p,q)=>g(q.a,W.curr)-g(p.a,W.curr));
-  const sr=(l,x,f,t)=>`<tr${t?' class="total"':""}><td>${l}</td><td class="n">${n(g(x,W.prev))}</td><td class="n">${n(g(x,W.new))}</td><td class="n">${n(g(x,W.rtt))}</td><td class="n">${n(g(x,W.iit))}</td><td class="n">${pct(W.rate(x),2)}</td>
-    <td class="n">${n(g(x,W.curr))}</td><td class="n">${sg(chg(x))}</td><td class="n">${rpct(g(x,"vl_result"),g(x,"vl_eligible"))}</td><td class="n">${rpct(g(x,"vl_suppressed"),g(x,"vl_result"))}</td>
-    <td class="n">${MEAS.includes("pbs_active")?rpct(g(x,"tx_curr"),g(x,"pbs_active")):"—"}</td><td class="n">${AC.rows.length?n(miss(f)):"—"}</td></tr>`;
-  return `<section class="c3d">${secH("CSCC sites vs general population sites",`${W.label} · CSCC = key-population one-stop sites (“CSCC” in the facility name) · follows the state / LGA / sex / age filters`)}
-   <div class="kpis">${G.map(o=>kpi(n(g(o.x,W.curr)),`TX_CURR · ${o.l}`,`${rpct(g(o.x,W.curr),g(v,W.curr))} of all · ${n(o.sites)} sites`)).join("")}
-    ${G.map(o=>kpi(pct(W.rate(o.x),2),`IIT rate · ${o.l}`,`${n(g(o.x,W.iit))} IIT · ${n(g(o.x,W.rtt))} RTT`,W.rate(o.x)==null?null:W.rate(o.x)<=.01?"good":W.rate(o.x)<=.02?"warning":"critical")).join("")}</div>
-   <div class="grid g2"><div><div class="tw"><table><thead><tr><th></th>${cols.map(o=>`<th class="n">${esc(o.l)}</th>`).join("")}</tr></thead><tbody>
-     ${rows.map(([l,fn])=>`<tr><td>${l}</td>${cols.map(o=>`<td class="n">${fn(o)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-     ${curQ?`<p class="drillnote">Italic rows carry the pace of the first ${Math.round(el*100)}% of ${esc(D.meta.quarter)} to the end of the quarter (flows ÷ ${el.toFixed(2)}); early in a quarter they move a lot from week to week.</p>`:""}</div>
-    <div><div class="legend"><span><span class="sw" style="background:var(--s2)"></span>CSCC sites</span><span><span class="sw" style="background:var(--s1)"></span>General population sites</span></div>
-     <div class="hbars">${shares.map(([l,k,fn])=>split(l,k,fn)).join("")}</div>
-     <p class="drillnote">A CSCC share of IIT, transfers out or missed appointments above its share of TX_CURR means those sites lose clients faster than the rest.</p></div></div></section>
-   <div class="grid g2">${G.map(o=>`<section class="c3d">${secH(`Continuity of treatment — ${o.l}`,W.label)}${waterfallFrom(NDRT()?stepsEMR(o.x):stepsNDR(o.x),`IIT rate ${pct(W.rate(o.x),2)}.`)}</section>`).join("")}</div>
-   <div class="grid g2">${G.map(o=>`<section class="c3d">${secH(`TX_CURR by age and sex — ${o.l}`)}${pyramid(trk==="tx_curr"?"tx_curr":"tx_curr_emr",{f:o.f})}</section>`).join("")}</div>
-   <div class="grid g2">${G.map(o=>`<section class="c3d">${secH(`Weekly TX_CURR — ${o.l}`,"Snapshots saved by each run")}${lineChart([{l:o.l,c:o.c,pts:tline(o)}],{label:`TX_CURR ${o.l}`,weekly:true})}</section>`).join("")}</div>
-   ${iitS.some(s=>s.pts.length)?`<section class="c3d">${secH("Clients in IIT by week — CSCC vs general population","Snapshots of the current IIT stock")}${lineChart(iitS,{label:"IIT stock by site group",weekly:true})}</section>`:""}
-   <section class="c3d">${secH("CSCC sites, one by one",W.label)}<div class="tw"><table><thead><tr><th>CSCC site</th><th class="n">TX_CURR end of last Q</th><th class="n">TX_NEW</th><th class="n">RTT</th><th class="n">IIT</th><th class="n">IIT rate</th><th class="n">TX_CURR now</th><th class="n">Net change</th><th class="n">VL coverage</th><th class="n">VLS</th><th class="n">Unique ÷ active</th><th class="n">Missed appts</th></tr></thead><tbody>
+  const sr=(l,x,f,t)=>`<tr${t?' class="total"':""}><td>${l}</td><td class="n">${n(g(x,W.curr))}</td><td class="n">${(chg(x)>0?"+":"")+n(chg(x))}</td><td class="n">${n(g(x,W.new))}</td><td class="n">${n(g(x,W.iit))}</td><td class="n">${pct(W.rate(x),2)}</td>
+    <td class="n">${rpct(g(x,"vl_result"),g(x,"vl_eligible"))}</td><td class="n">${rpct(g(x,"vl_suppressed"),g(x,"vl_result"))}</td><td class="n">${MEAS.includes("pbs_active")?rpct(g(x,"tx_curr"),g(x,"pbs_active")):"—"}</td><td class="n">${AC.rows.length?n(miss(f)):"—"}</td></tr>`;
+  return `<section class="c3d">${secH("CSCC sites, one by one",W.label)}<div class="tw"><table><thead><tr><th>CSCC site</th><th class="n">TX_CURR</th><th class="n">Net change</th><th class="n">TX_NEW</th><th class="n">IIT</th><th class="n">IIT rate</th><th class="n">VL coverage</th><th class="n">VLS</th><th class="n">Unique ÷ active</th><th class="n">Missed appts</th></tr></thead><tbody>
     ${sites.map(o=>sr(esc(o.fc.facility),o.a,o.f)).join("")}${sr("All CSCC sites",G[0].x,G[0].f,1)}${sr("General population sites",G[1].x,G[1].f,1)}</tbody></table></div></section>`;
 }
 function artPage(){
@@ -1968,9 +1977,11 @@ const TS = D.trend_series || {dates:[], measures:[], rows:[]};
 function trendAgg(f=F){
   const out = {}; TS.measures.forEach(m=>out[m]=new Map());
   for(const [fi,di,mi,v] of TS.rows){ if(!facPass(fi,f)) continue; const m=out[TS.measures[mi]], d=TS.dates[di]; m.set(d,(m.get(d)||0)+v); }
-  // weekly: one point per week (Sunday), the latest snapshot in that week
+  // weekly: one point per week (Sunday; the current week at the latest pull), the latest snapshot in that week
   for(const k of Object.keys(out)){ const wk=new Map();
-    for(const d of [...out[k].keys()].sort()){ const x=dOf(monOf(dOf(d))); x.setDate(x.getDate()+6); wk.set(iso(x), out[k].get(d)); }
+    for(const d of [...out[k].keys()].sort()){ const x=dOf(monOf(dOf(d))); x.setDate(x.getDate()+6);
+      const e=iso(x) > D.meta.as_of ? D.meta.as_of : iso(x);          // the current week ends at the latest pull, not next Sunday
+      wk.set(e, out[k].get(d)); }
     out[k]=wk; }
   return out;
 }
@@ -1984,7 +1995,7 @@ function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false}
   return `<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="${esc(label)}">
    ${ticks.map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--rule)" stroke-dasharray="2 3"/><text class="yax" x="${pl-6}" y="${y(t)+4}" text-anchor="end" font-size="11">${fmt(t)}</text>`).join("")}<line class="yax" x1="${pl}" x2="${pl}" y1="${pt}" y2="${H-pb}" stroke="var(--ink-3)"/>
    ${weekly ? ds.map((d,i)=>{ const near = i<ds.length-1 && (dOf(ds[i+1])-dOf(d))/DAY<5;      // a short last week: label only the later point
-       return `<line x1="${x(d)}" x2="${x(d)}" y1="${pt}" y2="${H-pb}" stroke="var(--rule-soft)"/>${near?"":`<text x="${x(d)}" y="${H-pb+18}" text-anchor="middle" font-size="11">${dOf(d).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</text>`}`; }).join("")
+       return `<line x1="${x(d)}" x2="${x(d)}" y1="${pt}" y2="${H-pb}" stroke="var(--rule-soft)"/>${near?"":`<text x="${x(d)}" y="${H-pb+18}" text-anchor="middle" font-size="11">${dLab(d)}</text>`}`; }).join("")
      : months.filter((_,i)=>i%step===0).map(m=>`<text x="${x(m+"-01")}" y="${H-pb+18}" text-anchor="middle" font-size="11">${monthLab(m)}</text>`).join("")}
    ${series.map(s=>{const p=s.pts.filter(q=>q.v!=null).sort((a,b)=>a.d<b.d?-1:1); if(!p.length) return "";
      return `<path d="${p.map((q,i)=>(i?"L":"M")+x(q.d).toFixed(1)+","+y(q.v).toFixed(1)).join("")}" fill="none" stroke="${s.c}" stroke-width="2.2"${s.dash?` stroke-dasharray="6 4"`:""}/>
@@ -2043,6 +2054,7 @@ function icard(i){
 /* ---------- after each render: searchable dropdowns, month scrollers opened at the latest month ---------- */
 function afterRender(){
   enhanceSelects(document);
+  requestAnimationFrame(()=>document.querySelectorAll(".hscroll").forEach(el=>{ el.scrollLeft = el.scrollWidth; }));   // after layout
   document.querySelectorAll(".hscroll").forEach(el=>{
     el.scrollLeft = el.scrollWidth;
     if(el.scrollWidth > el.clientWidth+4 && !(el.previousElementSibling||{}).classList?.contains("hsnote"))
@@ -2052,6 +2064,7 @@ function afterRender(){
     if(ax.length && el.scrollWidth > el.clientWidth+4 && !el.parentElement.classList.contains("yaxw")){
       const vb=svg.viewBox.baseVal, k=svg.getBoundingClientRect().width/vb.width, w=+ax.find(t=>t.tagName==="line").getAttribute("x1")+1;
       const wrap=document.createElement("div"); wrap.className="yaxw"; el.before(wrap); wrap.append(el);
+      el.scrollLeft = el.scrollWidth;
       wrap.insertAdjacentHTML("beforeend", `<svg class="yaxo" viewBox="0 0 ${w} ${vb.height}" width="${w*k}" height="${vb.height*k}" aria-hidden="true"><rect width="${w}" height="${vb.height}" fill="var(--card)" opacity=".94"/>${ax.map(t=>t.outerHTML).join("")}</svg>`);
     }
   });
