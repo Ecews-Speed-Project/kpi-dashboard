@@ -289,6 +289,8 @@ footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:
 .hscroll::-webkit-scrollbar{height:8px}.hscroll::-webkit-scrollbar-thumb{background:var(--gold);border-radius:4px}
 .hscroll svg{display:block;height:auto}
 .yaxw{position:relative}
+@media (max-width:640px){.hb{grid-template-columns:84px minmax(0,1fr)}.hb .val{grid-column:2;text-align:left;white-space:normal;margin-top:-6px;font-size:13px}
+  .maplegend{display:flex;flex-wrap:wrap;max-width:100%}.vs-share>div{grid-template-columns:96px 1fr 40px}.vs-head b{font-size:22px}}
 .vs-head{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 12px}.vs-head div{flex:1 1 240px;border-left:4px solid;padding:4px 12px}
 .vs-head b{display:block;font-size:26px;line-height:1.1}.vs-head span{font-size:13px;color:var(--ink-2)}
 .vs table{width:100%}.vs td,.vs th{padding:5px 6px}.vs th .sw{margin-right:5px}.vs td small{color:var(--ink-3);margin-left:3px}
@@ -1399,17 +1401,23 @@ function csccArt(v){
    ${csccSites(G, W)}`;
 }
 function csccTrends(G){
-  // two cards, each a weekly stacked bar: CSCC sites at the bottom, general population sites on top
   const trk=NDRT()||D.meta.tx_curr_source==="NDR"?"tx_curr":EMRK(), T=G.map(o=>trendAgg(o.f));
   const wkEnd = m => { const x=dOf(m); x.setDate(x.getDate()+6); const e=iso(x); return e > D.meta.as_of ? D.meta.as_of : e; };
-  const iit = G.map(o=>{ const m=new Map(); for(const [w,x] of agg(o.f,{by:"week",months:"all"})) if(w && x.iit_q) m.set(wkEnd(w), x.iit_q); return m; });
-  const lastN = (maps, n) => [...new Set(maps.flatMap(m=>[...m.keys()]))].sort().slice(-n);
-  const txw = lastN(T.map(t=>t[trk]||new Map()), 26), iw = lastN(iit, 13);
-  return `<div class="grid g2"><section class="c3d">${secH(`Weekly ${TXL()} — CSCC and general population`,"Snapshots saved by each run · week ending Sunday, the current week at the latest pull")}
-     ${stackWeeks(txw, G.map((o,i)=>({l:o.l,c:o.c,v:T[i][trk]||new Map()})))}</section>
-   <section class="c3d">${secH("Clients becoming IIT each week — CSCC and general population","Last refill + 28 days fell in that week · last 13 weeks")}
-     ${stackWeeks(iw, G.map((o,i)=>({l:o.l,c:o.c,v:iit[i]})))}
-     <p class="drillnote">Weekly count of clients who crossed into IIT. The quarter's IIT in the panels and waterfalls above (active at the end of last quarter, inactive now) is a related but separate count.</p></section></div>`;
+  const tx = T.map(t=>t[trk]||new Map());
+  // TX_CURR at a week end: the latest snapshot on or before it (else the first one), the denominator of the weekly rate
+  const txAt = (m, d) => { const ks=[...m.keys()].sort(), k=ks.filter(x=>x<=d).at(-1) ?? ks[0]; return k ? m.get(k) : null; };
+  const cut = (() => { const x=dOf(D.meta.as_of); x.setDate(x.getDate()-26*7); return iso(x); })();
+  const rate = G.map((o,i)=>{ const pts=[]; for(const [w,x] of agg(o.f,{by:"week",months:"all"})){ if(!w||!x.iit_q) continue; const d=wkEnd(w), den=txAt(tx[i],d);
+      if(d>=cut && den) pts.push({d, v:x.iit_q/den*1000, n:x.iit_q}); } return {l:o.l, c:o.c, pts:pts.sort((a,b)=>a.d<b.d?-1:1)}; });
+  const small = (o,i) => `<h3 class="minih" style="margin-top:${i?14:4}px"><span class="sw" style="background:${o.c}"></span>${o.l}</h3>
+     ${lineChart([{l:o.l,c:o.c,pts:[...tx[i]].filter(([d])=>d>=cut).map(([d,v])=>({d,v}))}],{label:`${TXL()} ${o.l}`,weekly:true,H:170,endLabel:true})}`;
+  return `<div class="grid g2"><section class="c3d">${secH(`Weekly ${TXL()} — CSCC and general population`,"Snapshots saved by each run · last 26 weeks · each panel has its own scale")}
+     ${G.map(small).join("")}</section>
+   <section class="c3d">${secH("Weekly IIT rate — CSCC vs general population","Clients crossing into IIT that week per 1,000 on treatment · last 26 weeks")}
+     ${lineChart(rate,{fmt:v=>v.toFixed(1),yMin:0,label:"Weekly IIT per 1,000 on treatment",weekly:true,endLabel:true})}
+     <div class="tw"><table><thead><tr><th>Week ending</th>${G.map(o=>`<th class="n">${o.k==="cscc"?"CSCC":"Gen. pop."} IIT</th><th class="n">per 1,000</th>`).join("")}</tr></thead><tbody>
+      ${[...new Set(rate.flatMap(s=>s.pts.map(p=>p.d)))].sort().slice(-4).reverse().map(d=>`<tr><td>${dLab(d)}</td>${rate.map(s=>{const p=s.pts.find(q=>q.d===d); return `<td class="n">${p?n(p.n):"—"}</td><td class="n">${p?p.v.toFixed(1):"—"}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div>
+     <p class="drillnote">IIT here = last refill + 28 days fell in that week. A rate puts the two groups on one scale: the bigger group always has more IIT, the rate shows who loses clients faster. The quarter's IIT in the panels above (active at the end of last quarter, inactive now) is a related but separate count.</p></section></div>`;
 }
 function stackWeeks(weeks, groups, {fmt=n}={}){
   if(!weeks.length) return `<div class="empty">No data yet.</div>`;
@@ -2006,11 +2014,11 @@ function trendAgg(f=F){
     out[k]=wk; }
   return out;
 }
-function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false}={}){
+function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false, H:H0=250, endLabel=false}={}){
   const pts = series.flatMap(s=>s.pts); if(!pts.length) return `<div class="empty">No data yet.</div>`;
   const ds = [...new Set(pts.map(p=>p.d))].sort(), t0=dOf(ds[0]).getTime(), t1=Math.max(dOf(ds.at(-1)).getTime(), t0+DAY);
   const vs = pts.map(p=>p.v).filter(v=>v!=null), lo = yMin ?? Math.min(...vs)*.97, hi = yMax ?? Math.max(...vs)*1.02;
-  const nMon=new Set(ds.map(d=>d.slice(0,7))).size, W=weekly?Math.max(640,ds.length*78):Math.max(640,nMon*95),H=250,pl=58,pr=14,pt=16,pb=34, x=d=>pl+(W-pl-pr)*(dOf(d).getTime()-t0)/(t1-t0), y=v=>pt+(H-pt-pb)*(1-(v-lo)/((hi-lo)||1));
+  const nMon=new Set(ds.map(d=>d.slice(0,7))).size, W=weekly?Math.max(640,ds.length*78):Math.max(640,nMon*95),H=H0,pl=58,pr=endLabel?62:14,pt=16,pb=34, x=d=>pl+(W-pl-pr)*(dOf(d).getTime()-t0)/(t1-t0), y=v=>pt+(H-pt-pb)*(1-(v-lo)/((hi-lo)||1));
   const ticks=[0,.25,.5,.75,1].map(k=>lo+(hi-lo)*k), months=[...new Set(ds.map(d=>d.slice(0,7)))];
   const step=Math.ceil(months.length/Math.max(8,Math.floor(W/95)));
   return `<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="${esc(label)}">
@@ -2020,7 +2028,8 @@ function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false}
      : months.filter((_,i)=>i%step===0).map(m=>`<text x="${x(m+"-01")}" y="${H-pb+18}" text-anchor="middle" font-size="11">${monthLab(m)}</text>`).join("")}
    ${series.map(s=>{const p=s.pts.filter(q=>q.v!=null).sort((a,b)=>a.d<b.d?-1:1); if(!p.length) return "";
      return `<path d="${p.map((q,i)=>(i?"L":"M")+x(q.d).toFixed(1)+","+y(q.v).toFixed(1)).join("")}" fill="none" stroke="${s.c}" stroke-width="2.2"${s.dash?` stroke-dasharray="6 4"`:""}/>
-      ${p.map(q=>`<circle cx="${x(q.d).toFixed(1)}" cy="${y(q.v).toFixed(1)}" r="${s.dash?2.5:3.5}" fill="${s.c}" data-tip="${esc(s.l)} · ${fmtDate(q.d)}: ${fmt(q.v)}"/>`).join("")}`;}).join("")}
+      ${p.map(q=>`<circle cx="${x(q.d).toFixed(1)}" cy="${y(q.v).toFixed(1)}" r="${s.dash?2.5:3.5}" fill="${s.c}" data-tip="${esc(s.l)} · ${fmtDate(q.d)}: ${fmt(q.v)}"/>`).join("")}
+      ${endLabel?`<text class="vlab" x="${(x(p.at(-1).d)+7).toFixed(1)}" y="${(y(p.at(-1).v)+4).toFixed(1)}" font-size="12" fill="${s.c}">${fmt(p.at(-1).v)}</text>`:""}`;}).join("")}
   </svg></div><div class="legend">${series.map(s=>`<span><svg width="22" height="10"><line x1="0" x2="22" y1="5" y2="5" stroke="${s.c}" stroke-width="2.2"${s.dash?` stroke-dasharray="6 4"`:""}/></svg>${esc(s.l)}</span>`).join("")}</div>`;
 }
 let TROPEN = false;
@@ -2079,7 +2088,7 @@ function afterRender(){
   document.querySelectorAll(".hscroll").forEach(el=>{
     el.scrollLeft = el.scrollWidth;
     if(el.scrollWidth > el.clientWidth+4 && !(el.previousElementSibling||{}).classList?.contains("hsnote"))
-      el.insertAdjacentHTML("beforebegin", `<p class="hsnote">◀ Scroll or swipe left for earlier months</p>`);
+      el.insertAdjacentHTML("beforebegin", `<p class="hsnote">◀ Scroll or swipe left for earlier dates</p>`);
     // a scrolled line chart keeps its y-axis in view: the axis labels are pinned to the left edge
     const svg=el.querySelector("svg"), ax=svg?[...svg.querySelectorAll(".yax")]:[];
     if(ax.length && el.scrollWidth > el.clientWidth+4 && !el.parentElement.classList.contains("yaxw")){
