@@ -79,6 +79,8 @@ postgres:                     # central data repository
   host: ""                    # set PG_HOST in .env (kept out of git)
   port: 5432
   dbname: ecews
+  page_rows: 5000             # line-list rows per request: the CDR drops a connection after ~2 minutes,
+                              # and a full-width page of 5,000 rows takes about 30 seconds
   schema: public
   tables:
     linelist: linelist_flat         # was linelist (removed 2026-10-14); weekly stacked snapshots

@@ -16,7 +16,7 @@ Project home: `C:\Users\CalebGwaza\OneDrive - Excellence Community Education Wel
 | Task | How |
 |---|---|
 | See the dashboard | http://localhost:8765. The Task Scheduler task "SPEED dashboard server" starts the server silently 30 seconds after you log in. `open_dashboard.bat` opens the page, and starts the server if it isn't running. The open page reloads itself after each update. |
-| Update now | `update_dashboard.bat` takes about 6 minutes and writes a log to `logs\`. Add `--full` to re-pull all of DHIS2 or `--export` for QA CSVs. |
+| Update now | `update_dashboard.bat` writes a log to `logs\`. Add `--full` to re-pull all of DHIS2, `--export` for QA CSVs, or `--refresh-cdr` to re-read the CDR line list when the CDR team reloads a period they already published (otherwise an unchanged period is taken from the saved copy). |
 | Scheduled updates | Task Scheduler task "SPEED dashboard update" runs on weekdays at 07:45 and 13:45. |
 | New NDR PBS export | Every week, download the **active + inactive (all status)** PBS line list from the NDR portal and drop it in `inbox\` as `pbs_all_<YYYY-MM-DD>_all_status.xlsx`. It drives every treatment number (`treatment_source: ndr`). The newest file wins, and older exports are saved to history and removed after the next run. |
 | Older NDR PBS files | `python scripts\import_ndr_history.py <folder or zip>` saves dated copies of past weekly files (named like `PBS Line List_13thJuly2026.xlsx`) for earlier periods and the weekly trend lines. Default folder: Downloads. |

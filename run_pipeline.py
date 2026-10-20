@@ -357,13 +357,23 @@ def read_flat(eng, pg: dict, lc: dict) -> pd.DataFrame:
     cols = [str(c) for c in lc.values() if c != "pqs_status"]
     pc = lc.get("period")
     if not pc:
-        return read_pg_table(eng, pg["schema"], pg["tables"]["linelist"], columns=cols)
+        return read_pg_table(eng, pg["schema"], pg["tables"]["linelist"], columns=cols, page=int(pg.get("page_rows", 5000)))
     with eng.connect() as con:
         periods = sorted({str(r[0])[:10] for r in con.execute(text(f'SELECT DISTINCT "{pc}" FROM "{pg["schema"]}"."{pg["tables"]["linelist"]}"')) if r[0]})
     periods = [p for p in periods if re.fullmatch(r"\d{4}-\d{2}-\d{2}", p)]
     need = [p for p in periods[:-1] if not (SOURCES / f"linelist_{p}.parquet").exists()] + periods[-1:]
+    # the CDR is refreshed about once a week, DHIS2 daily: when the newest period is already saved here with
+    # every column the pipeline reads, use that copy instead of re-reading it (about 5 minutes) from the CDR
+    latest = SOURCES / f"linelist_{periods[-1]}.parquet" if periods else None
+    if latest is not None and latest.exists() and need == periods[-1:] and "--refresh-cdr" not in sys.argv:   # --refresh-cdr: read it again
+        import pyarrow.parquet as pq_
+        have = {c.lower() for c in pq_.read_schema(latest).names}
+        if {c.lower() for c in cols} <= have | {"ndr_unique"}:
+            print(f"  linelist_flat periods: {', '.join(periods)}; newest ({periods[-1]}) unchanged since it was saved: using the saved copy")
+            return legacy_linelist(pd.read_parquet(latest))
     print(f"  linelist_flat periods: {', '.join(periods)}; reading {', '.join(need)}")
-    return pd.concat([read_pg_table(eng, pg["schema"], pg["tables"]["linelist"], columns=cols, where=f"\"{pc}\" = '{p}'")
+    return pd.concat([read_pg_table(eng, pg["schema"], pg["tables"]["linelist"], columns=cols, where=f"\"{pc}\" = '{p}'",
+                                    page=int(pg.get("page_rows", 5000)))
                       for p in need], ignore_index=True)
 
 
@@ -691,13 +701,18 @@ def cmd_run():
         flat = read_flat(eng, pg, lcols)
         linelist = split_periods(flat, lcols)
     except Exception as e:
-        copies = sorted(SOURCES.glob("linelist_*.parquet"))
+        # newest saved copy of the CDR line list itself: copies built from NDR files (history import, quarter
+        # files) lack the EMR-only fields (DSD, AHD, TB screening, OTZ)
+        import pyarrow.parquet as pq_
+        cdr_only = lcols.get("tb_status", "current_tb_status")
+        copies = [f for f in sorted(SOURCES.glob("linelist_*.parquet")) if cdr_only in pq_.read_schema(f).names]
         if not copies:
             raise
         linelist = legacy_linelist(pd.read_parquet(copies[-1]))
         linelist.attrs["from_copy"] = True
         ll_note = f"CDR linelist table unavailable ({type(e).__name__}); using the saved copy of {copies[-1].stem.split('_')[1]}"
         print(f"  WARNING: {ll_note}")
+        print(f"  CDR error: {str(e).splitlines()[0][:300] if str(e) else type(e).__name__}")
     # previous-quarter status as the deck uses it: the previous_quarter_status table, by unique ID
     # (linelist_flat carries its own ARTStatus_PreviousQuarter, so the table is only read for the old layout)
     pq = None
