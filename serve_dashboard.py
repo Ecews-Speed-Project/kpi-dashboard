@@ -282,7 +282,7 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
             path = path / "index.html"
         if path.name.endswith(".gz") or path.name == ".dash_secret":
             return self.send_error(404)
-        if path.suffix == ".html" and path.is_file():
+        if path.suffix == ".html" and (path.is_file() or path.with_name(path.name + ".gz").is_file()):
             return self._send_html(path, head=False)
         return super().do_GET()
 
@@ -293,16 +293,20 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         path = Path(self.translate_path(self.path))
         if path.is_dir():
             path = path / "index.html"
-        if path.suffix == ".html" and path.is_file():
+        if path.suffix == ".html" and (path.is_file() or path.with_name(path.name + ".gz").is_file()):
             return self._send_html(path, head=True)
         return super().do_HEAD()
 
     def _send_html(self, path: Path, head: bool):
-        """The dashboard: gzip when accepted, cached by the browser and revalidated on every visit."""
+        """The dashboard: gzip when accepted, cached by the browser and revalidated on every visit.
+        Works with index.html and index.html.gz side by side, or with the .gz alone (as published to the
+        GitHub 'live' branch): then a browser that does not accept gzip gets it unpacked on the fly."""
+        import gzip
         gz = path.with_name(path.name + ".gz")
-        use_gz = "gzip" in self.headers.get("Accept-Encoding", "") and gz.is_file() \
-            and gz.stat().st_mtime >= path.stat().st_mtime - 5
-        st = path.stat()
+        gz_only = not path.is_file()
+        accepts = "gzip" in self.headers.get("Accept-Encoding", "")
+        use_gz = accepts and gz.is_file() and (gz_only or gz.stat().st_mtime >= path.stat().st_mtime - 5)
+        st = (gz if gz_only else path).stat()
         etag = f'"{int(st.st_mtime)}-{st.st_size}{"-gz" if use_gz else ""}"'
         self._cached = True
         if etag in self.headers.get("If-None-Match", ""):
@@ -312,7 +316,7 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
             self.send_header("Vary", "Accept-Encoding, Cookie")
             self.end_headers()
             return
-        body = (gz if use_gz else path).read_bytes()
+        body = gz.read_bytes() if use_gz else gzip.decompress(gz.read_bytes()) if gz_only else path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         if use_gz:

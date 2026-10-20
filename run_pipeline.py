@@ -794,11 +794,15 @@ def publish_git(cfg: dict, data: dict) -> bool:
            "only behind the ECEWS sign-in page (serve_dashboard.py). " if full else
            "Figures only: client-level lists (ART / hospital numbers) are removed. ")
         + "This branch holds just the latest build and is\n"
-        "replaced on every update. Serve `index.html` (or `index.html.gz` with `Content-Encoding: gzip`); `version.json` changes\n"
+        "replaced on every update. The page is `index.html.gz` (the gzip-compressed index.html). Serve it with\n"
+        "`python serve_dashboard.py --lan --port 5100 --no-browser` from `main` (ECEWS sign-in; unpacks it for any browser that\n"
+        "needs it), or send it with `Content-Encoding: gzip`, or unpack it first (`gunzip -k index.html.gz`). `version.json` changes\n"
         "with each build and open pages reload when it does. The code is on the `main` branch.\n", encoding="utf-8")
     git = lambda *a, **k: subprocess.run(["git", "-C", str(ROOT), *a], check=True, capture_output=True, text=True, **k).stdout.strip()
     try:
-        files = ["README.md", "index.html", "index.html.gz", "version.json"]
+        # the compressed page only (about 7 MB; the full index.html is over GitHub's 50 MB warning size):
+        # serve_dashboard.py serves it as it is, or unpacks it for a browser that does not accept gzip
+        files = ["README.md", "index.html.gz", "version.json"]
         tree_in = "".join(f"100644 blob {git('hash-object', '-w', str(out / f))}\t{f}\n" for f in files)
         # bytes, not text: on Windows, text mode would add a carriage return to every file name
         tree = subprocess.run(["git", "-C", str(ROOT), "mktree"], input=tree_in.encode("utf-8"), check=True,
