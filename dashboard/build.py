@@ -47,11 +47,32 @@ def thin_archive(files: list[Path], today: dt.date) -> list[Path]:
 
 
 def _render(data: dict) -> str:
+    """The page with its data in a <script type="application/json"> block. Phone browsers ran out of memory
+    when the 50 MB of data was part of the script (compiled as code before it ran); JSON.parse reads it
+    as data. The cube is stored by column (seven flat lists) instead of 1.3 million small lists."""
     html = (HERE / "template.html").read_text(encoding="utf-8")
     logo = HERE / "assets" / "ecews_logo.png"
     logo_uri = "data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode() if logo.exists() else ""
-    payload = json.dumps(data, default=str).replace("</", "<\\/")
+    cube = data.get("cube") or {}
+    if "rows" in cube:
+        rows = cube["rows"]
+        data = dict(data, cube={"dims": cube["dims"], "cols": [[r[i] for r in rows] for i in range(7)]})
+    payload = json.dumps(data, default=str, separators=(",", ":")).replace("<", "\\u003c")   # nothing can close the block
     return html.replace("/*__DATA__*/null", payload).replace("__LOGO__", logo_uri)
+
+
+def read_page_data(html: str) -> dict:
+    """The dashboard data back out of a built page (either layout), with the cube as rows again."""
+    if '<script id="speed-data" type="application/json">' in html:
+        i = html.index('<script id="speed-data" type="application/json">') + len('<script id="speed-data" type="application/json">')
+        data = json.loads(html[i:html.index("</script>", i)])
+    else:                                                       # pages built before 2026-10-21
+        i = html.index("const D = ") + len("const D = ")
+        data = json.loads(html[i:html.index(";\nconst SPEED", i)])
+    cube = data.get("cube") or {}
+    if "cols" in cube:
+        data["cube"] = {"dims": cube["dims"], "rows": [list(r) for r in zip(*cube["cols"])]}
+    return data
 
 
 CLIENT_LISTS = ("pbs_clients", "conc_clients", "appt_clients", "vl_clients", "eac_clients")

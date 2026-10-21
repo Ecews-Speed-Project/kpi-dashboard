@@ -365,8 +365,10 @@ details.terms summary .ico{vertical-align:-.3em}
 <footer id="foot"></footer>
 <div class="tip" id="tip" hidden></div>
 
+<script id="speed-data" type="application/json">/*__DATA__*/null</script>
 <script>
-const D = /*__DATA__*/null;
+// the data is read as JSON (not compiled as code) and its text is dropped at once: phones have little memory
+const D = (() => { const el = document.getElementById("speed-data"), d = JSON.parse(el.textContent); el.remove(); return d; })();
 const SPEED = "ECEWS SPEED";
 const PAGES = [["overview","Overview"],["ipi","IPI & Non-IPI"],["hts","HIV Testing Services"],["naomi","Saturation"],["art","Current on Treatment"],["vl","Viral Load"],
   ["pmtct","AP3/PMTCT"],["tb","TB"],["ahd","AHD"],["pbs","Biometrics"],["methods","How it's calculated"],["flow","Data flow"]];
@@ -375,10 +377,13 @@ const F = {state:"", lga:"", fac:"", sex:"", age:""};
 try { Object.assign(F, JSON.parse(localStorage.getItem("speed.filters")||"{}")); } catch(e){}
 
 /* ---------- cube ---------- */
-const DM = D.cube.dims, R0 = D.cube.rows, N = R0.length;
+const DM = D.cube.dims, N = (D.cube.cols ? D.cube.cols[0] : D.cube.rows).length;
 const FAC = DM.facility.map(([state,lga,facility])=>({state,lga,facility}));
 const rf=new Int32Array(N), rs=new Int16Array(N), ra=new Int16Array(N), rm=new Int16Array(N), rt=new Int16Array(N), rk=new Int16Array(N), rv=new Float64Array(N);
-R0.forEach((r,i)=>{rf[i]=r[0];rs[i]=r[1];ra[i]=r[2];rm[i]=r[3];rt[i]=r[4];rk[i]=r[5];rv[i]=r[6];});
+// copied into typed arrays, then the parsed lists are dropped so the browser can free them
+if(D.cube.cols) [rf,rs,ra,rm,rt,rk,rv].forEach((a,j)=>a.set(D.cube.cols[j]));
+else D.cube.rows.forEach((r,i)=>{rf[i]=r[0];rs[i]=r[1];ra[i]=r[2];rm[i]=r[3];rt[i]=r[4];rk[i]=r[5];rv[i]=r[6];});
+D.cube.cols = D.cube.rows = null;
 const MEAS = DM.measure, AGE = DM.age, SEXL = {F:"Female",M:"Male",U:"Unknown"};
 const LT15 = new Set(["<1","1-4","5-9","10-14"]), LT20 = new Set(["<1","1-4","5-9","10-14","15-19"]);
 const STATES = [...new Set(FAC.map(f=>f.state))].sort();

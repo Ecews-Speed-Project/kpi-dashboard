@@ -863,10 +863,8 @@ def cmd_publish():
     load_env()
     cfg = settings()
     if (cfg.get("publish") or {}).get("git_branch"):
-        import json
-        s = (folder(cfg, "live", "live") / "index.html").read_text(encoding="utf-8")
-        i = s.index("const D = ") + len("const D = ")
-        ok = publish_git(cfg, json.loads(s[i:s.index(";\nconst SPEED", i)]))
+        from dashboard.build import read_page_data
+        ok = publish_git(cfg, read_page_data((folder(cfg, "live", "live") / "index.html").read_text(encoding="utf-8")))
         if not (cfg.get("publish") or {}).get("enabled"):
             sys.exit(0 if ok else 1)
     if not (cfg.get("publish") or {}).get("enabled"):
