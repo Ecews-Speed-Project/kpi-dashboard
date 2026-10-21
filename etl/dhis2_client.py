@@ -28,9 +28,21 @@ class DHIS2:
         self.timeout = timeout
 
     def get(self, path: str, **params):
-        r = self.s.get(f"{self.base}/api/{path.lstrip('/')}", params=params, timeout=self.timeout)
-        r.raise_for_status()
-        return r.json()
+        """GET with retries: the servers sometimes drop a connection or answer 502/503/504 for a moment,
+        which used to stop the whole update. Three more tries, 15 s, 45 s and 90 s apart."""
+        for wait in (15, 45, 90, None):
+            try:
+                r = self.s.get(f"{self.base}/api/{path.lstrip('/')}", params=params, timeout=self.timeout)
+                if r.status_code in (502, 503, 504) and wait:
+                    raise requests.HTTPError(f"{r.status_code} from {self.base}", response=r)
+                r.raise_for_status()
+                return r.json()
+            except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                if wait is None or (isinstance(e, requests.HTTPError) and status not in (502, 503, 504)):
+                    raise
+                print(f"  {self.base}: {type(e).__name__} on {path}; retrying in {wait} s")
+                time.sleep(wait)
 
     # ---------- metadata ---------------------------------------------------
     def datasets(self) -> pd.DataFrame:
