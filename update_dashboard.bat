@@ -9,7 +9,7 @@ call scripts\ensure_venv.bat > "logs\run_%STAMP%.log" 2>&1 || (
 )
 set PYTHONUTF8=1
 set PYTHONDONTWRITEBYTECODE=1
-"%PY%" run_pipeline.py run %* >> "logs\run_%STAMP%.log" 2>&1
+"%PY%" run_pipeline.py run --publish %* >> "logs\run_%STAMP%.log" 2>&1
 if errorlevel 1 (
   echo Update FAILED - see logs\run_%STAMP%.log
   exit /b 1

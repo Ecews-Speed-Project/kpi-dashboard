@@ -2347,16 +2347,22 @@ document.addEventListener("click", e=>{ if(matchMedia("(hover:hover)").matches) 
 route();
 
 /* Live mode: when the page is served over http (serve_dashboard.py), it checks
-   version.json every minute and reloads itself when a newer build lands.
+   version.json every minute and reloads itself (within 10 minutes) when a newer build lands.
    Filters, period and page are kept (they are remembered in this browser). */
 if (location.protocol.startsWith("http")) {
+  // Open pages must not all reload at the same moment after an update (each reload is a 7 MB download):
+  // each page waits a random 0-10 minutes, and a page in a background tab reloads only once it is looked at.
+  let due = 0;
+  const reloadWhenDue = () => { if (due && Date.now() >= due && document.visibilityState === "visible") location.reload(); };
   setInterval(async () => {
-    try {
+    if (!due) try {
       const r = await fetch("version.json?t=" + Date.now(), {cache: "no-store"});
       if (!r.ok) return;
       const v = await r.json();
-      if (v.generated_at && v.generated_at !== D.meta.generated_at) location.reload();
+      if (v.generated_at && v.generated_at !== D.meta.generated_at) due = Date.now() + Math.random() * 600000;
     } catch (e) { /* not served by the local server: refresh by hand */ }
+    reloadWhenDue();
   }, 60000);
+  document.addEventListener("visibilitychange", reloadWhenDue);
 }
 </script>

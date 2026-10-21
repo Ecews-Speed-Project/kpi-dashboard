@@ -34,6 +34,7 @@ import re
 import secrets
 import socket
 import sys
+import threading
 import time
 import urllib.parse
 import webbrowser
@@ -174,7 +175,31 @@ def slides() -> str:
     return "".join(out)
 
 
+# The dashboard is large (about 7 MB compressed, 50 MB unpacked). It is read from disk (and unpacked, for a
+# client that does not accept gzip) once per build and kept in memory: every request shares that one copy.
+# At most DASH_MAX_DOWNLOADS dashboards are sent at the same time; the rest wait their turn (up to two minutes,
+# then "503, try again"), so a burst of reloads after an update cannot exhaust the server's memory.
+_BODY: dict = {}
+_BODY_LOCK = threading.Lock()
+_SENDS = threading.BoundedSemaphore(int(os.environ.get("DASH_MAX_DOWNLOADS", 8)))
+
+
+def dashboard_bytes(src: Path, st: os.stat_result, unpack: bool) -> bytes:
+    """The bytes to send for this build, read (and unpacked) once and shared by every request."""
+    import gzip
+    key = (str(src), st.st_mtime_ns, st.st_size, unpack)
+    with _BODY_LOCK:
+        body = _BODY.get(key)
+        if body is None:
+            for k in [k for k in _BODY if k[0] == key[0] and k[1:3] != key[1:3]]:
+                del _BODY[k]                                     # an earlier build of the same file
+            raw = src.read_bytes()
+            body = _BODY[key] = gzip.decompress(raw) if unpack else raw
+        return body
+
+
 class Quiet(http.server.SimpleHTTPRequestHandler):
+    timeout = 120          # a stalled connection is dropped instead of holding a thread and a download slot
     def end_headers(self):
         if not getattr(self, "_cached", False):
             self.send_header("Cache-Control", "no-store")
@@ -300,8 +325,7 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
     def _send_html(self, path: Path, head: bool):
         """The dashboard: gzip when accepted, cached by the browser and revalidated on every visit.
         Works with index.html and index.html.gz side by side, or with the .gz alone (as published to the
-        GitHub 'live' branch): then a browser that does not accept gzip gets it unpacked on the fly."""
-        import gzip
+        GitHub 'live' branch): then a browser that does not accept gzip gets it unpacked (once per build)."""
         gz = path.with_name(path.name + ".gz")
         gz_only = not path.is_file()
         accepts = "gzip" in self.headers.get("Accept-Encoding", "")
@@ -316,7 +340,25 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
             self.send_header("Vary", "Accept-Encoding, Cookie")
             self.end_headers()
             return
-        body = gz.read_bytes() if use_gz else gzip.decompress(gz.read_bytes()) if gz_only else path.read_bytes()
+        if not head and not _SENDS.acquire(timeout=120):
+            busy = (b'<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="20">'
+                    b'<title>SPEED dashboard</title><p style="font:16px sans-serif;margin:2em">Many people are opening '
+                    b'the dashboard right now. This page tries again in 20 seconds.</p>')
+            self.send_response(503)                              # too many downloads at once: the page retries itself
+            self.send_header("Retry-After", "20")
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(busy)))
+            self.end_headers()
+            self.wfile.write(busy)
+            return
+        try:
+            self._send_body(path, gz, gz_only, use_gz, st, etag, head)
+        finally:
+            if not head:
+                _SENDS.release()
+
+    def _send_body(self, path, gz, gz_only, use_gz, st, etag, head):
+        body = dashboard_bytes(gz if (use_gz or gz_only) else path, st if not use_gz or gz_only else gz.stat(), unpack=gz_only and not use_gz)
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         if use_gz:

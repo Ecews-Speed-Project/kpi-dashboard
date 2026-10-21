@@ -596,7 +596,7 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
     # demo builds never touch live\ (the served dashboard) or archive\
     path = (build(data, ROOT / "data" / "demo" / "out") if demo else
             build(data, folder(cfg, "live", "live"), folder(cfg, "archive", "archive")))
-    if not demo and "--no-publish" not in sys.argv:      # --no-publish: build locally only (testing)
+    if not demo and "--publish" in sys.argv:      # only the scheduled update (update_dashboard.bat) publishes; other runs stay local
         publish_git(cfg, data)
     print(f"{data['meta']['quarter']}  as of {as_of}  cube rows {len(data['cube']['rows']):,}  ->  {path}")
     return data, scorecard
