@@ -278,7 +278,9 @@ publish:
                                  # GitHub branch for the Docker deployment; other runs stay local; empty = off
   client_lists: true             # include the client line lists - ONLY while the repository is private (private
                                  # since 2026-10-20; the deployment is behind the ECEWS sign-in); false = figures only
-  enabled: false                 # SSH copy to a server (not used: the deployment reads the GitHub branch)
+  split: false                   # true = publish the small page + data/<build>/*.json.gz (fetched as needed). Turn on
+                                 # only once the server runs serve_dashboard.py from 2026-10-23 or later (it serves the .json.gz)
+  enabled: false                # SSH copy to a server (not used: the deployment reads the GitHub branch)
   host: eboard.ecews.org
   user: ""                       # SSH user on the server
   path: ""                       # the server folder the dashboard is served from (its live/ folder)

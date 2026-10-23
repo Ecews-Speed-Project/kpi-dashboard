@@ -367,8 +367,24 @@ details.terms summary .ico{vertical-align:-.3em}
 
 <script id="speed-data" type="application/json">/*__DATA__*/null</script>
 <script>
-// the data is read as JSON (not compiled as code) and its text is dropped at once: phones have little memory
-const D = (() => { const el = document.getElementById("speed-data"), d = JSON.parse(el.textContent); el.remove(); return d; })();
+/* Start-up. A live build carries only a manifest: the current figures come from data/<build>/core.json and
+   everything else (client lists, trends, past months) is fetched when a page needs it. An archived copy
+   carries all its data inline. The data is read as JSON, never compiled as code (phones have little memory). */
+(async () => {
+  const el = document.getElementById("speed-data"); let d = JSON.parse(el.textContent); el.remove();
+  if (d && d.manifest) {
+    const m = d.manifest, r = await fetch(m.base + m.core);
+    if (!r.ok) throw new Error(r.status === 401 ? "please sign in again" : "server answered " + r.status);
+    d = Object.assign(await r.json(), {manifest: m});
+  }
+  window.__D = d;
+  const app = document.getElementById("app"), s = document.createElement("script");
+  s.textContent = app.textContent; app.remove(); document.body.appendChild(s);
+})().catch(e => { document.getElementById("main").innerHTML =
+  `<section class="c3d empty"><b>The dashboard data could not be loaded.</b> Check the connection and refresh the page (${String(e.message||e).replace(/[<&]/g,"")}).</section>`; });
+</script>
+<script id="app" type="text/plain">
+const D = window.__D; delete window.__D;
 const SPEED = "ECEWS SPEED";
 const PAGES = [["overview","Overview"],["ipi","IPI & Non-IPI"],["hts","HIV Testing Services"],["naomi","Saturation"],["art","Current on Treatment"],["vl","Viral Load"],
   ["pmtct","AP3/PMTCT"],["tb","TB"],["ahd","AHD"],["pbs","Biometrics"],["methods","How it's calculated"],["flow","Data flow"]];
@@ -377,13 +393,15 @@ const F = {state:"", lga:"", fac:"", sex:"", age:""};
 try { Object.assign(F, JSON.parse(localStorage.getItem("speed.filters")||"{}")); } catch(e){}
 
 /* ---------- cube ---------- */
-const DM = D.cube.dims, N = (D.cube.cols ? D.cube.cols[0] : D.cube.rows).length;
+const DM = D.cube.dims;
 const FAC = DM.facility.map(([state,lga,facility])=>({state,lga,facility}));
-const rf=new Int32Array(N), rs=new Int16Array(N), ra=new Int16Array(N), rm=new Int16Array(N), rt=new Int16Array(N), rk=new Int16Array(N), rv=new Float64Array(N);
-// copied into typed arrays, then the parsed lists are dropped so the browser can free them
-if(D.cube.cols) [rf,rs,ra,rm,rt,rk,rv].forEach((a,j)=>a.set(D.cube.cols[j]));
-else D.cube.rows.forEach((r,i)=>{rf[i]=r[0];rs[i]=r[1];ra[i]=r[2];rm[i]=r[3];rt[i]=r[4];rk[i]=r[5];rv[i]=r[6];});
-D.cube.cols = D.cube.rows = null;
+let N=0, rf=new Int32Array(0), rs=new Int16Array(0), ra=new Int16Array(0), rm=new Int16Array(0), rt=new Int16Array(0), rk=new Int16Array(0), rv=new Float64Array(0);
+// rows are kept as typed columns; a past month's snapshot is appended when that period is picked
+function addRows(cols){ const n=cols[0].length, M=N+n, T=[Int32Array,Int16Array,Int16Array,Int16Array,Int16Array,Int16Array,Float64Array];
+  const next=[rf,rs,ra,rm,rt,rk,rv].map((a,j)=>{ const b=new T[j](M); b.set(a); b.set(cols[j],N); return b; });
+  [rf,rs,ra,rm,rt,rk,rv]=next; N=M; }
+addRows(D.cube.cols || [0,1,2,3,4,5,6].map(j=>D.cube.rows.map(r=>r[j])));
+D.cube.cols = D.cube.rows = null;          // the parsed lists are dropped so the browser can free them
 const MEAS = DM.measure, AGE = DM.age, SEXL = {F:"Female",M:"Male",U:"Unknown"};
 const LT15 = new Set(["<1","1-4","5-9","10-14"]), LT20 = new Set(["<1","1-4","5-9","10-14","15-19"]);
 const STATES = [...new Set(FAC.map(f=>f.state))].sort();
@@ -413,6 +431,30 @@ function inWindow(m, s, e){
 /* Stock figures (TX_CURR, VL, biometrics, appointments...) are one snapshot as of the linelist /
    NDR file date: a period shows them only when it covers that date or today; otherwise "No data". */
 let STOCK = true, _SM = null, SKIPM = null, SNL = null, SNN = null;
+/* parts of a live build fetched when a page needs them (see the manifest); an archived copy has them all */
+const MAN = D.manifest || null, PART = {};
+const PAGE_PARTS = {overview:["conc"], art:["appt","trends"], trends:["appt","trends"], vl:["vl"], pmtct:["vl"], pbs:["pbs","trends"], methods:["methods"]};
+function partsFor(){ const want=[...(PAGE_PARTS[page]||[]), ...(page==="ipi"&&IPID?["trends","methods"]:[])];
+  if(!STOCK) for(const k of [SNL,SNN]) if(k) want.push("snap:"+k);
+  return MAN ? want.filter(n=>MAN.parts[n] && PART[n]!=="ready") : []; }
+function loadPart(n){
+  if(PART[n]==="loading") return; PART[n]="loading";
+  fetch(MAN.base+MAN.parts[n]).then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(x=>{ usePart(n,x); PART[n]="ready"; render(); })
+    .catch(async ()=>{ PART[n]="failed";
+      // a newer build replaced the files this page was opened with: reload it
+      try{ const v=await (await fetch("version.json?t="+Date.now(),{cache:"no-store"})).json(); if(v.generated_at!==D.meta.generated_at){ location.reload(); return; } }catch(e){}
+      render(); }); }
+function usePart(n,x){
+  if(n.startsWith("snap:")){ addRows(x.cols); _SMK[n.slice(5)]=null; return; }
+  Object.assign(D, x);
+  if(x.conc_clients){ CC=x.conc_clients; CCK=Object.keys(CC.cats); if(!CCK.includes(CCAT)) CCAT=CCK[0]||""; }
+  if(x.appt_clients){ AC=x.appt_clients; AMIN=AC.rows.reduce((m,r)=>r[ACOL("appt")]<m?r[ACOL("appt")]:m,"9999-12-31"); AMAX=AC.rows.reduce((m,r)=>r[ACOL("appt")]>m?r[ACOL("appt")]:m,"0000-01-01"); ARNG=null; }
+  if(x.vl_clients) VC=x.vl_clients;
+  if(x.eac_clients) EC=x.eac_clients;
+  if(x.pbs_clients){ PC=x.pbs_clients; if(!PC.cats[PBSCAT]) PBSCAT=Object.keys(PC.cats)[0]||""; }
+  if(x.trend_series) TS=x.trend_series;
+  if(x.methods) ME=x.methods; }
 // a past period uses the latest saved linelist (SL) / NDR (SN) copy dated inside it
 const _SMK = {};
 const snapM = key => key==null ? new Set() : _SMK[key] || (_SMK[key] = (()=>{ const i=PM.findIndex(m=>m.key===key), z=new Set(); for(let r=0;r<N;r++) if(rt[r]===i) z.add(MEAS[rk[r]]); return z; })());
@@ -708,7 +750,7 @@ function kpiSummary(v){
 }
 
 /* ---------- EMR TX_CURR vs NDR TX_CURR concurrence (client link: DATIM code + ART number) ---------- */
-const CC = D.conc_clients || {cats:{}, cols:[], rows:[]}, CCK = Object.keys(CC.cats);
+let CC = D.conc_clients || {cats:{}, cols:[], rows:[]}, CCK = Object.keys(CC.cats);
 let CCAT = CCK[0] || "", CCQ = "";
 const CCL = {datim:"DATIM",art_no:"ART no.",hosp_no:"Hospital no.",unique_id:"Unique ID",emr_status:"EMR status",emr_art_start:"EMR ART start",
   emr_last_pickup:"EMR last pickup",emr_refill_days:"EMR refill days",ndr_status28:"NDR CurrentStatus28",ndr_last_pickup:"NDR last pickup",
@@ -1246,9 +1288,9 @@ const iitNDR = v => div(gv(v,"ndr_wf_iit"), gv(v,"ndr_wf_prev")+gv(v,"ndr_wf_new
 const llQ = () => (qOf(dOf(D.meta.linelist_as_of||D.meta.as_of))||{}).label || "";
 
 /* appointments line list */
-const AC = D.appt_clients || {cols:[], rows:[], dict:{}};
+let AC = D.appt_clients || {cols:[], rows:[], dict:{}};
 const ACOL = c => AC.cols.indexOf(c)+4, acv = (r,c) => { const x=r[ACOL(c)]; return (AC.dict||{})[c] ? AC.dict[c][x] : x; };
-const AMIN = AC.rows.reduce((m,r)=>r[ACOL("appt")]<m?r[ACOL("appt")]:m, "9999-12-31"), AMAX = AC.rows.reduce((m,r)=>r[ACOL("appt")]>m?r[ACOL("appt")]:m, "0000-01-01");
+let AMIN = AC.rows.reduce((m,r)=>r[ACOL("appt")]<m?r[ACOL("appt")]:m, "9999-12-31"), AMAX = AC.rows.reduce((m,r)=>r[ACOL("appt")]>m?r[ACOL("appt")]:m, "0000-01-01");
 let ACAT = 0, AFLAG = "", AQ = "", ARNG = null, ADIM = "state";
 const ACL = {uniq:"In TX_CURR_Unique",datim:"DATIM",art_no:"ART no.",hosp_no:"Hospital no.",status:"EMR status",appt:"Appointment",last_pickup:"Last pickup",
   refill_days:"Refill days",regimen_line:"Regimen line",vl_value:"Last VL",vl_date:"VL date",flags:"Follow-up flags"};
@@ -1486,7 +1528,7 @@ function artPage(){
 }
 
 /* ---------- Unsuppressed clients (VL >= 1000): line list for EAC / repeat VL ---------- */
-const VC = D.vl_clients || {cols:[], rows:[], dict:{}};
+let VC = D.vl_clients || {cols:[], rows:[], dict:{}};
 const VCOL = c => VC.cols.indexOf(c)+3, vcv = (r,c) => { const x=r[VCOL(c)]; return (VC.dict||{})[c] ? VC.dict[c][x] : x; };
 const VCL = {datim:"DATIM",art_no:"ART no.",hosp_no:"Hospital no.",vl_value:"VL (copies/mL)",vl_band:"VL band",vl_date:"VL date",sample_date:"Last sample",
   repeat:"Repeat VL",regimen_line:"Regimen line",regimen:"Regimen",art_start:"ART start",days_on_art:"Days on ART",last_pickup:"Last pickup",next_appt:"Next appointment"};
@@ -1522,7 +1564,7 @@ function unsuppressedSection(){
 }
 
 /* ---------- EAC: enhanced adherence counselling, modelled on EAC_Script_Version11 ---------- */
-const EC = D.eac_clients || {cols:[], rows:[], dict:{}};
+let EC = D.eac_clients || {cols:[], rows:[], dict:{}};
 const ECOL = c => EC.cols.indexOf(c)+3, ecv = (r,c) => { const x=r[ECOL(c)]; return (EC.dict||{})[c] ? EC.dict[c][x] : x; };
 const ECL = {datim:"DATIM",art_no:"ART no.",hosp_no:"Hospital no.",status:"Status",transferred_in:"Transferred in",trigger_vl:"Triggering VL",trigger_date:"Triggering VL date",
   cycle:"EAC cycle",s1:"Session 1",s2:"Session 2",s3:"Session 3",s4:"Session 4 (ext.)",s5:"Session 5 (ext.)",s6:"Session 6 (ext.)",sessions:"Sessions (all cycles)",
@@ -1755,7 +1797,7 @@ function ahdPage(){
 }
 
 /* ---------- biometrics: NDR PBS portal cards, funnel, drill-down, client follow-up ---------- */
-const PC = D.pbs_clients || {cats:{}, cols:[], rows:[]};
+let PC = D.pbs_clients || {cats:{}, cols:[], rows:[]};
 let PBSCAT = Object.keys(PC.cats)[0] || "", PBSQ = "";
 function pbsList(f=F){
   const sexI = f.sex ? DM.sex.indexOf(f.sex) : -1;
@@ -1880,7 +1922,7 @@ function pbsPage(){
 }
 
 /* ---------- how it's calculated: every number traced to its source ---------- */
-const ME = D.methods || {catalog:{}, quarters:[], measures:[], rows:[]};
+let ME = D.methods || {catalog:{}, quarters:[], measures:[], rows:[]};
 function methodQuarters(){
   if(P.mode==="quarter") return [P.label];
   if(P.mode==="fy") return D.quarters.filter(q=>q.fy===P.fy && dOf(q.start)<=dOf(D.meta.as_of)).map(q=>q.label);
@@ -2007,7 +2049,7 @@ function methodsPage(){
 }
 
 /* ---------- trends: saved run snapshots (exact) + month-end backfill (estimated) ---------- */
-const TS = D.trend_series || {dates:[], measures:[], rows:[]};
+let TS = D.trend_series || {dates:[], measures:[], rows:[]};
 function trendAgg(f=F){
   const out = {}; TS.measures.forEach(m=>out[m]=new Map());
   for(const [fi,di,mi,v] of TS.rows){ if(!facPass(fi,f)) continue; const m=out[TS.measures[mi]], d=TS.dates[di]; m.set(d,(m.get(d)||0)+v); }
@@ -2277,6 +2319,14 @@ function render(){
     ipi:()=>IPID?ipiDetail(IPID):ipiPage(),methods:methodsPage,flow:flowPage}[page]||overview;
   document.getElementById("who").innerHTML = WHO ? `<span>${ico("user",20)} Hi, <b>${esc(WHO.name)}</b></span><a href="/logout" title="${esc(WHO.email)}">Sign out</a>` : "";
   const hello = page==="overview" && WHO ? `<h2 class="hello">Hi, ${esc(WHO.name)} <small>here is where the programme stands for ${esc(P.label)}</small></h2>` : "";
+  WIN=windowSet();
+  const want=partsFor();
+  if(want.length){ want.filter(n=>PART[n]!=="failed").forEach(loadPart);
+    const bad=want.filter(n=>PART[n]==="failed");
+    document.getElementById("main").innerHTML = hello + (bad.length
+      ? `<section class="c3d empty"><b>Part of this page could not be loaded.</b> Check the connection and <a href="javascript:location.reload()">refresh</a>.</section>`
+      : `<section class="c3d empty"><b>Loading…</b> fetching ${want.some(n=>n.startsWith("snap:"))?"that period's figures":"this page's data"}.</section>`);
+    return; }
   document.getElementById("main").innerHTML=hello+fn();
   afterRender();
   document.getElementById("foot").textContent=`Generated ${m.generated_at.replace("T"," ")} from DHIS2 (weekly + monthly, merged per facility), the central repository linelist, the PBS extract, FY27 targets and the Naomi PLHIV estimate. Counts are scored on pace (≥75% green, 50–74% amber, below 50% red); rates against the target itself (met = green, within ${Math.round((RAG.rate_warning_gap??.05)*100)} points = amber).`;

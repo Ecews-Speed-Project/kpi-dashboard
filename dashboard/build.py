@@ -1,5 +1,10 @@
-"""Render the dashboard: one self-contained HTML file with the KPI JSON embedded,
-so it opens offline, can be emailed, or hosted on any web server.
+"""Render the dashboard.
+
+Live build (split=True): a small index.html plus data/<build>/*.json(.gz): core.json holds what the first
+view needs (current figures); client lists, trends, calculation details and each past month's snapshot are
+separate files the page fetches when a page needs them, so the first load stays small however much history
+accumulates. Archived copies (and split=False builds) are one self-contained HTML file with the KPI JSON
+embedded, so they open offline, can be emailed, or hosted on any web server.
 
 live/index.html is overwritten on every run, so the same file (or the same
 http://localhost address from serve_dashboard.py) always shows the latest
@@ -13,6 +18,7 @@ import datetime as dt
 import gzip
 import json
 import os
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -61,8 +67,83 @@ def _render(data: dict) -> str:
     return html.replace("/*__DATA__*/null", payload).replace("__LOGO__", logo_uri)
 
 
-def read_page_data(html: str) -> dict:
-    """The dashboard data back out of a built page (either layout), with the cube as rows again."""
+# parts of a split build: name -> data keys (the cube's past-month snapshots are parts "snap:<period>")
+LIST_PARTS = {"conc": ("conc_clients",), "appt": ("appt_clients",), "vl": ("vl_clients", "eac_clients"), "pbs": ("pbs_clients",)}
+KEEP_BUILDS = 2       # data folders kept in live/data: the current build and the one before (pages still open on it)
+
+
+def _cols(rows: list) -> list:
+    return [[r[i] for r in rows] for i in range(7)]
+
+
+def split_parts(data: dict) -> tuple[dict, dict]:
+    """(core, parts): core = everything the first view needs, with the cube's current rows; parts = the rest."""
+    cube = data["cube"]
+    rows = cube["rows"] if "rows" in cube else [list(r) for r in zip(*cube["cols"])]
+    per = cube["dims"]["period"]
+    snap = [str(x)[:2] in ("SL", "SN") for x in per]
+    current, snaps = [], {}
+    for row in rows:
+        (snaps.setdefault(per[row[4]], []) if snap[row[4]] else current).append(row)
+    heavy = {k for ks in LIST_PARTS.values() for k in ks} | {"trend_series", "methods", "cube"}
+    core = {k: v for k, v in data.items() if k not in heavy}
+    core["cube"] = {"dims": cube["dims"], "cols": _cols(current)}
+    parts = {}
+    for name, keys in LIST_PARTS.items():
+        got = {k: data[k] for k in keys if isinstance(data.get(k), dict) and data[k].get("rows")}
+        if got:
+            parts[name] = got
+    for k, name in (("trend_series", "trends"), ("methods", "methods")):
+        if data.get(k):
+            parts[name] = {k: data[k]}
+    for key, rs in sorted(snaps.items()):
+        parts["snap:" + key] = {"cols": _cols(rs)}
+    return core, parts
+
+
+def _write_split(data: dict, out_dir: Path) -> dict:
+    """data/<build>/<part>.json and .json.gz (written to a temporary folder, then swapped in); returns the manifest."""
+    bid = re.sub(r"\D", "", str(data["meta"].get("generated_at", "")))[:12] or dt.datetime.now().strftime("%Y%m%d%H%M")
+    root = out_dir / "data"
+    root.mkdir(parents=True, exist_ok=True)
+    tmp = root / f".{bid}.tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir()
+    core, parts = split_parts(data)
+    files = {}
+    for name, obj in [("core", core), *parts.items()]:
+        fn = name.replace(":", "-") + ".json"
+        raw = json.dumps(obj, default=str, separators=(",", ":")).encode("utf-8")
+        (tmp / fn).write_bytes(raw)                                          # plain copy: any static server
+        (tmp / (fn + ".gz")).write_bytes(gzip.compress(raw, compresslevel=9, mtime=0))
+        files[name] = fn
+    final = root / bid
+    shutil.rmtree(final, ignore_errors=True)
+    os.replace(tmp, final)
+    builds = sorted((d for d in root.iterdir() if d.is_dir() and not d.name.startswith(".")), key=lambda d: d.name)
+    for old in builds[:-KEEP_BUILDS]:
+        shutil.rmtree(old, ignore_errors=True)
+    return {"id": bid, "base": f"data/{bid}/", "core": files.pop("core"), "parts": files}
+
+
+def read_page_data(html: str, base_dir: Path | None = None) -> dict:
+    """The dashboard data back out of a built page (any layout), with the cube as rows again.
+    A split build needs base_dir, the folder holding index.html and data/."""
+    if '"manifest"' in html[:4000] or ('{"manifest"' in html):
+        i = html.index('<script id="speed-data" type="application/json">') + len('<script id="speed-data" type="application/json">')
+        man = json.loads(html[i:html.index("</script>", i)])["manifest"]
+        folder = Path(base_dir or ".") / man["base"]
+        load = lambda fn: json.loads((folder / fn).read_bytes()) if (folder / fn).is_file() else json.loads(gzip.decompress((folder / (fn + ".gz")).read_bytes()))
+        data = load(man["core"])
+        cols = data["cube"]["cols"]
+        for name, fn in man["parts"].items():
+            part = load(fn)
+            if name.startswith("snap:"):
+                cols = [a + b for a, b in zip(cols, part["cols"])]
+            else:
+                data.update(part)
+        data["cube"] = {"dims": data["cube"]["dims"], "rows": [list(r) for r in zip(*cols)]}
+        return data
     if '<script id="speed-data" type="application/json">' in html:
         i = html.index('<script id="speed-data" type="application/json">') + len('<script id="speed-data" type="application/json">')
         data = json.loads(html[i:html.index("</script>", i)])
@@ -88,15 +169,19 @@ def without_clients(data: dict, **flags) -> dict:
     return out
 
 
-def build_shared(data: dict, out_dir: Path) -> Path:
+def build_shared(data: dict, out_dir: Path, split: bool = False) -> Path:
     """Figures-only dashboard (no client lists) for the public GitHub 'live' branch."""
-    return build(without_clients(data, shared=True), out_dir)
+    return build(without_clients(data, shared=True), out_dir, split=split)
 
 
-def build(data: dict, out_dir: Path | None = None, archive_dir: Path | None = None) -> Path:
+def build(data: dict, out_dir: Path | None = None, archive_dir: Path | None = None, split: bool = False) -> Path:
     out_dir = Path(out_dir or HERE / "out")
     out_dir.mkdir(parents=True, exist_ok=True)
-    html = _render(data)
+    if split:          # small page + data files fetched on demand (the data folder is swapped in before the page)
+        html = _render({"manifest": _write_split(data, out_dir)})
+    else:
+        html = _render(data)
+        shutil.rmtree(out_dir / "data", ignore_errors=True)
 
     # write to a temp file and swap, so a browser refresh never sees half a file
     path = out_dir / "index.html"

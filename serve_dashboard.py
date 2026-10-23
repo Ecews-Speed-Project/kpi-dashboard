@@ -307,7 +307,7 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
             path = path / "index.html"
         if path.name.endswith(".gz") or path.name == ".dash_secret":
             return self.send_error(404)
-        if path.suffix == ".html" and (path.is_file() or path.with_name(path.name + ".gz").is_file()):
+        if path.suffix in (".html", ".json") and (path.is_file() or path.with_name(path.name + ".gz").is_file()):
             return self._send_html(path, head=False)
         return super().do_GET()
 
@@ -318,12 +318,14 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         path = Path(self.translate_path(self.path))
         if path.is_dir():
             path = path / "index.html"
-        if path.suffix == ".html" and (path.is_file() or path.with_name(path.name + ".gz").is_file()):
+        if path.suffix in (".html", ".json") and (path.is_file() or path.with_name(path.name + ".gz").is_file()):
             return self._send_html(path, head=True)
         return super().do_HEAD()
 
     def _send_html(self, path: Path, head: bool):
-        """The dashboard: gzip when accepted, cached by the browser and revalidated on every visit.
+        """The dashboard page or one of its data files (data/<build>/*.json, live builds): gzip when accepted.
+        The page is cached by the browser and revalidated on every visit; a data file never changes (its
+        folder is named after the build), so the browser keeps it.
         Works with index.html and index.html.gz side by side, or with the .gz alone (as published to the
         GitHub 'live' branch): then a browser that does not accept gzip gets it unpacked (once per build)."""
         gz = path.with_name(path.name + ".gz")
@@ -360,13 +362,14 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
     def _send_body(self, path, gz, gz_only, use_gz, st, etag, head):
         body = dashboard_bytes(gz if (use_gz or gz_only) else path, st if not use_gz or gz_only else gz.stat(), unpack=gz_only and not use_gz)
         self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", "application/json" if path.suffix == ".json" else "text/html; charset=utf-8")
         if use_gz:
             self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("ETag", etag)
         self.send_header("Last-Modified", email.utils.formatdate(st.st_mtime, usegmt=True))
-        self.send_header("Cache-Control", "private, no-cache")   # this browser only; check it is still current
+        self.send_header("Cache-Control", "private, max-age=31536000, immutable" if path.suffix == ".json"
+                         else "private, no-cache")             # this browser only; the page: check it is still current
         self.send_header("Vary", "Accept-Encoding, Cookie")
         self.end_headers()
         if not head:

@@ -595,7 +595,7 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
     from dashboard.build import build
     # demo builds never touch live\ (the served dashboard) or archive\
     path = (build(data, ROOT / "data" / "demo" / "out") if demo else
-            build(data, folder(cfg, "live", "live"), folder(cfg, "archive", "archive")))
+            build(data, folder(cfg, "live", "live"), folder(cfg, "archive", "archive"), split=True))
     if not demo and "--publish" in sys.argv:      # only the scheduled update (update_dashboard.bat) publishes; other runs stay local
         publish_git(cfg, data)
     print(f"{data['meta']['quarter']}  as of {as_of}  cube rows {len(data['cube']['rows']):,}  ->  {path}")
@@ -786,7 +786,8 @@ def publish_git(cfg: dict, data: dict) -> bool:
     from dashboard.build import build, build_shared
     out = ROOT / "data" / "shared_build"
     full = bool(pub.get("client_lists"))           # private repository only: the full dashboard with client lists
-    (build if full else build_shared)(data, out)
+    split = bool(pub.get("split"))                 # small page + data files (needs serve_dashboard.py of 2026-10-23 or later)
+    (build if full else build_shared)(data, out, split=split)
     m = data["meta"]
     (out / "README.md").write_text(
         f"# SPEED KPI dashboard - latest shared build\n\nGenerated {m['generated_at']} (data as of {m['as_of']}, {m['quarter']}).\n\n"
@@ -794,7 +795,9 @@ def publish_git(cfg: dict, data: dict) -> bool:
            "only behind the ECEWS sign-in page (serve_dashboard.py). " if full else
            "Figures only: client-level lists (ART / hospital numbers) are removed. ")
         + "This branch holds just the latest build and is\n"
-        "replaced on every update. The page is `index.html.gz` (the gzip-compressed index.html). Serve it with\n"
+        "replaced on every update. The page is `index.html.gz` (the gzip-compressed index.html)"
+        + (", and its data is in `data/<build>/*.json.gz`, fetched by the page as it needs it" if split else "")
+        + ". Serve it with\n"
         "`python serve_dashboard.py --lan --port 5100 --no-browser` from `main` (ECEWS sign-in; unpacks it for any browser that\n"
         "needs it), or send it with `Content-Encoding: gzip`, or unpack it first (`gunzip -k index.html.gz`). `version.json` changes\n"
         "with each build and open pages reload when it does. The code is on the `main` branch.\n", encoding="utf-8")
@@ -802,11 +805,18 @@ def publish_git(cfg: dict, data: dict) -> bool:
     try:
         # the compressed page only (about 7 MB; the full index.html is over GitHub's 50 MB warning size):
         # serve_dashboard.py serves it as it is, or unpacks it for a browser that does not accept gzip
-        files = ["README.md", "index.html.gz", "version.json"]
-        tree_in = "".join(f"100644 blob {git('hash-object', '-w', str(out / f))}\t{f}\n" for f in files)
-        # bytes, not text: on Windows, text mode would add a carriage return to every file name
-        tree = subprocess.run(["git", "-C", str(ROOT), "mktree"], input=tree_in.encode("utf-8"), check=True,
-                              capture_output=True).stdout.decode().strip()
+        files = {f: git("hash-object", "-w", str(out / f)) for f in ("README.md", "index.html.gz", "version.json")}
+        if split:          # this build's data folder only, compressed files (the server unpacks for any browser)
+            bid = max(d.name for d in (out / "data").iterdir() if d.is_dir() and not d.name.startswith("."))
+            files["data"] = {bid: {f.name: git("hash-object", "-w", str(f)) for f in sorted((out / "data" / bid).glob("*.json.gz"))}}
+
+        def mktree(entries: dict) -> str:
+            lines = "".join(f"040000 tree {mktree(v)}\t{k}\n" if isinstance(v, dict) else f"100644 blob {v}\t{k}\n"
+                            for k, v in sorted(entries.items()))
+            # bytes, not text: on Windows, text mode would add a carriage return to every file name
+            return subprocess.run(["git", "-C", str(ROOT), "mktree"], input=lines.encode("utf-8"), check=True,
+                                  capture_output=True).stdout.decode().strip()
+        tree = mktree(files)
         commit = git("commit-tree", tree, "-m", f"Dashboard build {m['generated_at']} ({m['quarter']}, data as of {m['as_of']})")
         git("push", "--force", "-q", "origin", f"{commit}:refs/heads/{branch}", timeout=600)
         git("fetch", "-q", "origin", branch, timeout=300)
@@ -864,7 +874,8 @@ def cmd_publish():
     cfg = settings()
     if (cfg.get("publish") or {}).get("git_branch"):
         from dashboard.build import read_page_data
-        ok = publish_git(cfg, read_page_data((folder(cfg, "live", "live") / "index.html").read_text(encoding="utf-8")))
+        live = folder(cfg, "live", "live")
+        ok = publish_git(cfg, read_page_data((live / "index.html").read_text(encoding="utf-8"), live))
         if not (cfg.get("publish") or {}).get("enabled"):
             sys.exit(0 if ok else 1)
     if not (cfg.get("publish") or {}).get("enabled"):
