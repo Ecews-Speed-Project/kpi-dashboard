@@ -368,8 +368,11 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("ETag", etag)
         self.send_header("Last-Modified", email.utils.formatdate(st.st_mtime, usegmt=True))
-        self.send_header("Cache-Control", "private, max-age=31536000, immutable" if path.suffix == ".json"
-                         else "private, no-cache")             # this browser only; the page: check it is still current
+        # data/<build>/*.json never change (the folder is named after the build); the page, version.json and
+        # status.json do: the browser checks those every time. "private": this browser only.
+        base = Path(self.directory).resolve()
+        immutable = path.suffix == ".json" and path.resolve().is_relative_to(base) and path.resolve().relative_to(base).parts[:1] == ("data",)
+        self.send_header("Cache-Control", "private, max-age=31536000, immutable" if immutable else "private, no-cache")
         self.send_header("Vary", "Accept-Encoding, Cookie")
         self.end_headers()
         if not head:

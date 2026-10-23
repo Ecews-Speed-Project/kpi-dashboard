@@ -1,0 +1,16 @@
+# never in the image: credentials, client data, builds, logs (they are mounted folders on the server)
+.env
+.env.*
+!.env.example
+.git
+.claude
+data
+inbox
+live
+archive
+logs
+exports
+**/__pycache__
+**/*.pyc
+.pytest_cache
+*.bat

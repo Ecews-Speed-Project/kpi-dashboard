@@ -263,6 +263,7 @@ svg .vlab{font-family:var(--display);font-weight:700;fill:var(--ink);font-size:1
   .title p{display:none}.title h1{font-size:22px}.cartouche img{height:26px}
   .filters-in{flex-wrap:nowrap;overflow-x:auto}.crumbs{display:none}}
 .empty{padding:26px;text-align:center;color:var(--ink-3);font-style:italic}
+.statusnote{margin:10px auto 0;max-width:1400px;padding:9px 14px;border-left:4px solid var(--bar-critical);background:var(--card);font-size:14.5px}
 .tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--paper);font-size:14px;padding:6px 9px;border-radius:4px;max-width:280px;z-index:40;line-height:1.35}
 footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:0 20px 34px;font-style:italic}
 .tg .hb{grid-template-columns:130px minmax(0,1fr) 300px}
@@ -361,6 +362,7 @@ details.terms summary .ico{vertical-align:-.3em}
   <nav class="nav" id="nav" aria-label="Pages"></nav>
   <div class="filters"><div class="filters-in" id="filters"></div></div>
 </header>
+<div class="statusnote" id="statusnote" hidden></div>
 <main id="main"></main>
 <footer id="foot"></footer>
 <div class="tip" id="tip" hidden></div>
@@ -2419,5 +2421,16 @@ if (location.protocol.startsWith("http")) {
     reloadWhenDue();
   }, 60000);
   document.addEventListener("visibilitychange", reloadWhenDue);
+  // the server job writes status.json after each run: say so when the last one failed (these figures are older)
+  const statusNote = async () => {
+    try {
+      const r = await fetch("status.json?t=" + Date.now(), {cache: "no-store"}); if (!r.ok) return;
+      const st = await r.json(), el = document.getElementById("statusnote");
+      el.hidden = st.ok !== false;
+      if (st.ok === false) el.textContent = `The scheduled update of ${fmtDate(String(st.started||"").slice(0,10))} ${String(st.started||"").slice(11,16)} did not finish. `
+        + `The figures shown are from ${D.meta.generated_at.replace("T"," ")}; the next update will refresh them.`;
+    } catch (e) {}
+  };
+  statusNote(); setInterval(statusNote, 300000);
 }
 </script>

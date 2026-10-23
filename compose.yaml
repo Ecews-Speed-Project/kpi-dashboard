@@ -1,0 +1,37 @@
+# SPEED KPI dashboard on the server: see docs/server_job.md.
+#   docker compose up -d --build                               start both services (after git pull: the same)
+#   docker compose run --rm job python scripts/scheduler.py --now   run one update now
+#   docker compose logs -f job                                 watch the update job
+# The folders below sit next to this file on the server and survive rebuilds.
+services:
+  dashboard:
+    build: .
+    command: ["python", "serve_dashboard.py", "--lan", "--port", "5100", "--no-browser"]
+    ports: ["5100:5100"]
+    env_file: .env                       # DASH_SECRET (optional; else data/.dash_secret is created)
+    volumes:
+      - ./live:/app/live:ro              # the dashboard the job writes
+      - ./data:/app/data                 # data/.dash_secret (sign-in cookies)
+      - ./logs:/app/logs                 # logs/access.log (who signed in)
+    environment:
+      DASH_MAX_DOWNLOADS: "8"
+    mem_limit: 768m
+    restart: unless-stopped
+
+  job:
+    build: .
+    command: ["python", "scripts/scheduler.py"]
+    env_file: .env                       # DHIS2_*_USER/PASS, PG_USER/PASS/HOST, optional ALERT_*
+    environment:
+      SCHEDULE: "06:30,12:30"            # local times (TZ below); before morning and afternoon meetings
+      DAYS: "mon-fri"
+      RETRY_MINUTES: "20"
+      TZ: "Africa/Lagos"
+    volumes:
+      - ./live:/app/live                 # output: index.html, data/<build>/*.json(.gz), version.json, status.json
+      - ./data:/app/data                 # history (trends, past months), DHIS2 cache - must persist
+      - ./inbox:/app/inbox               # weekly NDR PBS line list, FY targets, Naomi estimates
+      - ./logs:/app/logs                 # one log per run
+      - ./archive:/app/archive           # dated copies of past builds (thinned automatically)
+    mem_limit: 5g                        # a run peaks around 4 GB for a few minutes
+    restart: unless-stopped

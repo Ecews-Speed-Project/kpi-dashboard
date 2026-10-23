@@ -118,11 +118,13 @@ def _write_split(data: dict, out_dir: Path) -> dict:
         (tmp / (fn + ".gz")).write_bytes(gzip.compress(raw, compresslevel=9, mtime=0))
         files[name] = fn
     final = root / bid
-    shutil.rmtree(final, ignore_errors=True)
+    if final.exists():         # the same build rebuilt: never touch the folder the current page uses - new name
+        bid = f"{bid}-{dt.datetime.now():%H%M%S}"
+        final = root / bid
     os.replace(tmp, final)
     builds = sorted((d for d in root.iterdir() if d.is_dir() and not d.name.startswith(".")), key=lambda d: d.name)
-    for old in builds[:-KEEP_BUILDS]:
-        shutil.rmtree(old, ignore_errors=True)
+    for old in builds[:-KEEP_BUILDS] + [d for d in root.iterdir() if d.name.startswith(".") and d != tmp]:
+        shutil.rmtree(old, ignore_errors=True)  # older builds, and temporary folders a failed run left behind
     return {"id": bid, "base": f"data/{bid}/", "core": files.pop("core"), "parts": files}
 
 
