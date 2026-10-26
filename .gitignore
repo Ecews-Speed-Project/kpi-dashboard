@@ -16,6 +16,8 @@ inbox/*
 # client-level or programme data never goes to git
 *.parquet
 *.pptx
+# exception: the blank HTS case finding template (no data) - every other .pptx stays out
+!dashboard/assets/hts_case_finding_template.pptx
 docs/PowerBI_measure_export.xlsx
 data/excel/
 data/manual/
