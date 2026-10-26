@@ -594,6 +594,13 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
         scorecard.to_csv(exp / "scorecard.csv", index=False)
     from dashboard.build import build
     # demo builds never touch live\ (the served dashboard) or archive\
+    if not demo:          # HTS team's monthly case finding report (PowerPoint), one per month of the year
+        try:
+            from kpi.hts_report import find_template, write_reports
+            data["reports"] = write_reports(data, folder(cfg, "live", "live") / "reports", find_template(cfg, ROOT))
+            print(f"  monthly case finding reports: {len(data['reports'])}")
+        except Exception as e:                      # a report problem must not stop the update
+            print(f"  WARNING monthly case finding reports not made: {type(e).__name__}: {e}")
     path = (build(data, ROOT / "data" / "demo" / "out") if demo else
             build(data, folder(cfg, "live", "live"), folder(cfg, "archive", "archive"), split=True))
     if not demo and "--publish" in sys.argv:      # only the scheduled update (update_dashboard.bat) publishes; other runs stay local
@@ -816,6 +823,9 @@ def publish_git(cfg: dict, data: dict) -> bool:
             # bytes, not text: on Windows, text mode would add a carriage return to every file name
             return subprocess.run(["git", "-C", str(ROOT), "mktree"], input=lines.encode("utf-8"), check=True,
                                   capture_output=True).stdout.decode().strip()
+        reports = sorted((folder(cfg, "live", "live") / "reports").glob("*.pptx"))
+        if reports:          # the monthly case finding reports (HIV Testing Services page)
+            files["reports"] = {f.name: git("hash-object", "-w", str(f)) for f in reports}
         tree = mktree(files)
         commit = git("commit-tree", tree, "-m", f"Dashboard build {m['generated_at']} ({m['quarter']}, data as of {m['as_of']})")
         git("push", "--force", "-q", "origin", f"{commit}:refs/heads/{branch}", timeout=600)

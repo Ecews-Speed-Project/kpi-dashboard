@@ -981,6 +981,17 @@ function htsAgeSex(){
    <div class="legend"><span><span class="sw" style="background:var(--s1)"></span>Female</span><span><span class="sw" style="background:var(--s2)"></span>Male</span></div>
    <div class="g5">${P.map(([t,s,m,o])=>`<div class="mini"><h3>${t}</h3><p>${s}</p>${pyramid(m,{...o,compact:true,bands:B})}</div>`).join("")}</div></section>`;
 }
+/* the HTS team's monthly case finding report (CDC template), made by each update: one PowerPoint per month */
+function htsReports(){
+  const R = D.reports || [];
+  if(D.meta.archived || D.meta.shared && !R.length) return "";
+  return `<section class="c3d">${secH("Monthly case finding report","CDC template · DHIS2 monthly instance only · TX_NEW from the treatment line list as linked to ART")}
+   ${R.length ? `<div class="tw"><table><thead><tr><th>Month</th><th>Status</th><th>Download</th></tr></thead><tbody>
+     ${[...R].reverse().map(r=>`<tr><td>${esc(r.label)}</td><td>${r.provisional?`<span class="pill openm">provisional — monthly reports still coming in</span>`:`<span class="pill closed">final</span>`}</td>
+       <td><a href="${esc(r.file)}" download>${esc(r.file.split("/").pop())}</a></td></tr>`).join("")}</tbody></table></div>`
+     : `<div class="empty">No month of ${esc(D.meta.fiscal_year)} has monthly HTS reports yet. The first report appears once facilities submit them.</div>`}
+   <p class="drillnote">Filled: Gen Pop and high-risk testing for the month and cumulative from 1 October (high risk = the CSCC sites), yield by modality (one slide per state), sex and age, HIVST. Left for the HTS team: activities, RTK stock, retesting for verification, trainings, challenges.</p></section>`;
+}
 function htsPage(){
   const v=agg(), E=c=>evaluate(c,v), cf=E("HTS_TST_POS"), ht=E("HTS_TST"), lk=E("IPI_ART_COV"), pr=E("PrEP_NEW");
   const mods = agg(F,{by:"mod"}); const mk=[...mods.keys()].filter(k=>k&&mods.get(k).hts_tst);
@@ -1018,6 +1029,7 @@ function htsPage(){
       C("Results",V("hivst_results")),C("Reported %",x=>div(x.hivst_results||0,(x.hivst_assisted||0)+(x.hivst_unassisted||0)),1),C("Reactive",V("hivst_reactive")),C("Reactivity",RV("hivst_reactive","hivst_results"),1),
       C("Referred",V("hivst_referred")),C("Confirmed",V("hivst_confirmed")),C("Linked",V("hivst_linked")),C("Linkage",RV("hivst_linked","hivst_confirmed"),1)],["org","sex","age"])}</section>
    ${csccSection()}
+   ${htsReports()}
    <section class="c3d">${secH("HTS breakdown","Drill like a DHIS2 pivot")}${pivot("hts",[C("HTS_TST",V("hts_tst"),0,0,"hts_tst"),C("HTS_POS",V("hts_tst_pos")),C("Yield",RV("hts_tst_pos","hts_tst"),1),
      C("TX_NEW",V("tx_new_q")),C("Linkage",RV("tx_new_q","hts_tst_pos"),1,v=>rateStatus(div(v.tx_new_q,v.hts_tst_pos),.98)),C("PrEP_NEW",V("prep_new"))],
      ["org","paed","sex","age","mod"])}</section>`;

@@ -199,6 +199,8 @@ def dashboard_bytes(src: Path, st: os.stat_result, unpack: bool) -> bytes:
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
+                      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation"}
     timeout = 120          # a stalled connection is dropped instead of holding a thread and a download slot
     def end_headers(self):
         if not getattr(self, "_cached", False):
