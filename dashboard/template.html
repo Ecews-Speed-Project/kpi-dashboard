@@ -2075,10 +2075,10 @@ function trendAgg(f=F){
     out[k]=wk; }
   return out;
 }
-function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false, H:H0=250, endLabel=false}={}){
+function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false, H:H0=250, endLabel=false, cap=null}={}){
   const pts = series.flatMap(s=>s.pts); if(!pts.length) return `<div class="empty">No data yet.</div>`;
   const ds = [...new Set(pts.map(p=>p.d))].sort(), t0=dOf(ds[0]).getTime(), t1=Math.max(dOf(ds.at(-1)).getTime(), t0+DAY);
-  const vs = pts.map(p=>p.v).filter(v=>v!=null), lo = yMin ?? Math.min(...vs)*.97, hi = yMax ?? Math.max(...vs)*1.02;
+  const vs = pts.map(p=>p.v).filter(v=>v!=null), lo = yMin ?? Math.min(...vs)*.97, hi = yMax ?? (cap!=null && Math.max(...vs)<=cap ? Math.min(cap, Math.max(...vs)*1.02) : Math.max(...vs)*1.02);   // cap: a share never shows above 100%
   const nMon=new Set(ds.map(d=>d.slice(0,7))).size, W=weekly?Math.max(640,ds.length*78):Math.max(640,nMon*95),H=H0,pl=58,pr=endLabel?62:14,pt=16,pb=34, x=d=>pl+(W-pl-pr)*(dOf(d).getTime()-t0)/(t1-t0), y=v=>pt+(H-pt-pb)*(1-(v-lo)/((hi-lo)||1));
   const ticks=[0,.25,.5,.75,1].map(k=>lo+(hi-lo)*k), months=[...new Set(ds.map(d=>d.slice(0,7)))];
   const step=Math.ceil(months.length/Math.max(8,Math.floor(W/95)));
@@ -2096,19 +2096,19 @@ function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false,
 let TROPEN = false;
 function trendsPage(){
   const T = trendAgg(), get = m => T[m] || new Map(), ser = (m,l,c,dash=false) => ({l,c,dash,pts:[...get(m)].map(([d,v])=>({d,v}))});
-  const ratio = (a,b,l,c,dash=false) => ({l,c,dash,pts:[...get(b)].map(([d,den])=>({d, v: den ? (get(a).get(d)||0)/den : null}))});
+  const ratio = (a,b,l,c,dash=false) => ({l,c,dash,pts:[...get(b)].map(([d,den])=>({d, v: den && get(a).has(d) ? get(a).get(d)/den : null}))});
   const snapDays = new Set(["tx_curr_emr","tx_curr","pbs_active"].flatMap(m=>[...get(m).keys()])).size;
   return `<p class="drillnote" style="margin:0">One point per week (week ending Sunday). Dashed lines are <b>estimated</b> week-ends rebuilt from today's linelist (ART start, last pickup + refill + 28 days, outcome dates); clients who lapsed and came back look continuously active, so earlier weeks run slightly high. Solid lines are <b>exact</b> snapshots saved by each live run (${snapDays} so far; one per day). Trend lines follow the state / LGA / facility filter; sex and age filters do not apply here.</p>
    <section class="c3d">${secH("Current on treatment","Week-end TX_CURR")}${lineChart([ser("tx_curr_est","EMR TX_CURR (estimated)","var(--s1)",true), ser(EMRK(),"EMR TX_CURR, CDR line list (snapshot)","var(--s1)"),
      ...(D.meta.tx_curr_source==="NDR"?[ser("tx_curr","TX_CURR_Unique (NDR snapshot)","var(--s2)")]:[])],{label:"TX_CURR trend",weekly:true})}</section>
    <section class="c3d">${secH("TX_NEW and IIT by week","Linelist ART start dates; IIT = refill + 28 days lapsed in the week")}${monthlyPick("trend",[{k:"n",l:"TX_NEW",num:"tx_new_q"},{k:"i",l:"IIT",num:"iit_q"}],F,"week")}</section>
    <div class="grid g2"><section class="c3d">${secH("Biometric coverage","Captured ÷ active")}${lineChart([ratio("pbs_baseline_est","pbs_active","Coverage of today's cohort by capture date (estimated)","var(--s2)",true),
-       ratio("pbs_baseline","pbs_active","Coverage (snapshot)","var(--s2)")],{fmt:v=>pct(v,0),label:"PBS coverage trend",weekly:true})}
+       ratio("pbs_baseline","pbs_active","Coverage (snapshot)","var(--s2)")],{fmt:v=>pct(v,0),cap:1,label:"PBS coverage trend",weekly:true})}
      <p class="drillnote">The estimated line uses today's active clients and their capture dates, so it shows how coverage of the current cohort was built up.</p></section>
    <section class="c3d">${secH("Biometric quality","Snapshots: unique share of active, and adjudication backlog")}${lineChart([ratio("pbs_valid","pbs_active","Valid ÷ active","var(--s1)"),
-       ratio("pbs_adjudication","pbs_active","Awaiting adjudication ÷ active","var(--bar-critical)")],{fmt:v=>pct(v,1),yMin:0,label:"PBS quality trend",weekly:true})}</section></div>
-   <div class="grid g2"><section class="c3d">${secH("Viral load","Snapshots")}${lineChart([ratio("vl_suppressed","vl_result","VLS among results","var(--s1)"),ratio("vl_result","tx_curr_emr","Results ÷ TX_CURR (EMR)","var(--s2)")],{fmt:v=>pct(v,1),label:"VL trend",weekly:true})}</section>
-   <section class="c3d">${secH("Clients in IIT","Snapshots of the current IIT stock")}${lineChart([ser("iit_now","In IIT","var(--bar-critical)")],{label:"IIT stock trend",weekly:true})}</section></div>`;
+       ratio("pbs_adjudication","pbs_active","Awaiting adjudication ÷ active","var(--bar-critical)")],{fmt:v=>pct(v,1),yMin:0,cap:1,label:"PBS quality trend",weekly:true})}</section></div>
+   <div class="grid g2"><section class="c3d">${secH("Viral load","Snapshots")}${lineChart([ratio("vl_suppressed","vl_result","VLS among results","var(--s1)"),ratio("vl_result","tx_curr_emr","Results ÷ TX_CURR (EMR)","var(--s2)")],{fmt:v=>pct(v,1),cap:1,label:"VL trend",weekly:true})}</section>
+   <section class="c3d">${secH("Clients in IIT","NDR: lost to follow-up, last pickup within the last 12 months (the clients still worth tracing)")}${lineChart([ser("iit_now","In IIT, last pickup within 12 months","var(--bar-critical)")],{label:"IIT stock trend",weekly:true,endLabel:true})}</section></div>`;
 }
 function naomiPage(){
   if(!D.naomi.length) return context()+`<section class="c3d empty">No Naomi file loaded. Put it at data/manual/naomi_estimates.xlsx and rerun the pipeline.</section>`;
@@ -2156,7 +2156,9 @@ function afterRender(){
       const vb=svg.viewBox.baseVal, k=svg.getBoundingClientRect().width/vb.width, w=+ax.find(t=>t.tagName==="line").getAttribute("x1")+1;
       const wrap=document.createElement("div"); wrap.className="yaxw"; el.before(wrap); wrap.append(el);
       el.scrollLeft = el.scrollWidth;
-      wrap.insertAdjacentHTML("beforeend", `<svg class="yaxo" viewBox="0 0 ${w} ${vb.height}" width="${w*k}" height="${vb.height*k}" aria-hidden="true"><rect width="${w}" height="${vb.height}" fill="var(--card)" opacity=".94"/>${ax.map(t=>t.outerHTML).join("")}</svg>`);
+      // the pinned axis, plus a short fade so dates scrolled under it disappear cleanly instead of half-showing
+      const f=34, gid="yf"+Math.random().toString(36).slice(2,8);
+      wrap.insertAdjacentHTML("beforeend", `<svg class="yaxo" viewBox="0 0 ${w+f} ${vb.height}" width="${(w+f)*k}" height="${vb.height*k}" aria-hidden="true"><defs><linearGradient id="${gid}"><stop offset="0" stop-color="var(--card)"/><stop offset="1" stop-color="var(--card)" stop-opacity="0"/></linearGradient></defs><rect width="${w}" height="${vb.height}" fill="var(--card)"/><rect x="${w}" width="${f}" height="${vb.height}" fill="url(#${gid})"/>${ax.map(t=>t.outerHTML).join("")}</svg>`);
     }
   });
 }

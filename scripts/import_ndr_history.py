@@ -29,7 +29,7 @@ import run_pipeline as rp  # noqa: E402
 from etl.dhis2_client import clean_state  # noqa: E402
 from etl.sources import read_excel  # noqa: E402
 from kpi.engine import TREND_MEASURES, attach_master, set_aliases  # noqa: E402
-from kpi.measures import Period, linelist_cube, pbs_cube, quarter_start  # noqa: E402
+from kpi.measures import STATUS, Period, linelist_cube, pbs_cube, quarter_start  # noqa: E402
 
 MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
 NAME = re.compile(r"pbs\s*line\s*list", re.I)
@@ -179,8 +179,47 @@ def refresh_trends() -> None:
     print(f"biometric trend refreshed for {new['date'].nunique()} dates from {len(cache)} NDR copies")
 
 
+def refresh_iit() -> None:
+    """Recompute the 'clients in IIT' trend (lost to follow-up, last pickup in the last 12 months) for every
+    date from the saved NDR copies that list inactive clients; earlier dates (active-only downloads, or the
+    CDR count used before the NDR line list) get no point, so the line uses one definition throughout."""
+    cfg = rp.settings()
+    lc = cfg["columns"]["linelist"]
+    fy = pd.to_datetime(str(cfg["fy_start"])).date()
+    hist = pd.read_csv(rp.HISTORY, dtype={"date": str})
+    copies = []
+    for f in sorted(rp.SOURCES.glob("ndr_*.parquet")):
+        d = dt.date.fromisoformat(f.stem.split("_")[1])
+        pbs = pd.read_parquet(f)
+        if (pbs["currentstatus28"].astype(str).str.strip().str.lower() != "active").any():   # all-status download
+            copies.append((d, pbs))
+    master, out = master_list(), []
+    for d, pbs in copies:
+        ll = rp.ndr_linelist(pbs, pd.DataFrame(), cfg, d)
+        # same rule as kpi.measures iit_now: IIT status, last pickup within 12 months of the file date
+        pick = pd.to_datetime(ll["pharmacy_lastpickupdate"], errors="coerce")
+        hit = ll[ll["currentartstatus"].astype(str).str.strip().str.lower().isin(STATUS["iit"])
+                 & (pick > pd.Timestamp(d - dt.timedelta(days=365)))]
+        x = hit.groupby(["state", "facilityname"]).size().reset_index(name="value").rename(columns={"facilityname": "facility"})
+        x = x.assign(lga="", sex="U", age="Unknown", mod="", period="", measure="iit_now")
+        if hit.empty:                  # e.g. a quarter-end file without the weekly statuses: no point, not a zero
+            print(f"  NDR copy {d}: no IIT statuses - skipped")
+            continue
+        x = attach_master(x, master, "ndr_history", {}).groupby(["state", "facility", "measure"])["value"].sum().reset_index()
+        later = [c for c, _ in copies if c > d]
+        dates = [s for s in sorted(set(hist["date"])) if s >= d.isoformat() and (not later or s < later[0].isoformat())]
+        out += [x.assign(date=s) for s in dates]
+        print(f"  NDR copy {d}: {int(x['value'].sum()):,} in IIT (last pickup within 12 months), {len(dates)} trend dates")
+    keep = hist[hist["measure"] != "iit_now"]
+    new = pd.concat(out, ignore_index=True) if out else hist.iloc[:0]
+    pd.concat([keep, new[["date", "state", "facility", "measure", "value"]]], ignore_index=True)       .sort_values(["date", "state", "facility", "measure"]).to_csv(rp.HISTORY, index=False)
+    print(f"clients-in-IIT trend refreshed from {len(copies)} NDR copies")
+
+
 if __name__ == "__main__":
-    if "--refresh-trends" in sys.argv:
+    if "--refresh-iit" in sys.argv:
+        refresh_iit()
+    elif "--refresh-trends" in sys.argv:
         refresh_trends()
     else:
         main(sys.argv[1:])

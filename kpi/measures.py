@@ -596,7 +596,9 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         # when the NDR PBS line list is loaded (see engine.run_engine)
         "tx_curr_emr": active,                               # valid print or under 15, as the NDR TX_CURR
         "emr_active": active_all,                            # every client the EMR marks Active
-        "iit_now": status.isin(STATUS["iit"]),      # stock of clients currently in IIT (trend snapshots)
+        # clients in IIT who picked up drugs in the last 12 months (trend snapshots): the recent, traceable
+        # IIT - the NDR's all-status file also lists everyone lost since 2008, which is not a useful stock
+        "iit_now": status.isin(STATUS["iit"]) & (pickup > pd.Timestamp(p.as_of - dt.timedelta(days=365))),
         "prev_tx_curr": prev_active,
         # dated events: the dashboard picks them up for any date range
         "tx_new_q": in_hist(start) & (ti != "yes") & uniq,
