@@ -476,7 +476,17 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
                                    master, "prev_quarter", {}))
     else:   # no previous_quarter_status table (linelist_flat): start from the linelist's own previous-quarter status
         ll_part = parts[1]
-        parts.append(ll_part[ll_part["measure"] == "prev_tx_curr"].assign(measure="wf_prev"))
+        from .measures import quarter_start
+        q_end = (quarter_start(ll_asof, p.fy_start.month) - dt.timedelta(days=1)).isoformat()
+        reported = [x for x in parts if len(x) and "period" in x and (x["period"] == f"SN{q_end}").any()]
+        if pbs_source == "ndr" and "prev_unique" in linelist and reported:
+            # the previous quarter's TX_CURR exactly as reported: its official NDR file's unique count, fixed
+            # for the whole quarter (clients matched to it give the flows; any mismatch shows as gain/loss)
+            r = pd.concat(reported)
+            r = r[(r["period"] == f"SN{q_end}") & (r["measure"] == "ndr_tx_curr")]
+            parts.append(r.assign(period="", measure="wf_prev"))
+        else:
+            parts.append(ll_part[ll_part["measure"] == "prev_tx_curr"].assign(measure="wf_prev"))
     # appointments from 120 days before the linelist date (a visit counts as missed 28 days after
     # the expected date) to the end of the month two months ahead; the dashboard picks a range inside
     appt_cl = appointment_clients(linelist, cols["linelist"], pbs_src if pbs_source == "ndr" else pd.DataFrame(),

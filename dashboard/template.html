@@ -1283,8 +1283,11 @@ function waterfallFrom(steps, note=""){
   </svg></div><p class="drillnote">Axis starts at ${n(lo)} so the movements are visible.${note?" "+note:""}</p>`;
 }
 function stepsEMR(v){
-  const pot=gv(v,"wf_prev")+gv(v,"wf_rtt")+gv(v,"wf_new")+gv(v,"wf_ti"), loss=gv(v,"wf_to")+gv(v,"wf_iit")+gv(v,"wf_dead")+gv(v,"wf_stopped");
-  return [["Previous TX_CURR",gv(v,"wf_prev"),"total"],["RTT",gv(v,"wf_rtt")],["TX_NEW",gv(v,"wf_new")],["Transfer in",gv(v,"wf_ti")],["Potential",pot,"total"],
+  // prints: on treatment at the end of last quarter without a unique print, counted now (net of prints lost)
+  const bio=gv(v,"wf_bio")-gv(v,"wf_bio_lost"), hasBio=MEAS.includes("wf_bio");
+  const pot=gv(v,"wf_prev")+gv(v,"wf_rtt")+gv(v,"wf_new")+gv(v,"wf_ti")+bio, loss=gv(v,"wf_to")+gv(v,"wf_iit")+gv(v,"wf_dead")+gv(v,"wf_stopped");
+  return [["Previous TX_CURR",gv(v,"wf_prev"),"total"],["RTT",gv(v,"wf_rtt")],["TX_NEW",gv(v,"wf_new")],["Transfer in",gv(v,"wf_ti")],
+    ...(hasBio?[["Prints captured",bio]]:[]),["Potential",pot,"total"],
     ["Transfer out",-gv(v,"wf_to")],["IIT",-gv(v,"wf_iit")],["Dead",-gv(v,"wf_dead")],["Stopped",-gv(v,"wf_stopped")],["Gain/loss",gv(v,"tx_curr_emr")-(pot-loss)],["TX_CURR",gv(v,"tx_curr_emr"),"total"]];
 }
 function stepsNDR(v){
@@ -1322,8 +1325,9 @@ const LATE = () => { const x=dOf(LLD()); x.setDate(x.getDate()-28); return iso(x
 // NDR line list: IIT is the NDR's own status (inactive, not transferred or dead), the same rule as the waterfall;
 // missed = still active but the appointment has passed with no pickup. CDR line list: by days late.
 const aStat = r => String(acv(r,"status")||"").toLowerCase();
-const aMissed = r => NDRT() ? (aStat(r)==="active" && acv(r,"appt") < LLD()) : (r[3]===1 && acv(r,"appt") > LATE() && acv(r,"appt") < LLD());
-const aIIT = r => NDRT() ? ["ltfu","lost to followup","lost to follow up"].includes(aStat(r)) : (r[3]===1 && acv(r,"appt") <= LATE());
+const aMissed = r => NDRT() ? (aStat(r)==="active" && acv(r,"appt") > LATE() && acv(r,"appt") < LLD()) : (r[3]===1 && acv(r,"appt") > LATE() && acv(r,"appt") < LLD());
+const aIIT = r => NDRT() ? (["ltfu","lost to followup","lost to follow up"].includes(aStat(r)) || (aStat(r)==="active" && acv(r,"appt") <= LATE()))
+  : (r[3]===1 && acv(r,"appt") <= LATE());
 const aUniq = r => acv(r,"uniq")==="Yes";
 const ACATS = [["Scheduled",()=>true],["Missed (under 28 days)",aMissed],["IIT (28+ days)",aIIT]];
 const aFlag = (r,k) => !k || (k==="any" ? !!acv(r,"flags") : String(acv(r,"flags")).includes(k));
@@ -1517,7 +1521,7 @@ function artPage(){
    ${kpi(n(v.ndr_wf_iit),"IIT",`${D.meta.fiscal_year} from 1 Oct · NDR TX_CURR`)}${kpi(pct(iitNDR(v),2),"IIT rate","IIT ÷ (TX_CURR at end of Q4 + TX_NEW)")}
    ${kpi(n(v.ndr_wf_rtt),"Returned to treatment",`NDR, ${D.meta.fiscal_year} to date`)}`}${kpi(pct(sat),"Saturation (Naomi)","ref. 90.25%",rateStatus(sat,.9025))}${kpi(pct(div(v.mmd3,v.tx_curr_emr)),"On 3+ month refills")}</div>
    ${NDRT() ? `<section class="c3d">${secH(`Continuity of treatment — NDR, ${llQ()}`,`TX_CURR at the end of last quarter to TX_CURR now (valid unique print or under 15) · updates with every NDR file · NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
-     ${waterfallFrom(stepsEMR(v), `IIT rate ${pct(iitEMR(v),2)} = IIT ÷ (previous TX_CURR + TX_NEW). IIT = active at the end of last quarter and inactive now; transfers out and deaths count only when dated on or after the last pickup.`)}</section>`
+     ${waterfallFrom(stepsEMR(v), `Previous TX_CURR is the TX_CURR reported for last quarter (its official NDR quarter file) and stays fixed for the whole quarter. IIT rate ${pct(iitEMR(v),2)} = IIT ÷ (previous TX_CURR + TX_NEW). IIT = counted at the end of last quarter and inactive now; transfers out and deaths count only when dated on or after the last pickup.${MEAS.includes("wf_bio")?` Prints captured = on treatment at the end of last quarter without a unique print, counted now (net of ${n(gv(v,"wf_bio_lost"))} whose print stopped counting).`:""}`)}</section>`
    : `   <div class="grid g2"><section class="c3d">${secH(`Continuity of treatment — ${NDRT()?"NDR line list":"EMR"}, ${llQ()}`,`Previous TX_CURR = active last quarter (ART status previous quarter) with a valid print or under 15; flows from the linelist as of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}`)}
      ${waterfallFrom(stepsEMR(v), `IIT rate ${pct(iitEMR(v),2)} = IIT ÷ (previous TX_CURR + TX_NEW).${demog?" The starting TX_CURR has no sex/age in previous_quarter_status, so with a sex/age filter the gap shows in gain/loss.":" Gain/loss holds clients in previous_quarter_status who are no longer in the linelist."}`)}</section>
    <section class="c3d">${secH(`Continuity of treatment — NDR TX_CURR, ${D.meta.fiscal_year} to date`,"From 1 October: TX_CURR at the end of Q4 (NDR TX_CURR rule) to NDR TX_CURR now")}

@@ -580,6 +580,8 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     active_all = status.isin(STATUS["active"])
     active = emr_unique(d, c, active_all)
     prev_active = emr_unique(d, c, prev.isin(STATUS["active"]))
+    if "prev_unique" in d:      # NDR: the previous quarter's reported TX_CURR (unique flag in its official file)
+        prev_active = _norm(d["prev_unique"]).eq("yes")
     # TX_PVLS: on ART 6 months (183 days) or more; a result in the 12 months to the date (as the NDR summary)
     eligible = active & (dos >= 183)
     has_result = eligible & (vl_date > p.as_of - dt.timedelta(days=365)) & (vl_date <= p.as_of)
@@ -631,11 +633,17 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     # table itself (engine), so clients no longer in the linelist land in 'gain/loss'
     qs = quarter_start(p.as_of, p.fy_start.month)
     new_q = (start >= qs) & (start <= p.as_of) & (ti != "yes") & uniq
+    ti_q = active & (ti == "yes") & ~new_q & ((lambda t: (t >= qs) & (t <= p.as_of))(_dates(d[c["ti_date"]]))
+                                             if c.get("ti_date") in d else ~prev_active)
+    rtt_q = active & prev.isin(STATUS["iit"] | STATUS["to"] | STATUS["stopped"] | STATUS["dead"]) & ~new_q
     masks.update({
         "wf_new": new_q,
-        "wf_ti": active & (ti == "yes") & ~new_q & ((lambda t: (t >= qs) & (t <= p.as_of))(_dates(d[c["ti_date"]]))
-                                                    if c.get("ti_date") in d else ~prev_active),
-        "wf_rtt": active & prev.isin(STATUS["iit"] | STATUS["to"] | STATUS["stopped"] | STATUS["dead"]) & ~new_q,
+        # on treatment at the end of last quarter but not counted then (no unique print), counted now
+        "wf_bio": active & prev.isin(STATUS["active"]) & ~prev_active & ~new_q & ~ti_q & ~rtt_q,
+        # counted then, still on treatment, no longer counted (print no longer valid / adjudication)
+        "wf_bio_lost": prev_active & active_all & ~active,
+        "wf_ti": ti_q,
+        "wf_rtt": rtt_q,
         "wf_to": prev_active & status.isin(STATUS["to"]),
         "wf_iit": prev_active & status.isin(STATUS["iit"]),
         "wf_dead": prev_active & status.isin(STATUS["dead"]),

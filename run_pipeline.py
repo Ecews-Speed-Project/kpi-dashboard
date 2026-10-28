@@ -340,10 +340,37 @@ def ndr_linelist(pbs: pd.DataFrame, cdr: pd.DataFrame, cfg: dict, file_date: dt.
         def key(datim, art):
             a = art.astype(str).str.upper().str.replace(r"[^A-Z0-9]", "", regex=True).str.replace(r"\d+", lambda m: str(int(m.group())), regex=True)
             return datim.astype(str).str.strip().str.upper() + "|" + a
-        e = cdr[emr_cols].assign(_k=key(cdr[lc["datim"]], cdr[lc["art_no"]])).drop_duplicates("_k")
+        e = cdr[emr_cols].assign(_k=key(cdr[lc["datim"]], cdr[lc["art_no"]]), _emr=True).drop_duplicates("_k")
         out = out.assign(_k=key(out["datim_code"], out["pepid"])).merge(e, on="_k", how="left").drop(columns="_k")
-        hit = out[emr_cols[0]].notna().mean() if emr_cols else 0
-        print(f"  treatment from the NDR file ({len(out):,} clients); EMR fields joined for {hit:.0%}")
+        if lc.get("hosp_no") in cdr:           # no ART-number match: try DATIM + hospital number
+            miss = out["_emr"].isna()
+            e2 = cdr[emr_cols].assign(_k=key(cdr[lc["datim"]], cdr[lc["hosp_no"]]), _emr=True).drop_duplicates("_k")
+            m2 = out.loc[miss, ["patienthospitalno", "datim_code"]].assign(_k=lambda x: key(x["datim_code"], x["patienthospitalno"]))
+            m2 = m2[["_k"]].reset_index().merge(e2, on="_k", how="inner").set_index("index")
+            out.loc[m2.index, emr_cols + ["_emr"]] = m2[emr_cols + ["_emr"]]
+        found = out["_emr"].fillna(False).astype(bool)
+        # every TX_CURR client has a regimen: a blank one means the client is not in the EMR line list
+        for k in ("regimen_line", "regimen"):
+            if lc.get(k) in out:
+                out.loc[~found, lc[k]] = "Not in EMR line list"
+        out = out.drop(columns="_emr")
+        print(f"  treatment from the NDR file ({len(out):,} clients); EMR fields joined for {found.mean():.0%} "
+              f"(ART number, then hospital number)")
+    # the previous quarter's TX_CURR is the one reported for it: the unique flag of each client in that
+    # quarter's official NDR file (data/history/sources/ndr_<quarter end>.parquet), fixed until the next quarter
+    from kpi.measures import quarter_start
+    q_end = quarter_start(file_date, int(str(cfg["fy_start"])[5:7])) - dt.timedelta(days=1)
+    qf = SOURCES / f"ndr_{q_end.isoformat()}.parquet"
+    if qf.exists():
+        q = pd.read_parquet(qf)
+        if "ndr_unique" in q and "patientartnumber" in q:
+            # quarter files and weekly downloads number clients differently: match on DATIM + ART number
+            qkey = lambda datim, art: datim.astype(str).str.strip().str.upper() + "|" + art.astype(str).str.upper() \
+                .str.replace(r"[^A-Z0-9]", "", regex=True).str.replace(r"\d+", lambda m: str(int(m.group())), regex=True)
+            flag = dict(zip(qkey(q["datimcode"], q["patientartnumber"]), q["ndr_unique"].astype(str)))
+            out["prev_unique"] = qkey(out["datim_code"], out["pepid"]).map(flag).fillna("No")
+            print(f"  previous quarter TX_CURR from the official NDR file of {q_end}: "
+                  f"{int((q['ndr_unique'].astype(str).str.lower() == 'yes').sum()):,} clients")
     out.attrs["source"] = "ndr"
     return out
 
