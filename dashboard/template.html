@@ -2088,8 +2088,9 @@ function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false,
   const step=Math.ceil(months.length/Math.max(8,Math.floor(W/95)));
   return `<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="${esc(label)}">
    ${ticks.map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--rule)" stroke-dasharray="2 3"/><text class="yax" x="${pl-6}" y="${y(t)+4}" text-anchor="end" font-size="11">${fmt(t)}</text>`).join("")}<line class="yax" x1="${pl}" x2="${pl}" y1="${pt}" y2="${H-pb}" stroke="var(--ink-3)"/>
-   ${weekly ? ds.map((d,i)=>{ const near = i<ds.length-1 && (dOf(ds[i+1])-dOf(d))/DAY<5;      // a short last week: label only the later point
-       return `<line x1="${x(d)}" x2="${x(d)}" y1="${pt}" y2="${H-pb}" stroke="var(--rule-soft)"/>${near?"":`<text x="${x(d)}" y="${H-pb+18}" text-anchor="middle" font-size="11">${dLab(d)}</text>`}`; }).join("")
+   ${weekly ? (()=>{ let last=Infinity; return ds.slice().reverse().map(d=>{ const near = last-x(d) < 54;      // labels too close (e.g. a short last week): keep the later one
+       if(!near) last=x(d);
+       return `<line x1="${x(d)}" x2="${x(d)}" y1="${pt}" y2="${H-pb}" stroke="var(--rule-soft)"/>${near?"":`<text x="${x(d)}" y="${H-pb+18}" text-anchor="${x(d)>W-34?"end":"middle"}" font-size="11">${dLab(d)}</text>`}`; }).join(""); })()
      : months.filter((_,i)=>i%step===0).map(m=>`<text x="${x(m+"-01")}" y="${H-pb+18}" text-anchor="middle" font-size="11">${monthLab(m)}</text>`).join("")}
    ${series.map(s=>{const p=s.pts.filter(q=>q.v!=null).sort((a,b)=>a.d<b.d?-1:1); if(!p.length) return "";
      return `<path d="${p.map((q,i)=>(i?"L":"M")+x(q.d).toFixed(1)+","+y(q.v).toFixed(1)).join("")}" fill="none" stroke="${s.c}" stroke-width="2.2"${s.dash?` stroke-dasharray="6 4"`:""}/>
