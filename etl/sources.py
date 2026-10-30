@@ -63,11 +63,27 @@ def read_pg_table(engine, schema: str, table: str, tries: int = 3, columns: list
     return _lower(pd.concat(parts, ignore_index=True))
 
 
-def read_excel(path: str | Path, sheet=0) -> pd.DataFrame:
+def read_excel(path: str | Path, sheet=0, password: str | None = None, keep: list[str] | None = None) -> pd.DataFrame:
+    """An Excel sheet with lower-case column names. A password-protected workbook is unlocked in
+    memory (never written out unlocked); keep = the only columns returned (e.g. no names or DOB)."""
     p = Path(path)
     if not p.exists():
         return pd.DataFrame()
-    return _lower(pd.read_excel(p, sheet_name=sheet))
+    src = p
+    with open(p, "rb") as fh:
+        locked = fh.read(8) == bytes.fromhex("d0cf11e0a1b11ae1")      # an encrypted .xlsx is an OLE container
+    if locked:
+        import io
+        import msoffcrypto
+        if not password:
+            raise ValueError(f"{p.name} is password-protected and no password is set in .env")
+        f = msoffcrypto.OfficeFile(open(p, "rb"))
+        f.load_key(password=password)
+        src = io.BytesIO()
+        f.decrypt(src)
+        src.seek(0)
+    df = _lower(pd.read_excel(src, sheet_name=sheet))
+    return df[[k for k in dict.fromkeys(keep) if k in df.columns]] if keep else df
 
 
 def read_manual(path: str | Path) -> pd.DataFrame:

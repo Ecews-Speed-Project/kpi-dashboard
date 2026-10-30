@@ -351,6 +351,12 @@ details.terms summary .ico{vertical-align:-.3em}
   footer{padding:0 12px 24px}
 }
 @media (hover:none){.tip{max-width:78vw}}
+.casc{display:grid;gap:7px}
+.casc-r{display:grid;grid-template-columns:minmax(120px,210px) 1fr 54px 64px 52px;align-items:center;gap:10px;font-size:14px}
+.casc-r.sub .casc-l{padding-left:16px;color:var(--ink-3)}
+.casc-b{height:18px;background:var(--rule-soft);border-radius:3px;overflow:hidden}.casc-b i{display:block;height:100%;border-radius:3px}
+.casc-d{text-align:right;color:var(--bar-critical);font-size:12.5px}.casc-r b{text-align:right}.casc-r small{text-align:right;color:var(--ink-3)}
+@media (max-width:640px){.casc-r{grid-template-columns:1fr 46px 56px 44px;gap:6px}.casc-l{grid-column:1/-1}.casc-b{grid-column:1}}
 </style>
 
 <header class="top">
@@ -935,7 +941,7 @@ function overview(){
      <div class="iv"><span class="big num" style="font-size:34px">${r.value==null?"—":fmtInd(i.code,r)}</span><small>${r.note?esc(r.note):r.target!=null?"target "+(i.kind==="rate"?pct(r.target,0):n(r.target)):""}</small></div>${meter(i,r)}<div>${chip(r.status,r.note?"Not due":null)}</div></a>`;}).join("");
 
   return context() + kpiSummary(v) + `<div class="grid g3">${a}${b}${c}</div>${concurrenceSection(v)}<div class="grid g3">${pmtct}${tb}${bio}</div>
-   ${secH("IPI scorecard","Incentive-linked indicators against this quarter's milestone")}<div class="grid g4">${ipi}</div>${ribbon}
+   ${periodFY()===TFY?`${secH("IPI scorecard","Incentive-linked indicators against this quarter's milestone")}<div class="grid g4">${ipi}</div>`:""}${ribbon}
    ${!F.state&&!F.lga&&!F.fac?statesTable():""}`;
 }
 function statesTable(){
@@ -1586,19 +1592,19 @@ let EC = D.eac_clients || {cols:[], rows:[], dict:{}};
 const ECOL = c => EC.cols.indexOf(c)+3, ecv = (r,c) => { const x=r[ECOL(c)]; return (EC.dict||{})[c] ? EC.dict[c][x] : x; };
 const ECL = {datim:"DATIM",art_no:"ART no.",hosp_no:"Hospital no.",status:"Status",transferred_in:"Transferred in",trigger_vl:"Triggering VL",trigger_date:"Triggering VL date",
   cycle:"EAC cycle",s1:"Session 1",s2:"Session 2",s3:"Session 3",s4:"Session 4 (ext.)",s5:"Session 5 (ext.)",s6:"Session 6 (ext.)",sessions:"Sessions (all cycles)",
-  fu_vl:"Follow-up VL",fu_date:"Follow-up VL date",fu_status:"Follow-up result",switched:"Switched to 2nd line"};
+  fu_vl:"Follow-up VL",fu_date:"Follow-up VL date",fu_status:"Follow-up result",switched:"Switched to 2nd line",fu_sample:"Follow-up VL sample date"};
 const EACAS = () => D.meta.eac_as_of || D.meta.linelist_as_of || D.meta.as_of;
 const ES = {s:null, e:null, active:true, thr:50, dim:"state", cat:0, q:""};
 function eacRange(){ if(!ES.s){ const e=dOf(EACAS()), s=new Date(e); s.setFullYear(s.getFullYear()-1); s.setDate(s.getDate()+1); ES.s=iso(s); ES.e=EACAS(); } return ES; }
 const eHas = (r,k) => !!ecv(r,k);
-const ESTEPS = r => ({n:1, st:eHas(r,"s1"), s3:eHas(r,"s3"), ext:eHas(r,"s4"), fu:eHas(r,"fu_date"),
+const ESTEPS = r => ({n:1, st:eHas(r,"s1"), s2:eHas(r,"s2"), s3:eHas(r,"s3"), ext:eHas(r,"s4"), fs:eHas(r,"fu_sample")||eHas(r,"fu_date"), fu:eHas(r,"fu_date"),
   sup:ecv(r,"fu_status")==="Suppressed", llv:ecv(r,"fu_status")==="Low Level Viremia", uns:ecv(r,"fu_status")==="Unsuppressed", sw:ecv(r,"switched")==="Yes"});
 const ECATS = [["All in cohort",()=>true],["No EAC documented",r=>!eHas(r,"s1")],["EAC started, no follow-up VL",r=>eHas(r,"s1")&&!eHas(r,"fu_date")],
   ["Still unsuppressed (≥1000)",r=>ecv(r,"fu_status")==="Unsuppressed"],["Low-level viraemia (50–999)",r=>ecv(r,"fu_status")==="Low Level Viremia"],["Re-suppressed (<50)",r=>ecv(r,"fu_status")==="Suppressed"]];
 function eacList(f=F){ const sexI=f.sex?DM.sex.indexOf(f.sex):-1, {s,e}=eacRange();
   return EC.rows.filter(r=>{ const d=ecv(r,"trigger_date"), v=+ecv(r,"trigger_vl");
     return d>=s && d<=e && v>=ES.thr && (!ES.active || ecv(r,"status")==="Active") && facPass(r[0],f) && (sexI<0||r[1]===sexI) && agePass(r[2],f.age); }); }
-function eacSum(rows){ const o={n:0,st:0,s3:0,ext:0,fu:0,sup:0,llv:0,uns:0,sw:0}; for(const r of rows){ const x=ESTEPS(r); for(const k in o) if(x[k]) o[k]++; } return o; }
+function eacSum(rows){ const o={n:0,st:0,s2:0,s3:0,ext:0,fs:0,fu:0,sup:0,llv:0,uns:0,sw:0}; for(const r of rows){ const x=ESTEPS(r); for(const k in o) if(x[k]) o[k]++; } return o; }
 function eacCsv(rows){
   const head=["State","LGA","Facility","Sex","Age band",...EC.cols.map(c=>ECL[c]||c)], q=s=>`"${String(s??"").replaceAll('"','""')}"`;
   const lines=[head.map(q).join(",")].concat(rows.map(r=>{const fc=FAC[r[0]]; return [fc.state,fc.lga,fc.facility,DM.sex[r[1]],AGE[r[2]],...EC.cols.map(c=>ecv(r,c))].map(q).join(",");}));
@@ -1610,9 +1616,13 @@ function eacSection(){
   if(!EC.rows.length) return `<section class="c3d">${head}<div class="empty">${D.meta.archived||D.meta.shared?NOLIST():"No EAC data yet: waiting for the CDR team to load the EAC line list (table <code>eac_linelist</code>, the output of EAC_Script_Version11 for every facility). This section fills in on the first run after it has data."}</div></section>`;
   if(!STOCK) return `<section class="c3d">${head}<div class="empty">EAC figures are for the current EAC line list only.</div></section>`;
   const {s,e}=eacRange(), all=eacList(), t=eacSum(all);
-  const flow = flowRow([fs(`High VL (≥${n(ES.thr)})`,t.n),fs("EAC started",t.st),fr("EAC uptake",t.st,t.n),fs("3 sessions (standard EAC)",t.s3),fr("Completed standard EAC",t.s3,t.st),
-    fs("Extended EAC (session 4+)",t.ext),fs("Follow-up VL done",t.fu),fr("Follow-up VL coverage",t.fu,t.n),fs("Re-suppressed <50",t.sup),fr("Re-suppression",t.sup,t.fu),
-    fs("LLV 50–999",t.llv),fs("Still unsuppressed ≥1000",t.uns),fs("Switched to 2nd line",t.sw)]);
+  // the cascade as the clinical team's slide: each step as a bar against the cohort, with the drop from the step before
+  const steps = [[`High VL (≥${n(ES.thr)})`,t.n],["EAC commenced",t.st],["EAC session 2",t.s2],["EAC session 3",t.s3],["Extended EAC (session 4+)",t.ext],
+    ["Follow-up VL sample",t.fs],["Follow-up VL result",t.fu],["Re-suppressed (<1,000)",t.sup+t.llv],["Undetectable (<50)",t.sup,1],["Low-level viraemia (50–999)",t.llv,1],
+    ["Still unsuppressed (≥1,000)",t.uns,0,1],["Switched to 2nd line",t.sw]];
+  const flow = `<div class="casc">${steps.map(([l,v,sub,bad],i)=>{ const drop = [1,2,3,6].includes(i) ? v-steps[i-1][1] : 0;      // extended EAC is for some clients only: no drop shown
+    return `<div class="casc-r${sub?" sub":""}"><span class="casc-l">${esc(l)}</span><span class="casc-b"><i style="width:${(100*v/Math.max(t.n,1)).toFixed(1)}%;background:${bad?"var(--bar-critical)":sub?"var(--s2)":"var(--s1)"}"></i></span>
+     <span class="casc-d">${drop<0?"−"+n(-drop):""}</span><b class="num">${n(v)}</b><small>${rpct(v,t.n)}</small></div>`; }).join("")}</div>`;
   const kf = {state:r=>FAC[r[0]].state, lga:r=>FAC[r[0]].lga, facility:r=>FAC[r[0]].facility, paed:r=>LT20.has(AGE[r[2]])?"<20":AGE[r[2]]==="Unknown"?"Unknown":"20+", sex:r=>DM.sex[r[1]], age:r=>ageOf(AGE[r[2]])}[ES.dim];
   const grp=new Map(); for(const r of all){ const k=kf(r); if(!grp.has(k)) grp.set(k,[]); grp.get(k).push(r); }
   let keys=[...grp.keys()]; if(ES.dim==="age") keys=AGEBANDS().filter(x=>keys.includes(x)); else if(ES.dim==="paed") keys=["<20","20+","Unknown"].filter(x=>keys.includes(x)); else keys.sort((x,y)=>grp.get(y).length-grp.get(x).length);
@@ -2334,7 +2344,9 @@ function filtersBar(){
 function render(){
   const m=D.meta; WIN=null;
   document.getElementById("sub").textContent=`${m.programme} · Delta, Ekiti, Osun · showing ${P.label} · current quarter ${m.quarter}`;
-  document.getElementById("nav").innerHTML=PAGES.map(([k,l])=>`<a href="#${k}"${k===page?' aria-current="page"':""}>${l}</a>`).join("");
+  const ipiOn = periodFY()===TFY;          // IPI is tracked from this fiscal year only: earlier periods have no IPI page
+  if(page==="ipi" && !ipiOn){ page="overview"; IPID=null; try{ history.replaceState(null,"","#overview"); }catch(e){} }
+  document.getElementById("nav").innerHTML=PAGES.filter(([k])=>k!=="ipi"||ipiOn).map(([k,l])=>`<a href="#${k}"${k===page?' aria-current="page"':""}>${l}</a>`).join("");
   document.getElementById("filters").innerHTML=filtersBar();
   const fn={overview,hts:htsPage,art:artPage,vl:vlPage,pmtct:pmtctPage,tb:tbPage,ahd:ahdPage,pbs:pbsPage,trends:artPage,naomi:naomiPage,
     ipi:()=>IPID?ipiDetail(IPID):ipiPage(),methods:methodsPage,flow:flowPage}[page]||overview;

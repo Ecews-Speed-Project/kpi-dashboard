@@ -189,7 +189,7 @@ def quarter_linelist(cfg: dict) -> list:
     4 justification). Converted once per file (re-done when the file changes)."""
     import re
     inbox = folder(cfg, "inbox", "inbox")
-    files = sorted({f for pat in cfg.get("inbox_patterns", {}).get("quarter_linelist", []) for f in inbox.glob(pat)})
+    files = inbox_files(cfg, "quarter_linelist")
     done = []
     for f in files:
         q = int(re.match(r"[qQ]([1-4])", f.name).group(1))
@@ -476,14 +476,33 @@ def read_eac(cfg: dict, eng, table) -> tuple[pd.DataFrame, str]:
             print(f"  EAC: CDR {name} is empty")
         except Exception as e:                     # table not created yet
             print(f"  EAC: CDR {name} not available ({type(e).__name__})")
-    hits = [f for p in cfg.get("inbox_patterns", {}).get("eac", []) for f in folder(cfg, "inbox", "inbox").glob(p)]
+    hits = inbox_files(cfg, "eac")
     if hits:
-        f = max(hits, key=lambda x: x.stat().st_mtime)
-        df = table(f)
-        keep = [v for v in dict.fromkeys(str(v) for v in c.values()) if v in df.columns]
-        print(f"  using EAC: inbox/{f.name}")
+        import os
+        from etl.sources import read_excel
+        f = max(hits, key=file_date)                   # newest by the date in the name ("..._24th October 2026.xlsx")
+        keep = [str(v) for v in c.values()]
+        df = table(f) if f.suffix.lower() == ".csv" else \
+            cached_table(f, lambda p: read_excel(p, password=os.environ.get("EAC_FILE_PASSWORD"), keep=keep))
+        keep = [v for v in dict.fromkeys(keep) if v in df.columns]
+        print(f"  using EAC: inbox/{f.relative_to(folder(cfg, 'inbox', 'inbox')).as_posix()} ({len(df):,} clients)")
         return df[keep], f"inbox/{f.name}"
     return pd.DataFrame(), ""
+
+
+def file_date(f: Path) -> dt.date:
+    """The date in a file name (2026-10-24, 24th October 2026, 24 Oct 2026), else the file's own date."""
+    import re
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", f.name)
+    if m:
+        return dt.date(*map(int, m.groups()))
+    m = re.search(r"(\d{1,2})(?:st|nd|rd|th)?[ _-]*([A-Za-z]{3,9})[ _-]*(\d{4})", f.name)
+    if m:
+        try:
+            return dt.datetime.strptime(f"{m.group(1)} {m.group(2)[:3]} {m.group(3)}", "%d %b %Y").date()
+        except ValueError:
+            pass
+    return dt.date.fromtimestamp(f.stat().st_mtime)
 
 
 def housekeeping(cfg: dict, pbs_path, as_of: dt.date) -> None:
@@ -493,7 +512,7 @@ def housekeeping(cfg: dict, pbs_path, as_of: dt.date) -> None:
     inbox = folder(cfg, "inbox", "inbox")
     pats = cfg.get("inbox_patterns", {}).get("pbs_all", [])
     current = Path(pbs_path).resolve() if pbs_path else None
-    for f in {x.resolve() for p in pats for x in inbox.glob(p)}:
+    for f in {x.resolve() for x in inbox_files(cfg, "pbs_all")}:
         if f == current or (current and f.stat().st_mtime >= current.stat().st_mtime):
             continue
         m = re.search(r"(\d{4}-\d{2}-\d{2})", f.name)
@@ -543,13 +562,21 @@ def folder(cfg, key, default):
     return p
 
 
+def inbox_files(cfg, key) -> list[Path]:
+    """Files in the inbox matching the key's patterns, in inbox/ itself or one folder down
+    (inbox/ndr/, inbox/eac/ ...: each source can have its own folder)."""
+    inbox = folder(cfg, "inbox", "inbox")
+    return sorted({f for pat in cfg.get("inbox_patterns", {}).get(key, []) for f in [*inbox.glob(pat), *inbox.glob("*/" + pat)]
+                   if f.is_file() and not f.name.startswith("~$")})
+
+
 def source(cfg, key, fallback):
     """Newest file in the inbox matching the key's patterns, else the configured path."""
     inbox = folder(cfg, "inbox", "inbox")
-    hits = [f for pat in cfg.get("inbox_patterns", {}).get(key, []) for f in inbox.glob(pat)]
+    hits = inbox_files(cfg, key)
     if hits:
         f = max(hits, key=lambda x: x.stat().st_mtime)
-        print(f"  using {key}: inbox/{f.name}")
+        print(f"  using {key}: inbox/{f.relative_to(inbox).as_posix()}")
         return f
     return ROOT / fallback
 

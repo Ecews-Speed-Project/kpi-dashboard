@@ -42,7 +42,8 @@ No laptop and no GitHub publishing are involved. Only code comes from GitHub (`m
 
 ## Every week
 
-- **NDR file:** put the new PBS line list (active + inactive) into `inbox/` named `pbs_all_YYYY-MM-DD_all_status.xlsx`. The next run uses it; the previous one is kept in `data/history/sources/`. The dashboard shows how old the NDR data is. *(If the NDR offers an API or a scheduled export, the job can fetch it instead.)*
+- **NDR file:** put the new PBS line list (active + inactive) into `inbox/ndr/` named `pbs_all_YYYY-MM-DD_all_status.xlsx`. The next run uses it; the previous one is kept in `data/history/sources/`. The dashboard shows how old the NDR data is. *(If the NDR offers an API or a scheduled export, the job can fetch it instead.)*
+- **EAC file:** put the CDR team's EAC line list (`ECEWS EAC Linelist_<date>.xlsx`) into `inbox/eac/`; its password goes in `.env` as `EAC_FILE_PASSWORD`. Used while the CDR `eac_linelist` table is not available.
 - Nothing else: DHIS2 and the CDR are pulled automatically.
 
 ## Watching it

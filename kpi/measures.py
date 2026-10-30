@@ -798,7 +798,7 @@ def vl_clients(ll: pd.DataFrame, lc: dict, ll_date: dt.date) -> pd.DataFrame:
 
 
 EAC_COLS = ["datim", "art_no", "hosp_no", "status", "transferred_in", "trigger_vl", "trigger_date", "cycle",
-            "s1", "s2", "s3", "s4", "s5", "s6", "sessions", "fu_vl", "fu_date", "fu_status", "switched"]
+            "s1", "s2", "s3", "s4", "s5", "s6", "sessions", "fu_vl", "fu_date", "fu_status", "switched", "fu_sample"]
 
 
 def eac_clients(df: pd.DataFrame, c: dict, since: dt.date) -> pd.DataFrame:
@@ -832,7 +832,7 @@ def eac_clients(df: pd.DataFrame, c: dict, since: dt.date) -> pd.DataFrame:
         **{f"s{i}": iso(f"s{i}") for i in range(1, 7)},
         "sessions": num("sessions")[keep].fillna(0).astype(int).astype(str),
         "fu_vl": num("fu_vl")[keep].round().astype("Int64").astype(str).replace({"<NA>": ""}),
-        "fu_date": iso("fu_date"), "fu_status": txt("fu_status"), "switched": txt("switched"),
+        "fu_date": iso("fu_date"), "fu_status": txt("fu_status"), "switched": txt("switched"), "fu_sample": iso("fu_sample"),
     }, index=d.index)
     return out.reset_index(drop=True)
 

@@ -126,7 +126,7 @@ inbox_patterns:
   naomi: ["naomi*.xlsx", "naomi*.csv", "*Naomi*.xlsx"]
   dqa: ["dqa_sites*.csv"]
   joint_ssv: ["joint_ssv*.csv"]
-  eac: ["eac_linelist*.csv", "eac_linelist*.xlsx"]   # fallback only, when the CDR EAC table is empty
+  eac: ["eac_linelist*.csv", "eac_linelist*.xlsx", "*EAC*inelist*.xlsx"]   # inbox/eac/ (password in .env EAC_FILE_PASSWORD); used when the CDR EAC table is empty
   # Quarter-end treatment line list (NDR / PHIS3 layout with _Q1.._Q4 columns), e.g. "q4 linelist_phsi3.csv".
   # The quarter comes from the file name (q1..q4); it is used for every treatment number of that quarter.
   quarter_linelist: ["q[1-4]*linelis*.csv", "Q[1-4]*linelis*.csv"]
@@ -238,6 +238,7 @@ columns:
     sessions: total_eac_sessions_all_cycles
     fu_vl: followup_vl_value
     fu_date: followup_vl_result_date
+    fu_sample: followup_vl_sample_collection_date
     fu_status: followup_vl_suppression_status
     switched: switched_to_second_line
     generated: date_generated

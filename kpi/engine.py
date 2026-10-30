@@ -263,11 +263,13 @@ def encode_appt_clients(cl: pd.DataFrame, master: pd.DataFrame) -> dict:
 
 
 def _eac_date(df, c) -> str:
-    """Data date of the EAC line list (the script's @endDate, column Date_Generated)."""
+    """Data date of the EAC line list (the script's @endDate, column Date_Generated): the most common
+    date, since facilities run the script on different days and a few carry a future end date."""
     if df is None or df.empty or c.get("generated") not in df:
         return ""
     d = _datetimes(df[c["generated"]]).dropna()
-    return d.max().date().isoformat() if len(d) else ""
+    d = d[d <= pd.Timestamp.today()]
+    return d.mode().max().date().isoformat() if len(d) else ""
 
 
 def encode_eac_clients(cl: pd.DataFrame, master: pd.DataFrame) -> dict:
