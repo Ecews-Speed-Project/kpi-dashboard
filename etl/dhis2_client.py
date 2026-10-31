@@ -209,6 +209,10 @@ def extract_instance(client: DHIS2, tables: dict, which: str, start: dt.date, en
         if raw.empty:
             continue
         raw = raw.drop_duplicates(["dataElement", "period", "orgUnit", "categoryOptionCombo", "attributeOptionCombo"])
+        if ids.get("elements"):          # a big form of which only a few data elements are wanted
+            raw = raw[raw["dataElement"].isin(ids["elements"])]
+            if raw.empty:
+                continue
         raw["value"] = pd.to_numeric(raw["value"], errors="coerce")
         raw = raw.dropna(subset=["value"])
         raw["dataname"] = raw["dataElement"].map(de[dataname_field]).fillna(raw["dataElement"])

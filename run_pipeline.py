@@ -748,6 +748,18 @@ def cmd_run():
             # their facility's key, so de-duplicating here would drop real data.)
             weekly = merge_cached(old_w, weekly, pull_from)
             monthly = merge_cached(old_m, monthly, pull_from)
+            # a table added to settings since the last full pull: fetch its whole history now
+            for which, c, fac, old in (("weekly", wk, fac_w, old_w), ("monthly", mo, fac_m, old_m)):
+                new = {t: ids for t, ids in h["tables"].items() if ids.get(which) and t not in set(old["table"])}
+                if new:
+                    print(f"  {which}: new table(s) {', '.join(new)} pulled from {start}", flush=True)
+                    extra = extract_instance(c, new, which, start, end, fac, h["dataname_field"],
+                                             community if which == "monthly" else None)
+                    keep = ~(weekly if which == "weekly" else monthly)["table"].isin(new)
+                    if which == "weekly":
+                        weekly = pd.concat([weekly[keep], extra], ignore_index=True)
+                    else:
+                        monthly = pd.concat([monthly[keep], extra], ignore_index=True)
         cache.mkdir(parents=True, exist_ok=True)
         for n, df in zip(names, (weekly, monthly, fac_w, fac_m)):
             df.to_parquet(cache / f"{n}.parquet", index=False)

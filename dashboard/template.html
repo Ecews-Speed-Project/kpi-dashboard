@@ -149,6 +149,7 @@ a.c3d{display:block;text-decoration:none;cursor:pointer}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-left:6px;box-shadow:0 0 0 1px var(--card)}
 details.trends>summary{list-style:none;cursor:pointer} details.trends>summary::-webkit-details-marker{display:none}
 details.trends>summary h2::before{content:"▸ ";color:var(--ink-3)} details.trends[open]>summary h2::before{content:"▾ "}
+details.trends>section.c3d,details.trends>.grid{margin-top:16px}
 .kpis + .dimbar, .kpis + .tw{margin-top:16px}
 select.orgsel{font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;background:var(--card);color:var(--ink-2)}
 select.orgsel.on{border-color:var(--s1);color:var(--ink);font-weight:600}
@@ -710,9 +711,9 @@ function pivot(id, cols, dims, def=null){
   const total = agg();
   const lab = k => dim==="sex"?SEXL[k]:dim==="age"?(k==="Unknown"?k:k+" yrs"):dim==="paed"?({"<20":"Paediatric & adolescent (<20)","20+":"Adult (20+)"}[k]||k):k;
   const canDrill = dim==="org" && levelDim!=="facility" || (dim==="org" && levelDim==="facility" && !F.fac);
-  const DL = {org:"Org unit", lga:"LGA", facility:"Facility", sex:"Sex", age:"Age band", agegrp:"Age group", paed:"Paediatric / adult", mod: id==="pmtct"?"Setting":"Modality"};
+  const DL = {org:"State", lga:"LGA", facility:"Facility", sex:"Sex", age:"Age band", agegrp:"Age group", paed:"Paediatric / adult", mod: ["pmtct","fit"].includes(id)?"Setting":"Modality"};
   const cell = (c,v) => { const x=c.f(v); const s=c.s?c.s(v):null; return `<td class="n">${c.p==="r"?ratio(x,1):c.p==="x"?(x==null?"—":x.toFixed(1)):c.p?pct(x):n(x)}${s?dot(s):""}</td>`; };
-  const orgSel = d => `<select class="orgsel${["org","lga","facility"].includes(dim)?" on":""}" data-pdimsel="${id}" aria-label="Org unit level">${[["org","Org unit (drill down)"],["lga","By LGA"],["facility","By facility"]].map(([k,l])=>`<option value="${k}"${dim===k?" selected":""}>${l}</option>`).join("")}</select>`;
+  const orgSel = d => `<select class="orgsel${["org","lga","facility"].includes(dim)?" on":""}" data-pdimsel="${id}" aria-label="Rows by place">${[["org","By state (drill down)"],["lga","By LGA"],["facility","By facility"]].map(([k,l])=>`<option value="${k}"${dim===k?" selected":""}>${l}</option>`).join("")}</select>`;
   return `<div class="dimbar"><span class="eyebrow">Rows by</span>${dims.includes("org")?orgSel():""}<span class="seg">${dims.filter(d=>d!=="org").map(d=>`<button data-pdim="${id}:${d}" aria-pressed="${d===dim}">${DL[d]}</button>`).join("")}</span>
     ${dim==="org"?`<span class="drillnote">${levelDim==="state"?"Click a state to drill to LGAs":levelDim==="lga"?"Click an LGA to drill to facilities":F.fac?"Single facility":"Click a facility to select it"}</span>`:(dim==="lga"||dim==="facility")&&!F.fac?`<span class="drillnote">Click a row to select it</span>`:""}</div>
    <div class="tw" style="max-height:560px;margin-top:8px"><table><thead><tr><th>${dim==="org"?levelDim[0].toUpperCase()+levelDim.slice(1):DL[dim]}</th>
@@ -1022,7 +1023,7 @@ function htsPage(){
     ${indexBySex()}
     <div class="grid g2"><div>${monthlyPick("index",[{k:"t",l:"Contacts tested",num:"index_tst"},{k:"p",l:"New positives",num:"index_pos"},{k:"y",l:"Index yield",num:"index_pos",den:"index_tst"}])}</div>
     <div>${pyramid("index_pos",{title:"Index new positives by age and sex"})}</div></div>
-    ${secH("Index testing breakdown","Every step above, by org unit, sex or age")}${pivot("index",[C("Index cases",V("index_cases"),0,0,"index_cases"),C("Offered",V("index_offered")),C("Offer rate",RV("index_offered","index_cases"),1),
+    ${secH("Index testing breakdown","Every step above, by state, sex or age")}${pivot("index",[C("Index cases",V("index_cases"),0,0,"index_cases"),C("Offered",V("index_offered")),C("Offer rate",RV("index_offered","index_cases"),1),
       C("Accepted",V("index_accepted")),C("Acceptance",RV("index_accepted","index_offered"),1),C("Elicited",V("index_elicited")),C("Elicitation ratio",x=>div(x.index_elicited||0,x.index_accepted),"r"),
       C("Reached",V("index_reached")),C("Reached %",RV("index_reached","index_elicited"),1),C("Tested",V("index_tst")),C("Known pos",V("index_known_pos")),C("New pos",V("index_pos")),C("Yield",RV("index_pos","index_tst"),1)],["org","sex","age"])}</section>
    <section class="c3d">${secH("HIV self-testing","Kits distributed to linkage")}
@@ -1031,7 +1032,7 @@ function htsPage(){
     ${hivstByAge()}
     <div class="grid g2"><div>${monthlyPick("hivst",[{k:"k",l:"Kits distributed",num:"hts_self"},{k:"r",l:"Reactive",num:"hivst_reactive"},{k:"y",l:"Reactivity",num:"hivst_reactive",den:"hivst_results",d:2}])}</div>
     <div>${pyramid("hts_self",{title:"Kits distributed by age and sex"})}</div></div>
-    ${secH("HIV self-testing breakdown","Every step above, by org unit, sex or age")}${pivot("hivst",[C("Assisted",V("hivst_assisted"),0,0,"hivst_assisted"),C("Unassisted",V("hivst_unassisted")),C("Kits",x=>(x.hivst_assisted||0)+(x.hivst_unassisted||0)),
+    ${secH("HIV self-testing breakdown","Every step above, by state, sex or age")}${pivot("hivst",[C("Assisted",V("hivst_assisted"),0,0,"hivst_assisted"),C("Unassisted",V("hivst_unassisted")),C("Kits",x=>(x.hivst_assisted||0)+(x.hivst_unassisted||0)),
       C("Results",V("hivst_results")),C("Reported %",x=>div(x.hivst_results||0,(x.hivst_assisted||0)+(x.hivst_unassisted||0)),1),C("Reactive",V("hivst_reactive")),C("Reactivity",RV("hivst_reactive","hivst_results"),1),
       C("Referred",V("hivst_referred")),C("Confirmed",V("hivst_confirmed")),C("Linked",V("hivst_linked")),C("Linkage",RV("hivst_linked","hivst_confirmed"),1)],["org","sex","age"])}</section>
    ${csccSection()}
@@ -1670,7 +1671,7 @@ function vlPage(){
      ${hbars(bands.map(b=>{const x=ga.get(b), c=div(x.vl_result,x.vl_eligible); return {l:b+" yrs",v:c,tick:.95,txt:`<b>${pct(c)}</b> of ${n(x.vl_eligible)}`,c:`var(--bar-${rateStatus(c,.95)})`};}),{max:1})}</section>
    <section class="c3d">${secH("Suppression by age band","Among results · reference 95%")}
      ${hbars(bands.map(b=>{const x=ga.get(b), c=div(x.vl_suppressed,x.vl_result); return {l:b+" yrs",v:c,tick:.95,txt:`<b>${pct(c)}</b> of ${n(x.vl_result)}`,c:`var(--bar-${rateStatus(c,.95)})`};}),{max:1})}</section></div>
-   <section class="c3d">${secH("Viral load by facility","Every facility · switch to org unit to drill state → LGA → facility, or rows by paediatric / adult, sex or age")}${pivot("vl",[C("TX_CURR",V("tx_curr_emr"),0,0,"tx_curr_emr"),C("Eligible",V("vl_eligible")),C("Sample",V("vl_sample")),
+   <section class="c3d">${secH("Viral load by facility","Every facility · choose “By state” to drill state → LGA → facility, or rows by paediatric / adult, sex or age")}${pivot("vl",[C("TX_CURR",V("tx_curr_emr"),0,0,"tx_curr_emr"),C("Eligible",V("vl_eligible")),C("Sample",V("vl_sample")),
      C("Sample rate",RV("vl_sample","vl_eligible"),1),C("Results",V("vl_result")),C("Coverage",RV("vl_result","vl_eligible"),1,x=>rateStatus(div(x.vl_result,x.vl_eligible),.95)),C("Suppressed",V("vl_suppressed")),
      C("VLS",RV("vl_suppressed","vl_result"),1,x=>rateStatus(div(x.vl_suppressed,x.vl_result),.95)),C("Unsuppressed",V("vl_unsuppressed")),C("Unsupp. rate",RV("vl_unsuppressed","vl_result"),1),C("LLV",V("vl_llv")),C("U=U rate",RV("vl_undetectable","vl_result"),1),C("Pending",V("vl_pending"))],["org","paed","sex","age"],"facility")}</section>
    ${unsuppressedSection()}
@@ -1678,6 +1679,32 @@ function vlPage(){
 }
 
 /* ---------- AP3/PMTCT: mothers, exposed infants and AP3 (0-19) ---------- */
+/* ---------- Family index testing (FIT): children of HIV-positive index clients ----------
+   DHIS2 Monthly Summary Forms (INDEX_MSF), monthly instance: laid out as the HTS team's FIT slide, one row per month
+   where the slide has batches. Untested = elicited − tested − already known positive. */
+function fitSection(){
+  const head = secH("Family index testing (FIT)","Children of HIV-positive index clients · DHIS2 Monthly Summary Forms (INDEX_MSF) · monthly reports only: a month shows once its reports are in");
+  if(!MEAS.includes("fit_elicited")) return `<section class="c3d">${head}<div class="empty">No FIT data in this build yet.</div></section>`;
+  const v=agg(), unt = x => Math.max(0,(x.fit_elicited||0)-(x.fit_tested||0)-(x.fit_known_pos||0));
+  const cards = `<div class="kpis">${kpi(n(v.fit_elicited),"Children elicited",P.label)}${kpi(rpct(v.fit_tested,v.fit_elicited,0),"Elicited children tested",`${n(v.fit_tested)} of ${n(v.fit_elicited)}`)}
+    ${kpi(rpct(v.fit_pos,v.fit_tested),"Yield",`${n(v.fit_pos)} new positive${v.fit_pos===1?"":"s"}`)}${kpi(n(unt(v)),"Elicited, not yet tested","elicited − tested − already known positive")}</div>`;
+  // yield by age: 0–4 (<1 and 1–4), 5–9, 10–14, 15–19 (DHIS2 15–17)
+  const ga=agg({...F,age:""},{by:"age"}), grp={"0–4":["<1","1-4"],"5–9":["5-9"],"10–14":["10-14"],"15–19":["15-19"]};
+  const sum=(bs,m)=>bs.reduce((a,b)=>a+((ga.get(b)||{})[m]||0),0), cats=Object.keys(grp);
+  const chart = groupBars(cats,[{l:"Tested",c:"var(--s1)",v:cats.map(k=>sum(grp[k],"fit_tested"))},{l:"New positive",c:"var(--s2)",v:cats.map(k=>sum(grp[k],"fit_pos"))}],
+    {sep:true, lines:[{l:"Yield",c:"var(--bar-critical)",v:cats.map(k=>{const t=sum(grp[k],"fit_tested"); return t?sum(grp[k],"fit_pos")/t:null;})}]});
+  // FIT by month (the slide's batches): the latest six months with reports
+  const gm=agg(F,{by:"month",months:"all"}), ms=[...gm.keys()].filter(m=>m&&((gm.get(m).fit_elicited||0)+(gm.get(m).fit_offered||0))>0).sort().reverse().slice(0,6);
+  const row=(l,x)=>`<tr><td>${l}</td><td class="n">${n(x.fit_offered)}</td><td class="n">${n(x.fit_accepted)}</td><td class="n">${rpct(x.fit_accepted,x.fit_offered,0)}</td><td class="n">${n(x.fit_elicited)}</td>
+    <td class="n">${n(x.fit_tested)}</td><td class="n">${n(x.fit_pos)}</td><td class="n">${n(unt(x))}</td><td class="n">${rpct(x.fit_pos,x.fit_tested)}</td><td class="n">${rpct(x.fit_linked,x.fit_pos,0)}</td></tr>`;
+  const table = `<div class="tw"><table><thead><tr><th>Month</th><th class="n">Adults offered</th><th class="n">Accepted</th><th class="n">Acceptance</th><th class="n">Children elicited</th><th class="n">Tested</th><th class="n">New +</th><th class="n">Untested</th><th class="n">Yield</th><th class="n">Linkage</th></tr></thead><tbody>
+    ${ms.map(m=>row(monthLab(m),gm.get(m))).join("")||`<tr><td colspan="10" class="empty">No FIT reports yet.</td></tr>`}</tbody></table></div>`;
+  return `<section class="c3d">${head}${cards}
+   <div class="grid g2" style="margin-top:12px"><div><h3 class="minih">Yield by age (${esc(P.label)})</h3>${chart}</div><div><h3 class="minih">FIT by month</h3>${table}
+    <p class="drillnote">Adults = HIV-positive clients offered / accepting index testing (newly identified and VL unsuppressed). Linkage = children linked to ART ÷ new positives.</p></div></div>
+   <h3 class="minih" style="margin-top:14px">Breakdown</h3>${pivot("fit",[C("Adults offered",V("fit_offered"),0,0,"fit_offered"),C("Accepted",V("fit_accepted")),C("Elicited",V("fit_elicited")),C("Tested",V("fit_tested")),
+     C("Tested %",RV("fit_tested","fit_elicited"),1),C("New +",V("fit_pos")),C("Yield",RV("fit_pos","fit_tested"),1),C("Known +",V("fit_known_pos")),C("Linked",V("fit_linked")),C("Linkage",RV("fit_linked","fit_pos"),1)],["org","sex","age","mod"])}</section>`;
+}
 function pmtctPage(){
   const v=agg(), E=c=>evaluate(c,v), pa=E("IPI_PMTCT_ART_COV"), ps=E("PMTCT_STAT"), part=E("PMTCT_ART");
   const C_ = s => ({d:v["pmtct_stat_den"+s], nn:v["pmtct_stat_num"+s], p:v["pmtct_stat_pos"+s], a:v["pmtct_art"+s]});
@@ -1696,6 +1723,7 @@ function pmtctPage(){
      </tbody></table></div><p class="drillnote">Headline figures = facility + Community PMTCT, as in the DAX and the deck. Linkage above 100% means women identified positive elsewhere started ART here.</p></section>
    <section class="c3d">${secH("Yield by age band","PMTCT_STAT_N and PMTCT_STAT_POS · yield = POS ÷ STAT_N")}${groupBars(bands,[{l:"PMTCT_STAT_N",c:"var(--s1)",v:bands.map(b=>ga.get(b).pmtct_stat_num)},{l:"PMTCT_STAT_POS",c:"var(--s2)",v:bands.map(b=>ga.get(b).pmtct_stat_pos)}],
      {sep:true, lines:[{l:"Yield",c:"var(--bar-critical)",v:bands.map(b=>div(ga.get(b).pmtct_stat_pos||0,ga.get(b).pmtct_stat_num))}]})}</section></div>
+   ${fitSection()}
    ${pmtctTargets()}
    ${prepPbfw()}
    <section class="c3d">${secH("HIV-exposed infants","From delivery to infant ART (facility PMTCT; EID = first virologic test)")}
@@ -1736,7 +1764,7 @@ function tbPage(){
      <div class="grid g3" style="margin-top:12px"><div>${pairBars("tb_stat_den","TB_STAT_D","tb_stat_num","TB_STAT_N")}</div><div>${pairBars("tb_stat_pos","TB_STAT_POS","tb_art","TB_ART")}</div><div>${pyramid("tb_stat_pos",{title:"TB_STAT_POS by age and sex"})}</div></div></section>
    ${MEAS.includes("tbs_screened") ? tbScreenEMR(v,tt,tp,ta) : `<section class="c3d"><div class="empty">TB screening needs the EMR linelist (linelist_flat).</div></section>`}
    <section class="c3d">${secH("Breakdown")}${pivot("tb",[C("TPT elig.",V("tpt_eligible"),0,0,"tpt_eligible"),C("TPT started",V("tpt_started")),C("TPT init.",RV("tpt_started","tpt_eligible"),1),C("TB_PREV (N)",V("tb_prev_num")),C("Completion",RV("tb_prev_num","tb_prev_den"),1),
-     C("TB_STAT_POS",V("tb_stat_pos")),C("TB_ART",V("tb_art")),C("Screened (EMR)",V("tbs_screened")),C("Presumptive (EMR)",V("tbs_presumptive")),C("Diagnosed (EMR)",V("tbs_diagnosed")),C("Rx started (EMR)",V("tbs_tx_started")),C("TX_TB (N, DHIS2)",V("tx_tb_num"))],["org","sex","age"])}</section>`;
+     C("TB_STAT_POS",V("tb_stat_pos")),C("TB_ART",V("tb_art")),C("Screened (EMR)",V("tbs_screened")),C("Presumptive (EMR)",V("tbs_presumptive")),C("Diagnosed (EMR)",V("tbs_diagnosed")),C("TB treatment (TX_TB N, DHIS2)",V("tx_tb_num"))],["org","sex","age"])}</section>`;
 }
 
 /* ---------- TB screening among PLHIV on ART (EMR linelist_flat) ---------- */
@@ -1744,18 +1772,18 @@ function tbScreenEMR(v,tt,tp,ta){
   const st=STATES.filter(x=>!F.state||x===F.state).map(x=>[esc(x),agg({...F,state:x,lga:"",fac:""}),0]).concat([[esc(F.state?filterText():SPEED),v,1]]);
   const dx=[["GeneXpert","tbs_gxp","tbs_gxp_pos","MTB detected"],["Sputum AFB","tbs_afb","tbs_afb_pos","positive"],["Chest X-ray","tbs_cxr","tbs_cxr_pos","suggestive"]];
   const status=[["No signs or symptoms","tbst_none","var(--s1)"],["Disease suspected","tbst_susp","var(--bar-warning)"],["Disease diagnosed","tbst_diag","var(--bar-critical)"],["On TB treatment","tbst_ontx","var(--s3)"],["On INH prophylaxis","tbst_inh","var(--s2)"]];
-  return `<section class="c3d">${secH("TB screening among PLHIV on ART","EMR (linelist_flat) · screened = TB status recorded in the period · diagnostics and treatment start from the EMR")}
+  return `<section class="c3d">${secH("TB screening among PLHIV on ART","EMR (linelist_flat) · screened = TB status recorded in the period · diagnostics from the EMR · TB treatment = TX_TB (N) from DHIS2")}
    ${flowRow([fs("On ART (TX_CURR, EMR)",v.tx_curr_emr),fs("Screened for TB",v.tbs_screened),fr("Screening coverage",v.tbs_screened,v.tx_curr_emr),fs("Presumptive",v.tbs_presumptive),fr("Presumptive yield",v.tbs_presumptive,v.tbs_screened),
-     fs("Tested (GeneXpert / AFB / X-ray)",v.tbs_tested),fr("Tested",v.tbs_tested,v.tbs_presumptive),fs("TB diagnosed",v.tbs_diagnosed),fr("TB yield",v.tbs_diagnosed,v.tbs_presumptive),fs("TB treatment started",v.tbs_tx_started),fr("Started",v.tbs_tx_started,v.tbs_diagnosed)])}
+     fs("Tested (GeneXpert / AFB / X-ray)",v.tbs_tested),fr("Tested",v.tbs_tested,v.tbs_presumptive),fs("TB diagnosed",v.tbs_diagnosed),fr("TB yield",v.tbs_diagnosed,v.tbs_presumptive),fs("TB treatment started (TX_TB N, DHIS2)",v.tx_tb_num),fr("Started",v.tx_tb_num,v.tbs_diagnosed)])}
    <div class="kpis" style="margin-top:12px">${kpi(n(v.tx_tb_num),"TX_TB (N) — DHIS2",tt.target!=null?`${TL()} ${n(tt.target)}`:"",tt.status)}${kpi(n(v.tb_prev_num),"TB_PREV (N) — DHIS2",tp.target!=null?`${TL()} ${n(tp.target)}`:"",tp.status)}
     ${kpi(n(v.tb_art),"TB_ART (N) — DHIS2",ta.target!=null?`${TL()} ${n(ta.target)}`:"",ta.status)}</div>
    <div class="grid g2" style="margin-top:12px"><div><h3 class="minih">Diagnostics among those screened</h3><div class="tw"><table><thead><tr><th>Test</th><th class="n">Done</th><th class="n">Positive</th><th class="n">Positivity</th></tr></thead><tbody>
      ${dx.map(([l,a,b,w])=>`<tr><td>${l}</td><td class="n">${n(v[a])}</td><td class="n">${n(v[b])} <span class="drillnote">${w}</span></td><td class="n">${rpct(v[b],v[a])}</td></tr>`).join("")}</tbody></table></div></div>
     <div><h3 class="minih">Current TB status of clients on ART</h3>${hbars(status.map(([l,k,c])=>({l,v:v[k]||0,c,txt:`<b>${n(v[k])}</b> · ${rpct(v[k],v.tx_curr_emr)}`})))}</div></div>
-   <div class="tw" style="margin-top:12px"><table><thead><tr><th>State</th><th class="n">${TXE()}</th><th class="n">Screened</th><th class="n">Coverage</th><th class="n">Presumptive</th><th class="n">Yield</th><th class="n">Tested</th><th class="n">Diagnosed</th><th class="n">Rx started</th><th class="n">TX_TB (N, DHIS2)</th></tr></thead><tbody>
+   <div class="tw" style="margin-top:12px"><table><thead><tr><th>State</th><th class="n">${TXE()}</th><th class="n">Screened</th><th class="n">Coverage</th><th class="n">Presumptive</th><th class="n">Yield</th><th class="n">Tested</th><th class="n">Diagnosed</th><th class="n">TB treatment (TX_TB N, DHIS2)</th></tr></thead><tbody>
     ${st.map(([l,x,t])=>`<tr${t?' class="total"':""}><td>${l}</td><td class="n">${n(x.tx_curr_emr)}</td><td class="n">${n(x.tbs_screened)}</td><td class="n">${rpct(x.tbs_screened,x.tx_curr_emr)}</td><td class="n">${n(x.tbs_presumptive)}</td><td class="n">${rpct(x.tbs_presumptive,x.tbs_screened)}</td>
-      <td class="n">${n(x.tbs_tested)}</td><td class="n">${n(x.tbs_diagnosed)}</td><td class="n">${n(x.tbs_tx_started)}</td><td class="n">${n(x.tx_tb_num)}</td></tr>`).join("")}</tbody></table></div>
-   <div class="grid g2" style="margin-top:12px"><div>${pyramid("tbs_diagnosed",{title:"TB diagnosed by age and sex (EMR)"})}</div><div>${pyramid("tbs_tx_started",{title:"TB treatment started by age and sex (EMR)"})}</div></div>
+      <td class="n">${n(x.tbs_tested)}</td><td class="n">${n(x.tbs_diagnosed)}</td><td class="n">${n(x.tx_tb_num)}</td></tr>`).join("")}</tbody></table></div>
+   <div class="grid g2" style="margin-top:12px"><div>${pyramid("tbs_diagnosed",{title:"TB diagnosed by age and sex (EMR)"})}</div><div>${pyramid("tx_tb_num",{title:"TB treatment started by age and sex (TX_TB N, DHIS2)"})}</div></div>
    <h3 class="minih">By month</h3>${testedByMonth("tbs_screened","tbs_presumptive","Screened","Presumptive")}</section>`;
 }
 
@@ -2098,9 +2126,9 @@ function lineChart(series, {fmt=n, yMin=null, yMax=null, label="", weekly=false,
   const step=Math.ceil(months.length/Math.max(8,Math.floor(W/95)));
   return `<div class="hscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="min-width:100%" role="img" aria-label="${esc(label)}">
    ${ticks.map(t=>`<line x1="${pl}" x2="${W-pr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--rule)" stroke-dasharray="2 3"/><text class="yax" x="${pl-6}" y="${y(t)+4}" text-anchor="end" font-size="11">${fmt(t)}</text>`).join("")}<line class="yax" x1="${pl}" x2="${pl}" y1="${pt}" y2="${H-pb}" stroke="var(--ink-3)"/>
-   ${weekly ? (()=>{ let last=Infinity; return ds.slice().reverse().map(d=>{ const near = last-x(d) < 54;      // labels too close (e.g. a short last week): keep the later one
-       if(!near) last=x(d);
-       return `<line x1="${x(d)}" x2="${x(d)}" y1="${pt}" y2="${H-pb}" stroke="var(--rule-soft)"/>${near?"":`<text x="${x(d)}" y="${H-pb+18}" text-anchor="${x(d)>W-34?"end":"middle"}" font-size="11">${dLab(d)}</text>`}`; }).join(""); })()
+   ${weekly ? (()=>{ let last=Infinity; return ds.slice().reverse().map(d=>{ const end = x(d)>W-34, mid = end ? x(d)-28 : x(d), near = last-mid < 56;   // mid: the label's centre (the last one is right-aligned)      // labels too close (e.g. a short last week): keep the later one
+       if(!near) last=mid;
+       return `<line x1="${x(d)}" x2="${x(d)}" y1="${pt}" y2="${H-pb}" stroke="var(--rule-soft)"/>${near?"":`<text x="${x(d)}" y="${H-pb+18}" text-anchor="${end?"end":"middle"}" font-size="11">${dLab(d)}</text>`}`; }).join(""); })()
      : months.filter((_,i)=>i%step===0).map(m=>`<text x="${x(m+"-01")}" y="${H-pb+18}" text-anchor="middle" font-size="11">${monthLab(m)}</text>`).join("")}
    ${series.map(s=>{const p=s.pts.filter(q=>q.v!=null).sort((a,b)=>a.d<b.d?-1:1); if(!p.length) return "";
      return `<path d="${p.map((q,i)=>(i?"L":"M")+x(q.d).toFixed(1)+","+y(q.v).toFixed(1)).join("")}" fill="none" stroke="${s.c}" stroke-width="2.2"${s.dash?` stroke-dasharray="6 4"`:""}/>

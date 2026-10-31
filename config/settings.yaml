@@ -74,6 +74,10 @@ dhis2:
     TX_TB:           {weekly: ao3uO7ifv5c, monthly: ao3uO7ifv5c}   # HIV Care and Treatment
     AHD:             {weekly: ao3uO7ifv5c, monthly: ao3uO7ifv5c}   # AHD_MSF elements in Care and Treatment (AHD_MSF datasets: no access / empty)
     PREP:            {weekly: KvZ6FtCvd52, monthly: KvZ6FtCvd52}   # PrEP (PrEP_NEW)
+    # Family index testing (children of index clients): INDEX_MSF elements of the Monthly Summary Forms
+    # (monthly instance only; the weekly instance has them only in a test form). Only these elements are kept.
+    FIT:             {weekly: "", monthly: nhFDDfJMHYw, elements: [pkgd8lkXOAf, v29Q1eY7iwK, XGzUvKaf3EF, ikGMNGBZT2A,
+                      lszLwo9mMn1, auMywy5ZRG3, bV7nzZybqaZ, l6VcTipNEZs, MxUAke3FdhA]}
 
 postgres:                     # central data repository
   host: ""                    # set PG_HOST in .env (kept out of git)

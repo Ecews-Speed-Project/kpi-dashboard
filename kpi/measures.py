@@ -62,6 +62,11 @@ class Term:
     exact: bool = False           # coc is the exact category option combo name, not a regex
 
 
+def _fit(what: str) -> list[Term]:
+    """A family index testing element (INDEX_MSF - Number of ...), split facility / community."""
+    return [Term("FIT", f"INDEX_MSF - Number of {what}", m, rf"^\s*{m},") for m in ("Facility", "Community")]
+
+
 def _modality_terms(table: str, base: str, suffixes: list[str]) -> list[Term]:
     return [Term(table, f"{base}_{s}", modality_of(s)) for s in suffixes]
 
@@ -153,6 +158,17 @@ DHIS_MEASURES = {
     "index_elicited": [Term("INDEX", f"HTS_{x}_CONTACTS ELICITED") for x in ("INDEX", "INDEXMOD")],
     "index_reached":  [Term("INDEX", f"HTS_{x}_CONTACTS REACHED") for x in ("INDEX", "INDEXMOD")],
     "index_known_pos": [Term("INDEX", e, "Index", r"known positive") for e in _INDEX_RESULT],
+    # family index testing (FIT): HIV-positive adults offered / accepting index testing, their children
+    # enumerated, tested and linked (Monthly Summary Forms, INDEX_MSF; facility or community)
+    "fit_offered":   _fit("HIV Positive clients offered index testing (Newly identified positives)")
+                     + _fit("HIV Positive clients offered index testing (VL Unsuppressed)"),
+    "fit_accepted":  _fit("HIV Positive clients accepting index testing (Newly identified positives)")
+                     + _fit("HIV Positive clients accepting index testing (VL Unsuppressed)"),
+    "fit_elicited":  _fit("children enumerated from Index Client"),
+    "fit_tested":    _fit("children of index clients tested HIV positive") + _fit("children of index clients tested HIV negative"),
+    "fit_pos":       _fit("children of index clients tested HIV positive"),
+    "fit_known_pos": _fit("children of index clients with Known HIV positive status"),
+    "fit_linked":    _fit("HIV positive children of index clients linked to ART"),
     # HIV self-testing: kits distributed, results, confirmation and linkage
     "hivst_assisted":   [Term("HIVST", "HTS_SELF_ASSISTED")],
     "hivst_unassisted": [Term("HIVST", "HTS_SELF_UNASSISTED")],
@@ -320,7 +336,7 @@ def parse_disagg(text: str) -> tuple[str, str]:
         m = _RANGE.search(t)
         if m:
             lo, hi = int(m.group(1)), int(m.group(2))
-            cand = "1-4" if (lo, hi) == (1, 4) else f"{lo}-{hi}"
+            cand = "1-4" if (lo, hi) == (1, 4) else "15-19" if (lo, hi) == (15, 17) else f"{lo}-{hi}"
             age = cand if cand in AGE_BANDS else UNKNOWN_AGE
         elif re.search(r"65\s*\+", t):
             age = "65+"
