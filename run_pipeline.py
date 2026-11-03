@@ -482,8 +482,12 @@ def read_eac(cfg: dict, eng, table) -> tuple[pd.DataFrame, str]:
         from etl.sources import read_excel
         f = max(hits, key=file_date)                   # newest by the date in the name ("..._24th October 2026.xlsx")
         keep = [str(v) for v in c.values()]
-        df = table(f) if f.suffix.lower() == ".csv" else \
-            cached_table(f, lambda p: read_excel(p, password=os.environ.get("EAC_FILE_PASSWORD"), keep=keep))
+        try:
+            df = table(f) if f.suffix.lower() == ".csv" else \
+                cached_table(f, lambda p: read_excel(p, password=os.environ.get("EAC_FILE_PASSWORD"), keep=keep))
+        except Exception as e:                     # an unreadable EAC file must not stop the update
+            print(f"  WARNING EAC file {f.name} not read ({type(e).__name__}: {e}); EAC section left empty")
+            return pd.DataFrame(), ""
         keep = [v for v in dict.fromkeys(keep) if v in df.columns]
         print(f"  using EAC: inbox/{f.relative_to(folder(cfg, 'inbox', 'inbox')).as_posix()} ({len(df):,} clients)")
         return df[keep], f"inbox/{f.name}"
