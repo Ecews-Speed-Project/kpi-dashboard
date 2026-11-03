@@ -621,7 +621,7 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
     r = cfg["reporting"]
     monthly = prefer_monthly_variants(monthly)        # TX_TB: monthly values, not the half-year totals
     merged = merge_weekly_monthly(weekly, monthly, rule=r["week_to_month_rule"], takeover=r["monthly_takeover"],
-                                  keep_weeks=True)
+                                  keep_weeks=True, as_of=as_of, switch_day=r.get("monthly_switch_day"))
     n_fac = master["facility"].nunique()
     ms = month_status(merged, n_fac, as_of, r["month_close_completeness"], r["month_close_day"])
     targets = load_targets(source(cfg, "targets", cfg["excel"]["targets"])).assign(fy=cfg["fiscal_year"])

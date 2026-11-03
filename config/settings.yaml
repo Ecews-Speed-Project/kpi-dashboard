@@ -23,10 +23,14 @@ reporting:
   #   facility_table  = per facility x month x table (default, most precise)
   #   all             = whole month switches only once month is declared closed
   monthly_takeover: facility_table
+  # Monthly data entry closes on the 13th of the next month: until that day the month stays on its
+  # weekly reports (no gaps while monthly entry is still coming in); from that day its monthly
+  # reports take over. E.g. October = weekly until 12 Nov, monthly from 13 Nov. Blank = at once.
+  monthly_switch_day: 13
   # A month is flagged "closed" (display only) once monthly reporting reaches
   # this share of facilities, or after this day of the following month.
   month_close_completeness: 0.90
-  month_close_day: 15
+  month_close_day: 13
   # How far back to pull (months before FY start) so earlier quarters can be
   # selected on the dashboard
   history_months: 12

@@ -3,6 +3,8 @@
 The rule, in one line:
     for every facility x month x table, use the MONTHLY report if it exists,
     otherwise the sum of the WEEKLY reports that fall in that month.
+Monthly data entry runs until the 13th of the next month, so a month's monthly reports are used
+only from that day (switch_day): until then the whole month stays on its weekly reports.
 
 So while a month is open, the weeks keep adding up ("real time"). As soon as
 a facility submits its monthly report, that facility's weeks for the month are
@@ -58,6 +60,12 @@ def period_start(period: str) -> dt.date:
     return dt.date(int(m.group(1)), int(m.group(2)), 1) if m else dt.date.min
 
 
+def switch_date(month: str, day: int) -> dt.date:
+    """'2026-10', 13 -> 13 Nov 2026: the day that month's monthly reports take over."""
+    y, mo = map(int, month.split("-"))
+    return dt.date(y + (mo == 12), mo % 12 + 1, day)
+
+
 def month_of(period: str) -> str:
     m = MONTH_RE.match(period)
     if not m:
@@ -67,8 +75,10 @@ def month_of(period: str) -> str:
 
 def merge_weekly_monthly(weekly: pd.DataFrame, monthly: pd.DataFrame,
                          rule: str = "thursday", takeover: str = "facility_table",
-                         closed_months: set[str] | None = None, keep_weeks: bool = False) -> pd.DataFrame:
-    """Return the merged fact table with provenance columns:
+                         closed_months: set[str] | None = None, keep_weeks: bool = False,
+                         as_of: dt.date | None = None, switch_day: int | None = None) -> pd.DataFrame:
+    """switch_day: a month's monthly reports count only from this day of the following month
+    (as of as_of); before that the month stays weekly. Return the merged fact table with provenance columns:
         source          'monthly' | 'weekly'
         weeks           comma list of weeks used (weekly rows only)
     """
@@ -76,6 +86,8 @@ def merge_weekly_monthly(weekly: pd.DataFrame, monthly: pd.DataFrame,
     m = monthly.copy()
     w["month"] = w["period"].map(lambda p: week_to_month(p, rule))
     m["month"] = m["period"].map(month_of)
+    if switch_day and as_of and len(m):
+        m = m[m["month"].map(lambda mo: switch_date(mo, switch_day) <= as_of)]
 
     if takeover == "facility_table":
         submitted = m[KEYS].drop_duplicates()

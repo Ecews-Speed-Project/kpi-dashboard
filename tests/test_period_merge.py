@@ -83,3 +83,15 @@ def test_keep_weeks_matches_aggregate():
     k = merge_weekly_monthly(weekly, monthly, keep_weeks=True)
     assert a.value.sum() == k.value.sum() == 52
     assert sorted(k[k.source == "weekly"].period) == ["2026W40", "2026W41"]
+
+
+def test_monthly_waits_for_switch_day():
+    """October's monthly reports count only from 13 November; until then October stays weekly."""
+    import datetime as dt
+    weekly = pd.DataFrame([row("HTS_TST", "2026W41", "FTH", "HTS_TST", 120),     # Oct
+                           row("HTS_TST", "2026W42", "FTH", "HTS_TST", 130)])
+    monthly = pd.DataFrame([row("HTS_TST", "202610", "FTH", "HTS_TST", 300)])
+    before = merge_weekly_monthly(weekly, monthly, as_of=dt.date(2026, 11, 12), switch_day=13)
+    assert before.value.sum() == 250 and set(before.source) == {"weekly"}
+    after = merge_weekly_monthly(weekly, monthly, as_of=dt.date(2026, 11, 13), switch_day=13)
+    assert after.value.sum() == 300 and set(after.source) == {"monthly"}
