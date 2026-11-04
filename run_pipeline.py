@@ -337,6 +337,9 @@ def ndr_linelist(pbs: pd.DataFrame, cdr: pd.DataFrame, cfg: dict, file_date: dt.
     # EMR-only fields from the CDR line list (DATIM + ART number, punctuation and leading zeros ignored)
     emr_cols = [lc[k] for k in EMR_ONLY if lc.get(k) in cdr]
     if len(cdr) and emr_cols:
+        # the CDR's own VL dates beside the NDR's: the NDR sample date moves with the result, so only the CDR shows a sample still waiting
+        emr_vl = {new: cdr[lc[k]] for new, k in (("emr_vl_date", "vl_date"), ("emr_vl_value", "vl_value"), ("emr_sample_date", "sample_date")) if lc.get(k) in cdr}
+        cdr, emr_cols = cdr.assign(**emr_vl), emr_cols + list(emr_vl)
         def key(datim, art):
             a = art.astype(str).str.upper().str.replace(r"[^A-Z0-9]", "", regex=True).str.replace(r"\d+", lambda m: str(int(m.group())), regex=True)
             return datim.astype(str).str.strip().str.upper() + "|" + a

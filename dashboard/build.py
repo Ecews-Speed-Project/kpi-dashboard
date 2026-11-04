@@ -68,7 +68,7 @@ def _render(data: dict) -> str:
 
 
 # parts of a split build: name -> data keys (the cube's past-month snapshots are parts "snap:<period>")
-LIST_PARTS = {"conc": ("conc_clients",), "appt": ("appt_clients",), "vl": ("vl_clients", "eac_clients"), "pbs": ("pbs_clients",)}
+LIST_PARTS = {"conc": ("conc_clients",), "appt": ("appt_clients",), "vl": ("vl_clients", "vl_gap_clients", "eac_clients"), "pbs": ("pbs_clients",)}
 KEEP_BUILDS = 2       # data folders kept in live/data: the current build and the one before (pages still open on it)
 
 
@@ -158,7 +158,7 @@ def read_page_data(html: str, base_dir: Path | None = None) -> dict:
     return data
 
 
-CLIENT_LISTS = ("pbs_clients", "conc_clients", "appt_clients", "vl_clients", "eac_clients")
+CLIENT_LISTS = ("pbs_clients", "conc_clients", "appt_clients", "vl_clients", "vl_gap_clients", "eac_clients")
 
 
 def without_clients(data: dict, **flags) -> dict:

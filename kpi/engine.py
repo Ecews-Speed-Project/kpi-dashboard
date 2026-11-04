@@ -9,7 +9,7 @@ import re
 import pandas as pd
 import yaml
 
-from .measures import (AGE_BANDS, APPT_COLS, VL_COLS, vl_clients, EAC_COLS, eac_clients, _datetimes, CONC_CATS, CONC_COLS, DIMS, PBS_FOLLOWUP, UNKNOWN_AGE, Period,
+from .measures import (AGE_BANDS, APPT_COLS, VL_COLS, vl_clients, VL_GAP_COLS, vl_gap_clients, EAC_COLS, eac_clients, _datetimes, CONC_CATS, CONC_COLS, DIMS, PBS_FOLLOWUP, UNKNOWN_AGE, Period,
                        appointment_clients, concurrence, dhis_cube, facility_key, linelist_backfill, ndr_waterfall,
                        linelist_cube, week_ends, pbs_backfill, pbs_clients, pbs_cube, pbs_from_linelist)
 from .naomi import AGE5
@@ -32,6 +32,8 @@ def _clean(v):
 def status_of(score, rag, neutral=False):
     if score is None or neutral:
         return "none"
+    if score > 1:
+        return "exceeds"
     if score >= rag["green_from"]:
         return "good"
     if score >= rag["red_below"]:
@@ -44,6 +46,8 @@ def rate_status(value, target, rag):
     against a 95% target is a miss even though it is '95% of target'."""
     if value is None or target is None:
         return "none"
+    if value > target:
+        return "exceeds"
     if value >= target:
         return "good"
     if value >= target - rag.get("rate_warning_gap", 0.05):
@@ -287,19 +291,18 @@ def encode_eac_clients(cl: pd.DataFrame, master: pd.DataFrame) -> dict:
     return {"cols": EAC_COLS, "rows": rows, "dict": lookup}
 
 
-def encode_vl_clients(cl: pd.DataFrame, master: pd.DataFrame) -> dict:
-    """Unsuppressed clients: [facility, sex, age, VL_COLS...]; repetitive text columns via 'dict'."""
+def encode_vl_clients(cl: pd.DataFrame, master: pd.DataFrame, cols=VL_COLS, dcols=("datim", "vl_band", "repeat", "regimen_line", "regimen")) -> dict:
+    """VL client lists: [facility, sex, age, cols...]; repetitive text columns via 'dict'."""
     if cl is None or cl.empty:
-        return {"cols": VL_COLS, "rows": [], "dict": {}}
+        return {"cols": cols, "rows": [], "dict": {}}
     cl = attach_master(cl, master, "vl_clients", {})
     fac_idx = {f: i for i, f in enumerate(facility_order(master)["facility"])}
     sex_i, age_i = {"F": 0, "M": 1, "U": 2}, {a: i for i, a in enumerate(AGE_BANDS + [UNKNOWN_AGE])}
-    dcols = ("datim", "vl_band", "repeat", "regimen_line", "regimen")
     lookup = {k: sorted(cl[k].astype(str).unique().tolist()) for k in dcols}
     idx = {k: {v: i for i, v in enumerate(lookup[k])} for k in dcols}
     rows = [[int(fac_idx[r["facility"]]), sex_i.get(r["sex"], 2), age_i.get(r["age"], len(AGE_BANDS))]
-            + [idx[k][str(r[k])] if k in idx else str(r[k]) for k in VL_COLS] for r in cl.to_dict("records")]
-    return {"cols": VL_COLS, "rows": rows, "dict": lookup}
+            + [idx[k][str(r[k])] if k in idx else str(r[k]) for k in cols] for r in cl.to_dict("records")]
+    return {"cols": cols, "rows": rows, "dict": lookup}
 
 
 TREND_MEASURES = ["tx_curr", "tx_curr_emr", "iit_now", "vl_result", "vl_suppressed", "pbs_active", "pbs_baseline", "pbs_invalid",
@@ -589,6 +592,8 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
         "conc_clients": encode_conc_clients(conc_cl, master),
         "appt_clients": encode_appt_clients(appt_cl, master),
         "vl_clients": encode_vl_clients(vl_clients(linelist, cols["linelist"], ll_asof), master),
+        "vl_gap_clients": encode_vl_clients(vl_gap_clients(linelist, cols["linelist"], ll_asof), master, VL_GAP_COLS,
+                                            ("datim", "gap", "vl_history", "regimen_line", "regimen")),
         "geo": manual.get("geo") or [],
         "eac_clients": encode_eac_clients(eac_clients(manual.get("eac"), cols.get("eac", {}), history_start), master),
         "trend_series": encode_trend(est, snaps, master, dq),

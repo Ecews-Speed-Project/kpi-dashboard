@@ -78,6 +78,33 @@ def test_pbs_cards_follow_ndr_portal():
     assert "U0" not in cl.index
 
 
+def test_vl_gap_splits_pending_from_needs_sampling():
+    import datetime as dt
+    from kpi.measures import Period, linelist_cube, vl_gap_clients
+    lc = {"id": "id", "status": "st", "prev_status": "prev", "art_start": "start", "last_pickup": "pick", "refill_days": "refill", "days_on_art": "dos",
+          "vl_date": "vd", "vl_value": "vv", "sample_date": "sd", "ti": "ti", "valid_bio": "vb", "datim": "dc", "art_no": "art", "state": "state",
+          "facility": "facility", "sex": "sex", "age": "age", "next_appt": "next"}
+    ll = pd.DataFrame({
+        "art": ["valid", "pending", "stale", "never", "new", "ltfu", "resampled", "in_emr", "emr_sample"],
+        "st": ["Active"] * 5 + ["LTFU"] + ["Active"] * 3,
+        "dos": [400, 800, 800, 800, 100, 800, 800, 800, 800],
+        "vd": ["2026-05-01", "2025-01-01", "2025-01-01", "", "", "", "2025-01-01", "2025-01-01", "2025-01-01"],
+        "vv": [20, 30, 40, None, None, None, 50, 60, 70],
+        "sd": ["2026-04-20", "2026-08-01", "2024-12-20", "", "", "2026-08-01", "2026-09-01", "2025-01-01", "2025-01-01"],
+        "emr_vl_date": ["", "", "", "", "", "", "", "2026-10-30", ""],
+        "emr_vl_value": [None, None, None, None, None, None, None, 15, None],
+        "emr_sample_date": ["", "", "", "", "", "", "", "2026-10-01", "2026-10-20"]}).assign(
+        dc="D1", state="Delta", facility="F1", sex="F", age=30, next="2026-11-01", firstname="NEVER READ", vb="Yes")
+    out = vl_gap_clients(ll, lc, dt.date(2026, 10, 28)).set_index("art_no")
+    assert set(out.index) == {"pending", "stale", "never", "resampled", "in_emr", "emr_sample"} and "firstname" not in out
+    assert out.loc["pending", "gap"] == out.loc["resampled", "gap"] == out.loc["emr_sample", "gap"] == "Result pending"
+    assert out.loc["in_emr", "gap"] == "Result in EMR, not in NDR" and out.loc["in_emr", "vl_value"] == "15"
+    assert out.loc["stale", "gap"] == out.loc["never", "gap"] == "Needs VL sampling"
+    assert out.loc["never", "vl_history"] == "No VL on record" and out.loc["stale", "vl_history"] == "VL older than 12 months"
+    assert out.index[0] == "pending"           # longest wait first
+    assert out.loc["pending", "days_waiting"] == "88" and out.loc["stale", "days_waiting"] == ""
+
+
 def test_concurrence_links_on_datim_and_art_number():
     from kpi.measures import concurrence
     lc = {"datim": "datimcode", "art_no": "pepid", "status": "currentartstatus", "state": "state",

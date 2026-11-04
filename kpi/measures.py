@@ -644,6 +644,10 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         sample = _dates(d[c["sample_date"]])
         masks["vl_sample"] = eligible & yr(sample)
         masks["vl_pending"] = eligible & yr(sample) & ~(vl_date >= sample)
+        # no valid result (none in the 12 months): a sample waiting for its result, or a sample still to be taken
+        gap = eligible & ~has_result
+        in_emr, pending, _, _, _ = vl_gap_split(d, c, p.as_of)
+        masks.update(vl_gap=gap, vl_gap_emr=gap & in_emr, vl_gap_pending=gap & pending, vl_gap_sample=gap & ~in_emr & ~pending)
     # EMR waterfall for the quarter the linelist date falls in (deck 'Continuity on Treatment'):
     # previous-quarter status from previous_quarter_status; the starting TX_CURR comes from that
     # table itself (engine), so clients no longer in the linelist land in 'gain/loss'
@@ -811,6 +815,63 @@ def vl_clients(ll: pd.DataFrame, lc: dict, ll_date: dt.date) -> pd.DataFrame:
         "days_on_art": dos[sel.index].round().astype("Int64").astype(str), "last_pickup": day("last_pickup"),
         "next_appt": day("next_appt")}, index=sel.index)
     return out.reset_index(drop=True)
+
+
+def vl_gap_split(d: pd.DataFrame, c: dict, as_of: dt.date):
+    """For clients with no valid result in the treatment list: (in_emr, pending, last VL date, last VL value, last sample).
+    in_emr = the CDR holds a result from the 12 months that the NDR does not have yet; pending = a sample in the
+    12 months with no result on or after it, on either source. The CDR copy may be up to a month newer than the NDR file."""
+    day = lambda k: pd.to_datetime(_dates(d[k]), errors="coerce") if k in d else pd.Series(pd.NaT, index=d.index, dtype="datetime64[ns]")
+    lo, hi = pd.Timestamp(as_of - dt.timedelta(days=365)), pd.Timestamp(as_of + dt.timedelta(days=31))
+    yr = lambda s: (s > lo) & (s <= hi)
+    vd, ed = day(c["vl_date"]), day("emr_vl_date")
+    sample = pd.concat([day(c["sample_date"]), day("emr_sample_date")], axis=1).max(axis=1)
+    use_emr = ed.notna() & ~(vd >= ed)
+    vl = pd.to_numeric(d[c["vl_value"]], errors="coerce")
+    if "emr_vl_value" in d:
+        vl = vl.where(~use_emr, pd.to_numeric(d["emr_vl_value"], errors="coerce"))
+    last = vd.where(~use_emr, ed)
+    in_emr = yr(ed)
+    return in_emr, ~in_emr & yr(sample) & ~(last >= sample), last, vl, sample
+
+
+VL_GAP_COLS = ["datim", "art_no", "hosp_no", "gap", "vl_history", "vl_value", "vl_date", "days_since_vl", "sample_date", "days_waiting",
+               "regimen_line", "regimen", "art_start", "days_on_art", "last_pickup", "next_appt"]
+
+
+def vl_gap_clients(ll: pd.DataFrame, lc: dict, ll_date: dt.date) -> pd.DataFrame:
+    """Clients with no valid VL result, the same rule as the vl_gap measures: active, on ART 183+ days, no
+    result in the 12 months to the linelist date. 'gap' says what they need (see vl_gap_split): the EMR result
+    sent to the NDR, their pending result, or a sample. Longest wait first, so the list reads as a priority
+    order. No names."""
+    if ll.empty or lc.get("vl_value") not in ll or lc.get("sample_date") not in ll:
+        return pd.DataFrame()
+    active = emr_unique(ll, lc, _norm(ll[lc["status"]]).isin(STATUS["active"]))   # same cohort as the cascade
+    dos = pd.to_numeric(ll[lc["days_on_art"]], errors="coerce")
+    vld = _dates(ll[lc["vl_date"]])
+    sel = ll[active & (dos >= 183) & ~((vld > ll_date - dt.timedelta(days=365)) & (vld <= ll_date))]
+    if sel.empty:
+        return pd.DataFrame()
+    txt = lambda k: sel[lc[k]].fillna("").astype(str).replace({"nan": "", "None": "", "NaT": ""}) if lc.get(k) in sel else ""
+    day = lambda k: _iso(_dates(sel[lc[k]])) if lc.get(k) in sel else ""
+    in_emr, pending, d, vl, s = vl_gap_split(sel, lc, ll_date)
+    ago = lambda x: (pd.Timestamp(ll_date) - x).dt.days.clip(lower=0).astype("Int64")
+    since, wait = ago(d), ago(s).where(pending)
+    num = lambda x: x.astype(object).where(x.notna(), "").map(str)
+    out = pd.DataFrame({
+        "state": sel[lc["state"]], "facility": sel[lc["facility"]], "sex": norm_sex(sel[lc["sex"]]),
+        "age": age_bands(sel[lc["age"]]) if lc.get("age") in sel else UNKNOWN_AGE,
+        "datim": txt("datim"), "art_no": txt("art_no"), "hosp_no": txt("hosp_no"),
+        "gap": np.where(in_emr, "Result in EMR, not in NDR", np.where(pending, "Result pending", "Needs VL sampling")),
+        "vl_history": np.where(d.isna(), "No VL on record", "VL older than 12 months"),
+        "vl_value": num(vl.round().astype("Int64")),
+        "vl_date": d.dt.strftime("%Y-%m-%d").fillna(""), "days_since_vl": num(since),
+        "sample_date": s.dt.strftime("%Y-%m-%d").fillna(""), "days_waiting": num(wait),
+        "regimen_line": txt("regimen_line"), "regimen": txt("regimen"), "art_start": day("art_start"),
+        "days_on_art": dos[sel.index].round().astype("Int64").astype(str), "last_pickup": day("last_pickup"),
+        "next_appt": day("next_appt"),
+        "_w": wait.astype("Float64").fillna(-1), "_s": since.astype("Float64").fillna(1e9)}, index=sel.index)
+    return out.sort_values(["_w", "_s"], ascending=False).drop(columns=["_w", "_s"]).reset_index(drop=True)
 
 
 EAC_COLS = ["datim", "art_no", "hosp_no", "status", "transferred_in", "trigger_vl", "trigger_date", "cycle",

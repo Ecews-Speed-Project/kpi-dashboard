@@ -12,8 +12,8 @@
   --ink:#2A2015; --ink-2:#55452F; --ink-3:#85735A; --rule:#C7B286; --rule-soft:#DED0AE;
   --cloth:#163F31; --cloth-2:#0F3125; --gold:#B8913A; --gold-ink:#7A5A16; --on-cloth:#F3E9CF;
   --s1:#0E7350; --s2:#B07A22; --s3:#2C6E8F;
-  --good:#355E2B; --good-bg:#DCE5C6; --warn:#7E5A10; --warn-bg:#F1DFAE; --crit:#8A2617; --crit-bg:#EFCDBF; --none:#7A6C55; --none-bg:#E5DAC0;
-  --bar-good:#4C7A3A; --bar-warning:#C08A1E; --bar-critical:#9C3220; --bar-none:#B5A585; --track:#E2D4B2; --ash:#9A9A96;
+  --good:#355E2B; --good-bg:#DCE5C6; --exc:#1B5E63; --exc-bg:#CFE4E0; --warn:#7E5A10; --warn-bg:#F1DFAE; --crit:#8A2617; --crit-bg:#EFCDBF; --none:#7A6C55; --none-bg:#E5DAC0;
+  --bar-good:#4C7A3A; --bar-exceeds:#2A7F86; --bar-warning:#C08A1E; --bar-critical:#9C3220; --bar-none:#B5A585; --track:#E2D4B2; --ash:#9A9A96;
   --display:"Cormorant Garamond","Iowan Old Style","Palatino Linotype",Georgia,serif;
   --body:"EB Garamond","Iowan Old Style","Palatino Linotype",Georgia,serif;
   --caps:"Cinzel","Trajan Pro","Palatino Linotype",Georgia,serif;
@@ -25,8 +25,8 @@
   --ink:#EFE3C6; --ink-2:#CFBF9C; --ink-3:#A08F70; --rule:#4A3A26; --rule-soft:#35291B;
   --cloth:#10291F; --cloth-2:#0B1E17; --gold:#C9A04A; --gold-ink:#D8B566; --on-cloth:#F0E4C6;
   --s1:#44A87F; --s2:#BD8A2C; --s3:#5FA7C8;
-  --good:#A9CF8E; --good-bg:#26331B; --warn:#E6BE64; --warn-bg:#3A2D10; --crit:#EE8A72; --crit-bg:#3D1C13; --none:#A89A7E; --none-bg:#2C2318;
-  --bar-good:#7FAE66; --bar-warning:#D9A53A; --bar-critical:#D2634B; --bar-none:#5C4F3B; --track:#33281B; --ash:#8C8C88;
+  --good:#A9CF8E; --good-bg:#26331B; --exc:#8FD3D0; --exc-bg:#15322F; --warn:#E6BE64; --warn-bg:#3A2D10; --crit:#EE8A72; --crit-bg:#3D1C13; --none:#A89A7E; --none-bg:#2C2318;
+  --bar-good:#7FAE66; --bar-exceeds:#58B3B3; --bar-warning:#D9A53A; --bar-critical:#D2634B; --bar-none:#5C4F3B; --track:#33281B; --ash:#8C8C88;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --paper:#17110B; --paper-2:#1E170F; --card:#241B12; --card-hi:#2B2116; --edge:#3E3020; --edge-2:#4C3B26;
@@ -34,8 +34,8 @@
   --ink:#EFE3C6; --ink-2:#CFBF9C; --ink-3:#A08F70; --rule:#4A3A26; --rule-soft:#35291B;
   --cloth:#10291F; --cloth-2:#0B1E17; --gold:#C9A04A; --gold-ink:#D8B566; --on-cloth:#F0E4C6;
   --s1:#44A87F; --s2:#BD8A2C; --s3:#5FA7C8;
-  --good:#A9CF8E; --good-bg:#26331B; --warn:#E6BE64; --warn-bg:#3A2D10; --crit:#EE8A72; --crit-bg:#3D1C13; --none:#A89A7E; --none-bg:#2C2318;
-  --bar-good:#7FAE66; --bar-warning:#D9A53A; --bar-critical:#D2634B; --bar-none:#5C4F3B; --track:#33281B; --ash:#8C8C88;
+  --good:#A9CF8E; --good-bg:#26331B; --exc:#8FD3D0; --exc-bg:#15322F; --warn:#E6BE64; --warn-bg:#3A2D10; --crit:#EE8A72; --crit-bg:#3D1C13; --none:#A89A7E; --none-bg:#2C2318;
+  --bar-good:#7FAE66; --bar-exceeds:#58B3B3; --bar-warning:#D9A53A; --bar-critical:#D2634B; --bar-none:#5C4F3B; --track:#33281B; --ash:#8C8C88;
   color-scheme:dark}
 
 *{box-sizing:border-box}
@@ -142,6 +142,7 @@ a.c3d{display:block;text-decoration:none;cursor:pointer}
 .row .t{color:var(--ink-3);font-size:13.5px;text-align:right}
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;border-radius:3px;padding:1px 8px;white-space:nowrap;border:1px solid currentColor}
 .chip::before{font-size:11px}
+.s-exceeds{color:var(--exc);background:var(--exc-bg)} .s-exceeds::before{content:"▲"}
 .s-good{color:var(--good);background:var(--good-bg)} .s-good::before{content:"✓"}
 .s-warning{color:var(--warn);background:var(--warn-bg)} .s-warning::before{content:"!"}
 .s-critical{color:var(--crit);background:var(--crit-bg)} .s-critical::before{content:"✕"}
@@ -154,7 +155,7 @@ details.trends>section.c3d,details.trends>.grid{margin-top:16px}
 select.orgsel{font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;background:var(--card);color:var(--ink-2)}
 select.orgsel.on{border-color:var(--s1);color:var(--ink);font-weight:600}
 .dimbar input[type=date]{font:inherit;font-size:13px;padding:2px 6px;border:1px solid var(--rule);border-radius:4px;background:var(--card);color:var(--ink)}
-.d-good{background:var(--bar-good)} .d-warning{background:var(--bar-warning)} .d-critical{background:var(--bar-critical)} .d-none{background:var(--bar-none)}
+.d-exceeds{background:var(--bar-exceeds)} .d-good{background:var(--bar-good)} .d-warning{background:var(--bar-warning)} .d-critical{background:var(--bar-critical)} .d-none{background:var(--bar-none)}
 
 /* KPI strip */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;align-items:stretch}
@@ -460,6 +461,7 @@ function usePart(n,x){
   if(x.conc_clients){ CC=x.conc_clients; CCK=Object.keys(CC.cats); if(!CCK.includes(CCAT)) CCAT=CCK[0]||""; }
   if(x.appt_clients){ AC=x.appt_clients; AMIN=AC.rows.reduce((m,r)=>r[ACOL("appt")]<m?r[ACOL("appt")]:m,"9999-12-31"); AMAX=AC.rows.reduce((m,r)=>r[ACOL("appt")]>m?r[ACOL("appt")]:m,"0000-01-01"); ARNG=null; }
   if(x.vl_clients) VC=x.vl_clients;
+  if(x.vl_gap_clients) VG=x.vl_gap_clients;
   if(x.eac_clients) EC=x.eac_clients;
   if(x.pbs_clients){ PC=x.pbs_clients; if(!PC.cats[PBSCAT]) PBSCAT=Object.keys(PC.cats)[0]||""; }
   if(x.trend_series) TS=x.trend_series;
@@ -551,7 +553,7 @@ const n = v => v==null||isNaN(v) ? "—" : nf.format(Math.round(v));
 const pct = (v,d=1) => v==null||!isFinite(v) ? "—" : (v*100).toFixed(d)+"%";
 const div = (a,b) => (a==null||!b) ? null : (a||0)/b;
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const LABEL = {good:"On track",warning:"Watch",critical:"Off track",none:"No target"};
+const LABEL = {exceeds:"Exceeds",good:"On track",warning:"Watch",critical:"Off track",none:"No target"};
 const chip = (s,t) => `<span class="chip s-${s}">${esc(t||LABEL[s])}</span>`;
 const dot = s => `<span class="dot d-${s}" title="${LABEL[s]}"></span>`;
 const fmtDate = s => new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
@@ -595,7 +597,7 @@ function evaluate(code, v, f=F){
     r.status = scoreStatus(r.score, ind);
   } else if(ind.kind==="rate"){
     r.target = ms ?? annual; r.gap = value!=null&&r.target!=null ? value-r.target : null;
-    r.status = ind.neutral || value==null||r.target==null ? "none" : value>=r.target ? "good" : value>=r.target-(RAG.rate_warning_gap??.05) ? "warning" : "critical";
+    r.status = ind.neutral || value==null||r.target==null ? "none" : targetStatus(value,r.target);
   } else if(ind.flow==="snapshot"){
     r.target = annual; r.score = value!=null&&annual ? value/annual : null; r.status = scoreStatus(r.score, ind);
   } else {
@@ -618,8 +620,9 @@ function evaluate(code, v, f=F){
   }
   return r;
 }
-function scoreStatus(s, ind){ if(s==null||ind.neutral) return "none"; return s>=RAG.green_from?"good":s>=RAG.red_below?"warning":"critical"; }
+function scoreStatus(s, ind){ if(s==null||ind.neutral) return "none"; return s>1?"exceeds":s>=RAG.green_from?"good":s>=RAG.red_below?"warning":"critical"; }
 const rateStatus = (v,t) => v==null||t==null ? "none" : v>=t ? "good" : v>=t-(RAG.rate_warning_gap??.05) ? "warning" : "critical";
+const targetStatus = (v,t) => v!=null&&t!=null&&v>t ? "exceeds" : rateStatus(v,t);   // above a set target; rateStatus alone for reference values
 const fmtInd = (code, r) => REG[code].kind==="rate" ? pct(r.value) : n(r.value);
 
 /* ---------- shared pieces ---------- */
@@ -668,13 +671,13 @@ function bullets(items, mx){
 }
 
 /* population pyramid: female left, male right; optional comparison outline */
-function pyramid(measure, {f=F, title="", outline=null, den=null, d=1, compact=false, bands:only=null}={}){
+function pyramid(measure, {f=F, title="", outline=null, den=null, d=1, compact=false, bands:only=null, ref=null}={}){
   const g = agg({...f, sex:"", age:""}, {by:"agesex"}); const bands = only || AGEBANDS().filter(a=>a!=="Unknown"&&(!den||["F","M"].some(s=>(g.get(a+"|"+s)||{})[den])));
   const raw = (b,s,m) => (g.get(b+"|"+s)||{})[m]||0, fm = den ? (x=>pct(x,d)) : n;
   const val = (b,s) => den ? (div(raw(b,s,measure),raw(b,s,den))||0) : raw(b,s,measure);
   const tot = s => den ? fm(div(bands.reduce((a,b)=>a+raw(b,s,measure),0), bands.reduce((a,b)=>a+raw(b,s,den),0))) : n(bands.reduce((a,b)=>a+val(b,s),0));
   const tipx = (b,s) => den ? ` (${n(raw(b,s,measure))} of ${n(raw(b,s,den))})` : "";
-  const mx = Math.max(...bands.flatMap(b=>[val(b,"F"),val(b,"M")]),1);
+  const mx = Math.max(...bands.flatMap(b=>[val(b,"F"),val(b,"M")]),ref||0,1);
   // compact: a narrow panel's own scale, so labels keep a readable size when five sit in a row
   const W=compact?218:560, rowH=compact?16:17, top=compact?20:26, H=top+bands.length*rowH+(compact?6:24), mid=W/2, lab=compact?16:34, half=mid-lab-(compact?3:6);
   const fsV=compact?10.5:12, fsA=compact?10.5:null, sx=v=>v/mx*(half-(compact?(den?40:30):40));
@@ -688,7 +691,8 @@ function pyramid(measure, {f=F, title="", outline=null, den=null, d=1, compact=f
      ${mv?`<text x="${mid+lab+mw+3}" y="${y+rowH-(compact?4:5)}" font-size="${fsV}">${fm(mv)}</text>`:""}</g>`;}).join("");
   const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(measure)} by age and sex">
    <text x="${mid-lab}" y="${compact?13:16}" text-anchor="end" class="vlab"${compact?' font-size="11.5"':""}>${compact?"F":"Female"} ${tot("F")}</text>
-   <text x="${mid+lab}" y="${compact?13:16}" class="vlab"${compact?' font-size="11.5"':""}>${compact?"M":"Male"} ${tot("M")}</text>${bars}</svg>`;
+   <text x="${mid+lab}" y="${compact?13:16}" class="vlab"${compact?' font-size="11.5"':""}>${compact?"M":"Male"} ${tot("M")}</text>
+   ${ref?[mid-lab-sx(ref),mid+lab+sx(ref)].map(x=>`<line x1="${x}" x2="${x}" y1="${top}" y2="${top+bands.length*rowH}" stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="3 3"/>`).join(""):""}${bars}</svg>`;
   if(compact) return svg;
   return `<div class="legend"><span><span class="sw" style="background:var(--s1)"></span>Female</span><span><span class="sw" style="background:var(--s2)"></span>Male</span>${title?`<span>${title}</span>`:""}</div>
    <div class="tw">${svg}</div>`;
@@ -751,7 +755,7 @@ function kpiSummary(v){
    ${over.length?`<p class="over">Above 100% of the ${esc(periodFY())} target: ${over.map(it=>`<span title="${esc(tip(it))}"><b>${esc(it.i.name)}</b> ${pct(it.ach,0)} (${n(it.r.value)} of ${n(tgt(it))})</span>`).join(" · ")}</p>`:""}
    <div class="tg kgrid"><div class="hb axis"><span></span><span class="track"><i style="left:0">0%</i><i style="left:25%">25%</i><i style="left:50%">50%</i><i style="left:75%">75%</i><i style="left:100%">100%</i></span><span></span></div>
    ${hbars(bars,{max:1,fmt:x=>pct(x,0)})}</div>
-   <div class="legend" style="font-size:12px"><span><span class="sw" style="background:var(--bar-critical)"></span>0 – ${lo-1}</span><span><span class="sw" style="background:var(--bar-warning)"></span>${lo} – ${hi-1}</span><span><span class="sw" style="background:var(--bar-good)"></span>≥ ${hi}</span>
+   <div class="legend" style="font-size:12px"><span><span class="sw" style="background:var(--bar-critical)"></span>0 – ${lo-1}</span><span><span class="sw" style="background:var(--bar-warning)"></span>${lo} – ${hi-1}</span><span><span class="sw" style="background:var(--bar-good)"></span>${hi} – 100</span><span><span class="sw" style="background:var(--bar-exceeds)"></span>Above 100 (Exceeds)</span>
     <span><svg width="10" height="12"><line x1="5" x2="5" y1="0" y2="12" stroke="var(--ink)" stroke-width="1.6"/></svg>${(()=>{const fe=(items.find(x=>x.r.fyElapsed!=null)||{r:{}}).r.fyElapsed, [a,b]=fyBounds(periodFY()), tot=Math.round((b-a)/DAY)+1;
       return fe==null?"where we should be by now":`where we should be by now: DHIS2 data through ${fmtDate(D.meta.dhis_through)} covers ${Math.round(fe*tot)} of the ${tot} days of ${esc(periodFY())} = ${pct(fe,1)} of the year target`;})()}</span>
     <span>* stock against the FY target${stock}</span>${none.length?`<span>No target / no data: ${esc(none.map(x=>x.i.name).join(", "))}</span>`:""}</div>
@@ -1588,6 +1592,46 @@ function unsuppressedSection(){
   return `<section class="c3d">${secH("Unsuppressed clients — line list",`VL ≥1000 copies/mL in the 12 months to ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)} (EMR linelist) · for EAC and repeat VL follow-up`)}${unsuppressedList("vl")}</section>`;
 }
 
+/* ---------- No valid VL result (none in 12 months): who needs their result, who needs a sample ---------- */
+let VG = D.vl_gap_clients || {cols:[], rows:[], dict:{}};
+const VGCOL = c => VG.cols.indexOf(c)+3, vgv = (r,c) => { const x=r[VGCOL(c)]; return (VG.dict||{})[c] ? VG.dict[c][x] : x; };
+const VGL = {datim:"DATIM",art_no:"ART no.",hosp_no:"Hospital no.",gap:"Needs",vl_history:"VL history",vl_value:"Last VL",vl_date:"Last VL date",days_since_vl:"Days since VL",sample_date:"Last sample",
+  days_waiting:"Days waiting",regimen_line:"Regimen line",regimen:"Regimen",art_start:"ART start",days_on_art:"Days on ART",last_pickup:"Last pickup",next_appt:"Next appointment"};
+const VGS = {cat:"", q:""};
+const VGAS = () => D.meta.linelist_as_of||D.meta.as_of, vgAdd = k => new Date(dOf(VGAS()).getTime()+k*DAY).toISOString().slice(0,10);
+const VGCATS = [["","All",()=>true],["e","Result in EMR, not in NDR",r=>vgv(r,"gap")==="Result in EMR, not in NDR"],["p","Result pending",r=>vgv(r,"gap")==="Result pending"],["p30","Waiting over 30 days",r=>+vgv(r,"days_waiting")>30],
+  ["s","Needs VL sampling",r=>vgv(r,"gap")==="Needs VL sampling"],["a14","To sample: visit within 14 days",r=>vgv(r,"gap")==="Needs VL sampling"&&vgv(r,"next_appt")>=VGAS()&&vgv(r,"next_appt")<=vgAdd(14)],
+  ["n","No VL on record",r=>vgv(r,"vl_history")==="No VL on record"]];
+const vgCat = k => VGCATS.find(c=>c[0]===k)[2];
+function vgList(){ const sexI=F.sex?DM.sex.indexOf(F.sex):-1; return VG.rows.filter(r=>facPass(r[0],F)&&(sexI<0||r[1]===sexI)&&agePass(r[2],F.age)); }
+function vgSel(){ const q=VGS.q.trim().toLowerCase(), t=vgCat(VGS.cat); return vgList().filter(r=>t(r)&&(!q||VG.cols.some(c=>String(vgv(r,c)).toLowerCase().includes(q)))); }
+function vgCsv(rows){
+  const head=["State","LGA","Facility","Sex","Age band",...VG.cols.map(c=>VGL[c]||c)], q=s=>`"${String(s??"").replaceAll('"','""')}"`;
+  const lines=[head.map(q).join(",")].concat(rows.map(r=>{const fc=FAC[r[0]]; return [fc.state,fc.lga,fc.facility,DM.sex[r[1]],AGE[r[2]],...VG.cols.map(c=>vgv(r,c))].map(q).join(",");}));
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv"}));
+  a.download=`vl_no_valid_result_${(F.fac||F.lga||F.state||"SPEED").replace(/[^\w-]+/g,"_")}_${VGAS()}.csv`; a.click(); URL.revokeObjectURL(a.href);
+}
+function vlGapList(){
+  if(!STOCK) return `<div class="empty">The line list is for the current linelist only.</div>`;
+  if(!VG.rows.length) return `<div class="empty">${D.meta.archived||D.meta.shared?NOLIST():"No clients without a valid result."}</div>`;
+  const all=vgList(), sel=vgSel(), show=sel.slice(0,300), cols=VG.cols.filter(x=>x!=="datim");
+  return `<div class="dimbar" style="margin-top:12px"><span class="eyebrow">Show</span><span class="seg" style="flex-wrap:wrap">${VGCATS.map(([k,l,t])=>`<button data-vgcat="${k}" aria-pressed="${VGS.cat===k}">${esc(l)} <b>${n(all.filter(t).length)}</b></button>`).join("")}</span></div>
+   <div class="dimbar" style="margin-top:8px"><label>Search <input id="vlg-q" value="${esc(VGS.q)}" placeholder="ART or hospital number" style="min-width:220px"></label>
+    <button class="reset" data-vgcsv="1">Download ${n(sel.length)} as CSV</button><span class="drillnote">${sel.length>show.length?`Showing first ${show.length} of ${n(sel.length)}. `:""}Longest wait first. No names. Filtered by state / LGA / facility / sex / age. Client-level data — keep within the programme team.</span></div>
+   <div class="tw" style="max-height:480px;margin-top:8px"><table><thead><tr><th>Facility</th><th>Sex</th><th>Age</th>${cols.map(x=>`<th>${esc(VGL[x]||x)}</th>`).join("")}</tr></thead><tbody>
+   ${show.map(r=>`<tr><td>${esc(FAC[r[0]].facility)}</td><td>${DM.sex[r[1]]}</td><td>${esc(AGE[r[2]])}</td>${cols.map(x=>`<td>${esc(vgv(r,x))}</td>`).join("")}</tr>`).join("")}
+   ${show.length?"":`<tr><td colspan="${cols.length+3}" class="empty">No clients for this selection.</td></tr>`}</tbody></table></div>`;
+}
+function vlGapSection(){
+  const head=secH("Clients without a valid VL result",`Active, on ART 183+ days, no result in the 12 months to ${fmtDate(VGAS())}`);
+  if(!MEAS.includes("vl_gap")) return `<section class="c3d">${head}<div class="empty">Not available for this period.</div></section>`;
+  const v=agg();
+  return `<section class="c3d">${head}<div class="kpis">${kpi(n(v.vl_gap),"No valid VL result",`${pct(div(v.vl_gap,v.vl_eligible))} of eligible`)}${kpi(n(v.vl_gap_emr),"Result in EMR, not in NDR","no blood draw: send the result")}${kpi(n(v.vl_gap_pending),"Sample taken, result pending","follow up the lab")}${kpi(n(v.vl_gap_sample),"Needs VL sampling","no sample in 12 months")}</div>
+   ${vlGapList()}
+   <p class="drillnote">Valid result is judged on the NDR file. For what comes next the CDR line list is read too, because the NDR's sample date moves with the result. Result in EMR = the CDR holds a result from the last 12 months that the NDR does not. Result pending = a sample in the last 12 months with no result on or after it. Needs VL sampling = neither. Clients in their first 183 days on ART are not due yet and are not listed.</p>
+   <div style="margin-top:12px">${pivot("vlgap",[C("Eligible",V("vl_eligible"),0,0,"vl_eligible"),C("No valid VL",V("vl_gap")),C("% of eligible",RV("vl_gap","vl_eligible"),1),C("Result in EMR",V("vl_gap_emr")),C("Result pending",V("vl_gap_pending")),C("Needs sampling",V("vl_gap_sample"))],["org","paed","sex","age"],"org")}</div></section>`;
+}
+
 /* ---------- EAC: enhanced adherence counselling, modelled on EAC_Script_Version11 ---------- */
 let EC = D.eac_clients || {cols:[], rows:[], dict:{}};
 const ECOL = c => EC.cols.indexOf(c)+3, ecv = (r,c) => { const x=r[ECOL(c)]; return (EC.dict||{})[c] ? EC.dict[c][x] : x; };
@@ -1657,7 +1701,6 @@ const VLHEAD = `<thead><tr><th></th><th class="n">TX_CURR</th><th class="n">Elig
 function vlPage(){
   if(WIN||(WIN=windowSet()), !HAS("ll")) return context()+noData("Viral load figures");
   const v=agg(), E=c=>evaluate(c,v), ip=E("IPI_VLS_ON_ART"), pend=gv(v,"vl_pending");
-  const ga=agg({...F,age:""},{by:"age"}), bands=AGEBANDS().filter(a=>ga.has(a)&&a!=="Unknown"&&(ga.get(a).vl_eligible||0)>0);
   const grp=[["All ages",{...F}],["Paediatric & adolescent (<20)",{...F,age:"<20"}],["Adult (20+)",{...F,age:"20+"}]];
   const st=STATES.filter(s=>!F.state||s===F.state);
   return context()+flowRow([fs(TXE(),v.tx_curr_emr),fs("VL eligible",v.vl_eligible),fs("Sample collected",v.vl_sample,"Sample collected in the 12 months to the linelist date"),
@@ -1667,13 +1710,12 @@ function vlPage(){
    <div class="kpis">${kpi(pct(ip.value),"VLS on ART (IPI)",`${D.meta.quarter.slice(-2)} milestone ${pct(ip.target,0)}`,ip.status,"Suppressed ÷ "+TXE())}${kpi(n(v.vl_unsuppressed),"Unsuppressed ≥1000","need EAC and a repeat VL")}</div>
    <section class="c3d">${secH("Paediatric & adolescent vs adult","Same flow for <20 and 20+ (EMR linelist)")}<div class="tw"><table>${VLHEAD}<tbody>${grp.map(([l,f])=>vlRow(l,agg(f))).join("")}</tbody></table></div></section>
    <section class="c3d">${secH("By state")}<div class="tw"><table>${VLHEAD}<tbody>${st.map(s=>vlRow(esc(s),agg({...F,state:s,lga:"",fac:""}))).join("")}<tr class="total">${vlRow(esc(filterText()),v).slice(4)}</tbody></table></div></section>
-   <div class="grid g2"><section class="c3d">${secH("VL coverage by age band","Reference line at 95%")}
-     ${hbars(bands.map(b=>{const x=ga.get(b), c=div(x.vl_result,x.vl_eligible); return {l:b+" yrs",v:c,tick:.95,txt:`<b>${pct(c)}</b> of ${n(x.vl_eligible)}`,c:`var(--bar-${rateStatus(c,.95)})`};}),{max:1})}</section>
-   <section class="c3d">${secH("Suppression by age band","Among results · reference 95%")}
-     ${hbars(bands.map(b=>{const x=ga.get(b), c=div(x.vl_suppressed,x.vl_result); return {l:b+" yrs",v:c,tick:.95,txt:`<b>${pct(c)}</b> of ${n(x.vl_result)}`,c:`var(--bar-${rateStatus(c,.95)})`};}),{max:1})}</section></div>
+   <div class="grid g2"><section class="c3d">${secH("VL coverage by age and sex","Results ÷ eligible · dashed line at 95%")}${pyramid("vl_result",{den:"vl_eligible",ref:.95})}</section>
+   <section class="c3d">${secH("Suppression by age and sex","Suppressed ÷ results · dashed line at 95%")}${pyramid("vl_suppressed",{den:"vl_result",ref:.95})}</section></div>
    <section class="c3d">${secH("Viral load by facility","Every facility · choose “By state” to drill state → LGA → facility, or rows by paediatric / adult, sex or age")}${pivot("vl",[C("TX_CURR",V("tx_curr_emr"),0,0,"tx_curr_emr"),C("Eligible",V("vl_eligible")),C("Sample",V("vl_sample")),
      C("Sample rate",RV("vl_sample","vl_eligible"),1),C("Results",V("vl_result")),C("Coverage",RV("vl_result","vl_eligible"),1,x=>rateStatus(div(x.vl_result,x.vl_eligible),.95)),C("Suppressed",V("vl_suppressed")),
      C("VLS",RV("vl_suppressed","vl_result"),1,x=>rateStatus(div(x.vl_suppressed,x.vl_result),.95)),C("Unsuppressed",V("vl_unsuppressed")),C("Unsupp. rate",RV("vl_unsuppressed","vl_result"),1),C("LLV",V("vl_llv")),C("U=U rate",RV("vl_undetectable","vl_result"),1),C("Pending",V("vl_pending"))],["org","paed","sex","age"],"facility")}</section>
+   ${vlGapSection()}
    ${unsuppressedSection()}
    ${eacSection()}`;
 }
@@ -2280,7 +2322,7 @@ function weeklyProgress(code){
     }
     const frac=((dOf(e)-dOf(P.start))/DAY+1)/span;
     const target = i.kind==="rate" ? full.target : full.target!=null && i.flow!=="snapshot" ? full.target*frac : full.target;
-    return {d:e, value:r.value, target, status: i.kind==="rate" ? rateStatus(r.value, target) : r.value!=null&&target ? scoreStatus(r.value/target, i) : "none"};
+    return {d:e, value:r.value, target, status: i.kind==="rate" ? targetStatus(r.value, target) : r.value!=null&&target ? scoreStatus(r.value/target, i) : "none"};
   });
 }
 function ipiDetail(code){
@@ -2413,6 +2455,7 @@ document.addEventListener("change", e=>{
   else if(id==="appt-dim") ADIM=e.target.value;
   else if(id==="cl-fac") CLFAC=e.target.value;
   else if(id.startsWith("vlc-q-")) vst(id.slice(6)).q=e.target.value;
+  else if(id==="vlg-q") VGS.q=e.target.value;
   else if(id==="eac-from"||id==="eac-to"){ const a=document.getElementById("eac-from").value, b=document.getElementById("eac-to").value; if(a&&b){ES.s=a<b?a:b; ES.e=a<b?b:a;} }
   else if(id==="eac-dim") ES.dim=e.target.value; else if(id==="eac-q") ES.q=e.target.value;
   else if(id==="pbs-q") PBSQ=e.target.value; else if(id==="conc-q") CCQ=e.target.value; else if(id==="appt-q") AQ=e.target.value; else return;
@@ -2440,6 +2483,8 @@ document.addEventListener("click", e=>{
   const ea=e.target.closest("[data-eact]"); if(ea){ES.active=ea.dataset.eact==="1"; render(); return;}
   const ek=e.target.closest("[data-ecat]"); if(ek){ES.cat=+ek.dataset.ecat; render(); return;}
   if(e.target.closest("#eac-csv")){ const q=ES.q.trim().toLowerCase(); eacCsv(eacList().filter(r=>ECATS[ES.cat][1](r)&&(!q||EC.cols.some(c=>String(ecv(r,c)).toLowerCase().includes(q))))); return; }
+  const vg=e.target.closest("[data-vgcat]"); if(vg){VGS.cat=vg.dataset.vgcat; render(); return;}
+  if(e.target.closest("[data-vgcsv]")){vgCsv(vgSel()); return;}
   const vx=e.target.closest("[data-vlcsv]"); if(vx){const k=vx.dataset.vlcsv; vlcCsv(vlcSel(k,VLCF[k]()),k); return;}
   const ah=e.target.closest("[data-ahd]"); if(ah){AHDM=ah.dataset.ahd; render(); return;}
   const cc=e.target.closest("[data-ccat]"); if(cc){CCAT=cc.dataset.ccat; render(); return;}
