@@ -128,6 +128,21 @@ a.c3d{display:block;text-decoration:none;cursor:pointer}
 .qbar{flex:1 1 160px;max-width:280px;height:7px;background:var(--track);border-radius:4px;position:relative;box-shadow:inset 0 1px 1px var(--bevel-lo)}
 .qbar i{position:absolute;inset:0 auto 0 0;background:var(--cloth);border-radius:4px}
 .demo{background:var(--warn-bg);color:var(--warn);border:1px dashed var(--warn);border-radius:5px;padding:9px 14px;font-size:15px}
+.cfr-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.cfr-tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px;text-align:left;border:1px solid var(--track);border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.cfr-tile span:not(.pill){font-size:14px;color:var(--ink-3)}
+.cfr-tile:hover:not(:disabled){border-color:var(--s1)}
+.cfr-tile[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+.cfr-tile:disabled{opacity:.55;cursor:default}
+.cfr-box{padding:14px;border:1px solid var(--track);border-radius:8px}
+.cfr-hint{text-align:center;color:var(--ink-3);padding:24px 14px}
+.cfr-bar{height:6px;margin:10px 0;border-radius:3px;background:var(--track);overflow:hidden}
+.cfr-bar span{display:block;width:40%;height:100%;border-radius:3px;background:var(--s1);animation:cfr-slide 1s ease-in-out infinite alternate}
+@keyframes cfr-slide{from{margin-left:0}to{margin-left:60%}}
+@media (prefers-reduced-motion:reduce){.cfr-bar span{animation:none;width:100%}}
+.cfr-ready{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+.cfr-dl{display:inline-block;padding:10px 16px;border:1px solid var(--s1);border-radius:8px;background:transparent;color:inherit;font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.cfr-dl:hover{box-shadow:inset 0 0 0 1px var(--s1)}
 .drillnote{font-size:14px;color:var(--ink-3);font-style:italic}
 
 /* hero cards */
@@ -999,15 +1014,55 @@ function htsAgeSex(){
    <div class="g5">${P.map(([t,s,m,o])=>`<div class="mini"><h3>${t}</h3><p>${s}</p>${pyramid(m,{...o,compact:true,bands:B})}</div>`).join("")}</div></section>`;
 }
 /* the HTS team's monthly case finding report (CDC template), made by each update: one PowerPoint per month */
+let CFR = {month:"", state:"", url:null};
+function cfrMonths(){
+  const out=[], first=String(D.meta.fy_start).slice(0,7), last=String(D.meta.as_of).slice(0,7); let [y,m]=first.split("-").map(Number);
+  for(let k=first; k<=last; k=`${y}-${String(m).padStart(2,"0")}`){ out.push(k); m++; if(m>12){m=1;y++;} if(out.length>12) break; }
+  return out;
+}
+const cfrLabel = k => { const [y,m]=k.split("-").map(Number); return new Date(y,m-1,1).toLocaleString("en-GB",{month:"long",year:"numeric"}); };
+const cfrPill = r => r.provisional?`<span class="pill openm">provisional</span>`:`<span class="pill closed">final</span>`;
+function cfrPanel(){
+  const r=(D.reports||[]).find(x=>x.month===CFR.month);
+  if(!r) return `<div class="cfr-box cfr-hint">Select a month above to prepare its report.</div>`;
+  if(CFR.state==="busy") return `<div class="cfr-box"><b>Preparing the ${esc(r.label)} report…</b><div class="cfr-bar"><span></span></div><span class="drillnote">Downloading will be ready in a moment.</span></div>`;
+  if(CFR.state==="fail") return `<div class="cfr-box"><b>Could not get the ${esc(r.label)} report.</b><p class="drillnote">Check your connection, then try again.</p><button type="button" class="cfr-dl" data-cfr="${esc(r.month)}">Try again</button></div>`;
+  const cum=r.cum_from===r.label?r.label:`${r.cum_from} – ${r.label}`, y=f=>rpct(f[1],f[0]), l=f=>rpct(f[2],f[1]);
+  const row=(lab,m,c,tot)=>`<tr${tot?' class="total"':""}><td>${esc(lab)}</td><td class="n">${n(m[0])}</td><td class="n">${n(m[1])}</td><td class="n">${y(m)}</td><td class="n">${n(m[2])}</td><td class="n">${n(c[0])}</td><td class="n">${n(c[1])}</td><td class="n">${y(c)}</td><td class="n">${n(c[2])}</td></tr>`;
+  return `<div class="cfr-box"><div class="cfr-ready"><div><b>${esc(r.label)} report is ready</b> ${cfrPill(r)}<br><span class="drillnote">${r.provisional?"Monthly reports are still coming in, so these figures can change.":"Monthly data entry for this month has closed."}</span></div>
+    <a class="cfr-dl" href="${CFR.url}" download="${esc(r.file.split("/").pop())}">Download PowerPoint</a></div>
+   <div class="kpis" style="margin-top:12px">${kpi(n(r.month_figs[0]),"Tested",r.label)}${kpi(n(r.month_figs[1]),"Positive",`Yield ${y(r.month_figs)}`)}${kpi(n(r.month_figs[2]),"Linked to ART",`${l(r.month_figs)} of positives`)}${kpi(n(r.cum_figs[1]),"Positive, cumulative",`${n(r.cum_figs[0])} tested · ${esc(cum)}`)}</div>
+   <div class="tw" style="margin-top:12px"><table><thead><tr><th rowspan="2"></th><th colspan="4" style="text-align:center">${esc(r.label)}</th><th colspan="4" style="text-align:center">Cumulative, ${esc(cum)}</th></tr>
+    <tr><th class="n">Tested</th><th class="n">Positive</th><th class="n">Yield</th><th class="n">Linked</th><th class="n">Tested</th><th class="n">Positive</th><th class="n">Yield</th><th class="n">Linked</th></tr></thead>
+    <tbody>${r.states.map(x=>row(x[0],x.slice(1,4),x.slice(4,7))).join("")}${row("Total",r.month_figs,r.cum_figs,true)}</tbody></table></div></div>`;
+}
+function cfrPaint(){
+  const el=document.getElementById("cfr-panel"); if(el) el.innerHTML=cfrPanel();
+  document.querySelectorAll(".cfr-tile").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.cfr===CFR.month)));
+}
+async function cfrGet(month){
+  const r=(D.reports||[]).find(x=>x.month===month); if(!r) return;
+  if(CFR.url) URL.revokeObjectURL(CFR.url);
+  CFR={month,state:"busy",url:null}; cfrPaint();
+  try{
+    const [res]=await Promise.all([fetch(`${r.file}?v=${encodeURIComponent(D.meta.generated_at||"")}`), new Promise(ok=>setTimeout(ok,700))]);
+    if(!res.ok) throw new Error(res.status);
+    const blob=await res.blob();
+    if(CFR.month!==month) return;
+    CFR={month,state:"ready",url:URL.createObjectURL(blob)};
+  }catch(err){ if(CFR.month!==month) return; CFR={month,state:"fail",url:null}; }
+  cfrPaint();
+}
+/* the HTS team's monthly case finding report (CDC template), made by each update: one PowerPoint per month */
 function htsReports(){
-  const R = D.reports || [];
-  if(D.meta.archived || D.meta.shared && !R.length) return "";
-  return `<section class="c3d">${secH("Monthly case finding report","CDC template · DHIS2 monthly instance only · TX_NEW from the treatment line list as linked to ART")}
-   ${R.length ? `<div class="tw"><table><thead><tr><th>Month</th><th>Status</th><th>Download</th></tr></thead><tbody>
-     ${[...R].reverse().map(r=>`<tr><td>${esc(r.label)}</td><td>${r.provisional?`<span class="pill openm">provisional — monthly reports still coming in</span>`:`<span class="pill closed">final</span>`}</td>
-       <td><a href="${esc(r.file)}" download>${esc(r.file.split("/").pop())}</a></td></tr>`).join("")}</tbody></table></div>`
-     : `<div class="empty">No month of ${esc(D.meta.fiscal_year)} has monthly HTS reports yet. The first report appears once facilities submit them.</div>`}
-   <p class="drillnote">Filled: Gen Pop and high-risk testing for the month and cumulative from 1 October (high risk = the CSCC sites), yield by modality (one slide per state), sex and age, HIVST. Left for the HTS team: activities, RTK stock, retesting for verification, trainings, challenges.</p></section>`;
+  if(D.meta.archived) return "";
+  const R=D.reports||[];
+  return `<section class="c3d">${secH("Monthly case finding report","CDC template · select a month to prepare its report · DHIS2 monthly instance · linked to ART = everyone in the EMR line list who started ART in the month, with no biometric or other filter")}
+   <div class="cfr-tiles">${cfrMonths().map(k=>{const r=R.find(x=>x.month===k);
+     return r?`<button type="button" class="cfr-tile" data-cfr="${esc(k)}" aria-pressed="${k===CFR.month}"><b>${esc(r.label)}</b><span>${n(r.month_figs[0])} tested · ${n(r.month_figs[1])} positive</span>${cfrPill(r)}</button>`
+       :`<button type="button" class="cfr-tile" disabled><b>${esc(cfrLabel(k))}</b><span>No monthly reports yet</span></button>`;}).join("")}</div>
+   <div id="cfr-panel" role="status" aria-live="polite" style="margin-top:12px">${cfrPanel()}</div>
+   <p class="drillnote">Reporting-period slides show the selected month; cumulative slides add every month from 1 October up to it. Figures are from the latest dashboard update, on the DHIS2 monthly instance as soon as facilities submit. High risk = the CSCC sites. Filled: Gen Pop and high-risk testing, yield by modality (one slide per state), sex and age, HIVST. Left for the HTS team: activities, RTK stock, retesting for verification, trainings, challenges.</p></section>`;
 }
 function htsPage(){
   const v=agg(), E=c=>evaluate(c,v), cf=E("HTS_TST_POS"), ht=E("HTS_TST"), lk=E("IPI_ART_COV"), pr=E("PrEP_NEW");
@@ -2505,6 +2560,7 @@ document.addEventListener("click", e=>{
   const vg=e.target.closest("[data-vgcat]"); if(vg){VGS.cat=vg.dataset.vgcat; render(); return;}
   if(e.target.closest("[data-vgcsv]")){vgCsv(vgSel()); return;}
   const vx=e.target.closest("[data-vlcsv]"); if(vx){const k=vx.dataset.vlcsv; vlcCsv(vlcSel(k,VLCF[k]()),k); return;}
+  const cfrB=e.target.closest("[data-cfr]"); if(cfrB){cfrGet(cfrB.dataset.cfr); return;}
   const ah=e.target.closest("[data-ahd]"); if(ah){AHDM=ah.dataset.ahd; render(); return;}
   const cc=e.target.closest("[data-ccat]"); if(cc){CCAT=cc.dataset.ccat; render(); return;}
   if(e.target.closest("#conc-csv")){ concCsv(concSel()); return; }

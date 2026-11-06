@@ -658,7 +658,13 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
     if not demo:          # HTS team's monthly case finding report (PowerPoint), one per month of the year
         try:
             from kpi.hts_report import find_template, write_reports
-            data["reports"] = write_reports(data, folder(cfg, "live", "live") / "reports", find_template(cfg, ROOT))
+            from kpi.engine import attach_master
+            from kpi.measures import dhis_cube
+            # the monthly instance alone, without waiting for the day it takes over from the weekly reports
+            r = cfg["reporting"]
+            m_all = merge_weekly_monthly(weekly, monthly, rule=r["week_to_month_rule"], takeover=r["monthly_takeover"], as_of=as_of)
+            m_cube = attach_master(dhis_cube(m_all[m_all["source"].eq("monthly")]), master, "reports", {})
+            data["reports"] = write_reports(data, folder(cfg, "live", "live") / "reports", find_template(cfg, ROOT), m_cube)
             print(f"  monthly case finding reports: {len(data['reports'])}")
         except Exception as e:                      # a report problem must not stop the update
             print(f"  WARNING monthly case finding reports not made: {type(e).__name__}: {e}")

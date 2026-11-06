@@ -437,6 +437,9 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
     if cdr is not None and len(cdr):
         cd = linelist_date(cdr, cols["linelist"], as_of)
         x = linelist_cube(cdr, cols["linelist"], Period(as_of=cd, fy_start=p.fy_start), None, today=cd)
+        # the case finding report's linked to ART comes from the EMR line list, not the NDR
+        parts[1] = parts[1][parts[1]["measure"] != "tx_new_all"]
+        parts.append(attach_master(x[x["measure"] == "tx_new_all"], master, "cdr_linelist", dq))
         x = x[(x["period"].fillna("") == "") & (x["mod"].fillna("") == "") & x["measure"].isin(["tx_curr_emr", "emr_active"])]
         parts.append(attach_master(x.assign(measure=x["measure"].map({"tx_curr_emr": "tx_curr_cdr", "emr_active": "emr_active_cdr"})),
                                    master, "cdr_linelist", dq))

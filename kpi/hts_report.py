@@ -1,7 +1,7 @@
 """Monthly case finding report (HTS team, CDC template), filled from the dashboard's data.
 
 One PowerPoint per month of the fiscal year, from the HTS team's template: the DHIS2 *monthly* instance
-only (no weekly reports), plus TX_NEW (new on ART by ART start date) from the treatment line list as
+only (no weekly reports), plus everyone who started ART in the month (ART start date; no biometric, status or transfer-in filter) from the EMR line list as
 "Number linked to ART". "Reporting period" slides show the month; "Cumulative" slides show 1 October
 to the end of that month. Persons at high risk = key populations = testing at the CSCC sites; Gen Pop =
 all other sites (the two add up to the total).
@@ -23,7 +23,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 STATES = ["Delta", "Ekiti", "Osun"]
-NEED = {"hts_tst", "hts_tst_neg", "hts_tst_pos", "tx_new_q", "hivst_assisted", "hivst_unassisted",
+NEED = {"hts_tst", "hts_tst_neg", "hts_tst_pos", "tx_new_all", "hivst_assisted", "hivst_unassisted",
         "hivst_reactive", "hivst_confirmed", "hivst_linked"}
 AGE_BANDS = [("0-4", {"<1", "1-4"}), ("5-9", {"5-9"}), ("10-14", {"10-14"}), ("15-19", {"15-19"})]
 
@@ -33,7 +33,9 @@ class Figures:
     """Sums over the cube for a set of months: monthly-instance rows (kind M) for DHIS2 measures,
     ART start dates (kind D) for TX_NEW."""
 
-    def __init__(self, data: dict):
+    def __init__(self, data: dict, monthly=None):
+        """monthly: long cube of the monthly instance alone. The report uses it so a month is available as soon
+        as facilities submit, while the dashboard itself stays on weekly reports until the switch day."""
         dims, per = data["cube"]["dims"], data["periods"]
         rows = data["cube"]["rows"] if "rows" in data["cube"] else [list(r) for r in zip(*data["cube"]["cols"])]
         self.state = [f[0] for f in dims["facility"]]
@@ -43,7 +45,19 @@ class Figures:
         month = [p.get("month") for p in per]
         names = dims["measure"]
         self.rows = [(names[m], f, s, a, mo, month[p], v) for f, s, a, mo, p, m, v in rows
-                     if names[m] in NEED and kind[p] == ("D" if names[m] == "tx_new_q" else "M")]
+                     if names[m] in NEED and kind[p] == ("D" if names[m] == "tx_new_all" else "M")]
+        if monthly is not None:
+            self.rows = [r for r in self.rows if r[0] == "tx_new_all"]
+            fac = {f[2]: i for i, f in enumerate(dims["facility"])}
+            self.sex, self.age, self.mod = list(self.sex), list(self.age), list(self.mod)
+            def at(values, v):
+                if v not in values:
+                    values.append(v)
+                return values.index(v)
+            x = monthly[monthly["measure"].isin(NEED) & monthly["facility"].isin(fac) & (monthly["value"] != 0)]
+            for r in x.groupby(["measure", "facility", "sex", "age", "mod", "period"], dropna=False)["value"].sum().reset_index().itertuples(index=False):
+                self.rows.append((r.measure, fac[r.facility], at(self.sex, r.sex), at(self.age, r.age),
+                                  at(self.mod, "" if r.mod != r.mod else r.mod), str(r.period)[:7], r.value))
         self.idx: dict[tuple, list] = {}                 # (measure, month) -> rows
         for row in self.rows:
             self.idx.setdefault((row[0], row[5]), []).append(row)
@@ -259,7 +273,7 @@ def build_report(fig: Figures, template: Path, month: str, fy_months: list[str],
     def hts_rows(months, kp):
         rows, tot = [], [0.0] * 4
         for s in STATES:
-            t, n, p, l = (fig.sum(m, months, state=s, kp=kp) for m in ("hts_tst", "hts_tst_neg", "hts_tst_pos", "tx_new_q"))
+            t, n, p, l = (fig.sum(m, months, state=s, kp=kp) for m in ("hts_tst", "hts_tst_neg", "hts_tst_pos", "tx_new_all"))
             rows.append([s, num(t), num(n), num(p), rate(p, t), num(l), rate(l, p)])
             tot = [a + b for a, b in zip(tot, (t, n, p, l))]
         t, n, p, l = tot
@@ -321,11 +335,11 @@ def find_template(cfg: dict, root: Path) -> Path | None:
     return bundled if bundled.is_file() else None
 
 
-def write_reports(data: dict, out_dir: Path, template: Path | None) -> list[dict]:
+def write_reports(data: dict, out_dir: Path, template: Path | None, monthly=None) -> list[dict]:
     """A report for every month of the fiscal year with monthly HTS reports; returns the list for the page."""
     if not template:
         return []
-    fig = Figures(data)
+    fig = Figures(data, monthly)
     fy_start = str(data["meta"]["fy_start"])[:7]
     have = sorted({mon for m, f, s, a, mo, mon, v in fig.rows if m == "hts_tst" and v and mon and mon >= fy_start})
     closed = {r["month"]: bool(r.get("closed")) for r in data.get("dataflow", [])}
@@ -335,7 +349,10 @@ def write_reports(data: dict, out_dir: Path, template: Path | None) -> list[dict
         name = f"HTS_case_finding_{month}.pptx"
         prov = not closed.get(month, False)
         build_report(fig, template, month, have[:i + 1], out_dir / name, prov)
-        made.append({"month": month, "label": month_label(month), "file": f"reports/{name}", "provisional": prov})
+        figs = lambda months, **k: [fig.sum(x, months, **k) for x in ("hts_tst", "hts_tst_pos", "tx_new_all")]
+        made.append({"month": month, "label": month_label(month), "file": f"reports/{name}", "provisional": prov,
+                     "cum_from": month_label(have[0]), "month_figs": figs({month}), "cum_figs": figs(set(have[:i + 1])),
+                     "states": [[s] + figs({month}, state=s) + figs(set(have[:i + 1]), state=s) for s in STATES]})
     for old in out_dir.glob("HTS_case_finding_*.pptx"):          # months no longer in this fiscal year
         if old.name not in {m["file"].split("/")[-1] for m in made}:
             old.unlink(missing_ok=True)

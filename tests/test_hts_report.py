@@ -6,7 +6,7 @@ from xml.dom import minidom
 
 import pytest
 
-from kpi.hts_report import write_reports
+from kpi.hts_report import Figures, write_reports
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "dashboard" / "assets" / "hts_case_finding_template.pptx"
 
@@ -16,7 +16,7 @@ def _data():
             "sex": ["F", "M", "U"], "age": ["<1", "1-4", "5-9", "10-14", "15-19", "20-24", "Unknown"],
             "mod": ["", "Index", "VCT"],
             "period": ["2026-10", "2026-11", "2026W45", "2026-11-03"],
-            "measure": ["hts_tst", "hts_tst_neg", "hts_tst_pos", "tx_new_q"]}
+            "measure": ["hts_tst", "hts_tst_neg", "hts_tst_pos", "tx_new_all"]}
     periods = [{"key": "2026-10", "kind": "M", "month": "2026-10"}, {"key": "2026-11", "kind": "M", "month": "2026-11"},
                {"key": "2026W45", "kind": "W", "month": "2026-11"}, {"key": "2026-11-03", "kind": "D", "month": "2026-11"}]
     r = []
@@ -57,3 +57,16 @@ def test_reports_month_and_cumulative(tmp_path):
     kp = _table(nov, 5)                                                 # high risk = the CSCC site
     assert kp[1][:4] == ["Delta", "20", "16", "4"] and kp[4][0] == "Total"
     assert len(zipfile.ZipFile(nov).read("ppt/presentation.xml").decode().split("<p:sldId ")) - 1 == 16   # modality slide per state
+
+
+def test_monthly_cube_gives_a_month_the_dashboard_still_has_on_weekly():
+    import pandas as pd
+    data = _data()
+    name = data["cube"]["dims"]["facility"][0][2]
+    state = data["cube"]["dims"]["facility"][0][0]
+    cube = pd.DataFrame([dict(state=state, lga="", facility=name, sex="F", age="25-29", mod="VCT", period="2026-11", measure="hts_tst", value=7),
+                         dict(state=state, lga="", facility=name, sex="F", age="25-29", mod="VCT", period="2026-12", measure="hts_tst", value=4)])
+    fig = Figures(data, cube)
+    assert fig.sum("hts_tst", {"2026-11"}) == 7
+    assert fig.sum("hts_tst", {"2026-11", "2026-12"}) == 11      # cumulative adds the months up to the one selected
+    assert fig.sum("hts_tst", {"2026-11"}, state=state, sex="F", mod="VCT") == 7
