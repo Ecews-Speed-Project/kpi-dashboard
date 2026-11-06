@@ -254,6 +254,24 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         self._redirect("/index.html#overview",
                        f"{COOKIE}={sign(addr)}; Path=/; Max-Age={DAYS * 86400}; HttpOnly; SameSite=Lax{secure}")
 
+    def _live_data(self, route: str, user: str):
+        send = lambda obj, status=200: self._page(json.dumps(obj), status, "application/json")
+        try:
+            from kpi import live
+            if not live.enabled():
+                return self.send_error(404)
+            if route == "/live-data/options":
+                return send(live.options())
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            one = lambda k: (q.get(k) or [""])[0]
+            log_access(user, self.headers.get("X-Forwarded-For", self.client_address[0]), "live-data")
+            return send(live.get(one("section"), one("state"), one("period")))
+        except ValueError:
+            return send({"error": "That selection is not available."}, 400)
+        except Exception as e:           # the reason goes to the log; the page says DHIS2 could not be reached
+            print(f"live data entry failed: {type(e).__name__}", flush=True)
+            return send({"error": "DHIS2 could not be reached. Try again in a few minutes."}, 502)
+
     def _gate(self, head: bool) -> bool:
         """Answer sign-in routes; False when the request may go on to the dashboard files."""
         route = self._route()
@@ -293,6 +311,9 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
                 self._redirect("/login")
             else:
                 self.send_error(401, "Sign in at /login")
+            return True
+        if route.startswith("/live-data"):      # live data entry monitor: only where DHIS2 logins are set
+            self._live_data(route, user)
             return True
         if route == "/whoami":
             self._page(json.dumps({"email": user, "name": first_name(user)}), ctype="application/json")

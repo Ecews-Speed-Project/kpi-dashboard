@@ -412,7 +412,7 @@ details.terms summary .ico{vertical-align:-.3em}
 const D = window.__D; delete window.__D;
 const SPEED = "ECEWS SPEED";
 const PAGES = [["overview","Overview"],["ipi","IPI & Non-IPI"],["hts","HIV Testing Services"],["naomi","Saturation"],["art","Current on Treatment"],["vl","Viral Load"],
-  ["pmtct","AP3/PMTCT"],["tb","TB"],["ahd","AHD"],["pbs","Biometrics"],["methods","How it's calculated"],["flow","Data flow"]];
+  ["pmtct","AP3/PMTCT"],["tb","TB"],["ahd","AHD"],["pbs","Biometrics"],["live","Live data entry"],["methods","How it's calculated"],["flow","Data flow"]];
 let page = "overview", IPID = null, WHO = null;
 const F = {state:"", lga:"", fac:"", sex:"", age:""};
 try { Object.assign(F, JSON.parse(localStorage.getItem("speed.filters")||"{}")); } catch(e){}
@@ -1063,6 +1063,48 @@ function htsReports(){
        :`<button type="button" class="cfr-tile" disabled><b>${esc(cfrLabel(k))}</b><span>No monthly reports yet</span></button>`;}).join("")}</div>
    <div id="cfr-panel" role="status" aria-live="polite" style="margin-top:12px">${cfrPanel()}</div>
    <p class="drillnote">Reporting-period slides show the selected month; cumulative slides add every month from 1 October up to it. Figures are from the latest dashboard update, on the DHIS2 monthly instance as soon as facilities submit. High risk = the CSCC sites. Filled: Gen Pop and high-risk testing, yield by modality (one slide per state), sex and age, HIVST. Left for the HTS team: activities, RTK stock, retesting for verification, trainings, challenges.</p></section>`;
+}
+/* ---------- Live data entry: straight from DHIS2 for one state, period and section (server route /live-data) ---------- */
+const LV = {on:false, opt:null, section:"hts", state:"", period:"", res:null, busy:false, err:"", started:false};
+const lvKey = () => `${LV.section}|${LV.state}|${LV.period}`;
+function liveBody(){
+  if(LV.busy && !LV.res) return `<div class="cfr-box"><b>Reading DHIS2…</b><div class="cfr-bar"><span></span></div><span class="drillnote">The first read of the day can take a little longer.</span></div>`;
+  if(LV.err && !LV.res) return `<div class="cfr-box"><b>${esc(LV.err)}</b></div>`;
+  const r=LV.res; if(!r) return "";
+  const t=r.totals, p=r.previous, M=r.measures, rate=(a,b)=>rpct(a,b);
+  const when=new Date(r.as_of), hhmm=when.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}), sc=r.state||"All states";
+  const lastLab=m=>`${r.previous_label}: ${n(p[m])}`;
+  return `${LV.busy?`<div class="cfr-bar"><span></span></div>`:""}${LV.err?`<p class="drillnote"><b>${esc(LV.err)}</b></p>`:""}${r.warning?`<p class="drillnote"><b>${esc(r.warning)}</b></p>`:""}
+   <p class="drillnote"><b>${esc(sc)} · ${esc(r.period_label)} · as of ${hhmm}</b>. Provisional: figures change as entry continues.</p>
+   <div class="kpis">${kpi(`${n(r.reported)} / ${n(r.expected)}`,"Facilities reported",`${rpct(r.reported,r.expected,0)} of those reporting recently`)}${M.map(m=>kpi(n(t[m.key]),m.label,lastLab(m.key))).join("")}${kpi(rate(t[r.rate.num],t[r.rate.den]),r.rate.label,`${r.previous_label}: ${rate(p[r.rate.num],p[r.rate.den])}`)}</div>
+   ${r.flags.length?`<section class="c3d">${secH("Check these entries",`At least 3 times the site's highest entry of the last 3 periods · for the data officer to check`)}<div class="tw"><table><thead><tr><th>Facility</th><th>LGA</th><th>Indicator</th><th class="n">Entered</th><th class="n">Usual</th></tr></thead><tbody>${r.flags.map(f=>`<tr><td>${esc(f.facility)}</td><td>${esc(f.lga)}</td><td>${esc(f.measure)}</td><td class="n">${n(f.value)}</td><td class="n">${n(f.usual)}</td></tr>`).join("")}</tbody></table></div></section>`:""}
+   <section class="c3d">${secH("By LGA",esc(r.period_label))}<div class="tw"><table><thead><tr><th>LGA</th><th class="n">Reported</th>${M.map(m=>`<th class="n">${esc(m.label)}</th>`).join("")}</tr></thead><tbody>${r.by_lga.map(x=>`<tr><td>${esc(x.lga)}</td><td class="n">${n(x.reported)} / ${n(x.expected)}</td>${M.map(m=>`<td class="n">${n(x[m.key])}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section>
+   <section class="c3d">${secH(`Facilities not yet reported (${n(r.missing.length)})`,"Reported on these forms in the last 3 periods, with no entry for this one")}${r.missing.length?`<div class="tw" style="max-height:360px"><table><thead><tr><th>LGA</th><th>Facility</th></tr></thead><tbody>${r.missing.map(x=>`<tr><td>${esc(x[0])}</td><td>${esc(x[1])}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Every facility that reported recently has an entry for this period.</div>`}</section>`;
+}
+function livePaint(){ const el=document.getElementById("live-body"); if(el) el.innerHTML=liveBody(); const b=document.querySelector("[data-lvgo]"); if(b){ b.disabled=LV.busy; b.textContent=LV.busy?"Reading…":"Refresh"; } }
+async function liveFetch(){
+  if(!LV.on||!LV.period) return;
+  const key=lvKey(); if(LV.res&&LV.resKey!==key) LV.res=null;
+  LV.busy=true; LV.err=""; LV.started=true; livePaint();
+  try{
+    const r=await fetch(`/live-data?section=${encodeURIComponent(LV.section)}&state=${encodeURIComponent(LV.state)}&period=${encodeURIComponent(LV.period)}`,{cache:"no-store"});
+    const j=await r.json(); if(key!==lvKey()) return;
+    if(!r.ok) throw new Error(j.error||"DHIS2 could not be reached.");
+    LV.res=j; LV.resKey=key;
+  }catch(e){ if(key!==lvKey()) return; LV.err=e.message&&!/fetch|JSON/i.test(e.message)?e.message:"DHIS2 could not be reached. Try again in a few minutes."; }
+  LV.busy=false; livePaint();
+}
+function livePage(){
+  if(!LV.on) return `<section class="c3d empty">Live data entry is not switched on for this server yet.</section>`;
+  const o=LV.opt, sel=(id,val,opts)=>`<select id="lv-${id}">${opts.map(x=>`<option value="${esc(x[0])}"${x[0]===val?" selected":""}>${esc(x[1])}</option>`).join("")}</select>`;
+  const kinds=[...new Set(o.periods.map(p=>p.kind))];
+  const per=`<select id="lv-period">${kinds.map(k=>`<optgroup label="${esc(k)}">${o.periods.filter(p=>p.kind===k).map(p=>`<option value="${esc(p.key)}"${p.key===LV.period?" selected":""}>${esc(p.label)}</option>`).join("")}</optgroup>`).join("")}</select>`;
+  const v=agg({...F,state:LV.state,lga:"",fac:"",sex:"",age:""}), asOf=fmtDate(D.meta.linelist_as_of||D.meta.as_of);
+  if(!LV.started) setTimeout(liveFetch,0);
+  return `<div class="dimbar"><span class="eyebrow">Section</span>${sel("section",LV.section,o.sections.map(s=>[s.key,s.label]))}<span class="eyebrow">State</span>${sel("state",LV.state,[["","All states"],...o.states.map(s=>[s,s])])}<span class="eyebrow">Period</span>${per}<button type="button" class="cfr-dl" data-lvgo>Refresh</button></div>
+   <div id="live-body" role="status" aria-live="polite" style="margin-top:12px">${liveBody()}</div>
+   <section class="c3d">${secH("From the latest update",`Line list figures, not live · NDR file of ${asOf} · dashboard updated ${esc(String(D.meta.generated_at||"").replace("T"," "))}`)}<div class="kpis">${kpi(n(v.tx_curr),TXE())}${kpi(n(v.vl_eligible),"VL eligible")}${kpi(rpct(v.vl_result,v.vl_eligible),"VL coverage",`${n(v.vl_result)} results`)}${kpi(rpct(v.vl_suppressed,v.vl_result),"VL suppression")}</div>
+     <p class="drillnote">The live figures above come straight from DHIS2 and use the same formulas as the rest of the dashboard. Answers are kept for 5 minutes, so Refresh may show the same read. Treatment and viral load follow the regular updates, because the line lists are not live.</p></section>`;
 }
 function htsPage(){
   const v=agg(), E=c=>evaluate(c,v), cf=E("HTS_TST_POS"), ht=E("HTS_TST"), lk=E("IPI_ART_COV"), pr=E("PrEP_NEW");
@@ -2490,10 +2532,10 @@ function render(){
   document.getElementById("sub").textContent=`${m.programme} · Delta, Ekiti, Osun · showing ${P.label} · current quarter ${m.quarter}`;
   const ipiOn = periodFY()===TFY;          // IPI is tracked from this fiscal year only: earlier periods have no IPI page
   if(page==="ipi" && !ipiOn){ page="overview"; IPID=null; try{ history.replaceState(null,"","#overview"); }catch(e){} }
-  document.getElementById("nav").innerHTML=PAGES.filter(([k])=>k!=="ipi"||ipiOn).map(([k,l])=>`<a href="#${k}"${k===page?' aria-current="page"':""}>${l}</a>`).join("");
-  document.getElementById("filters").innerHTML=filtersBar();
+  document.getElementById("nav").innerHTML=PAGES.filter(([k])=>(k!=="ipi"||ipiOn)&&(k!=="live"||LV.on)).map(([k,l])=>`<a href="#${k}"${k===page?' aria-current="page"':""}>${l}</a>`).join("");
+  document.getElementById("filters").innerHTML=page==="live"?"":filtersBar();
   const fn={overview,hts:htsPage,art:artPage,vl:vlPage,pmtct:pmtctPage,tb:tbPage,ahd:ahdPage,pbs:pbsPage,trends:artPage,naomi:naomiPage,
-    ipi:()=>IPID?ipiDetail(IPID):ipiPage(),methods:methodsPage,flow:flowPage}[page]||overview;
+    ipi:()=>IPID?ipiDetail(IPID):ipiPage(),live:livePage,methods:methodsPage,flow:flowPage}[page]||overview;
   document.getElementById("who").innerHTML = WHO ? `<span>${ico("user",20)} Hi, <b>${esc(WHO.name)}</b></span><a href="/logout" title="${esc(WHO.email)}">Sign out</a>` : "";
   const hello = page==="overview" && WHO ? `<h2 class="hello">Hi, ${esc(WHO.name)} <small>here is where the programme stands for ${esc(P.label)}</small></h2>` : "";
   WIN=windowSet();
@@ -2515,6 +2557,7 @@ function route(){ const [h,sub]=location.hash.slice(1).split("/"); page=PAGES.so
 addEventListener("hashchange", route);
 document.addEventListener("change", e=>{
   const id=e.target.id;
+  if(id==="lv-section"||id==="lv-state"||id==="lv-period"){ LV[id.slice(3)]=e.target.value; liveFetch(); return; }
   if(id==="f-period"){ const v=e.target.value;
     if(v.startsWith("q:")) setPeriod("quarter", v.slice(2)); else if(v.startsWith("m:")) setPeriod("month", v.slice(2)); else if(v.startsWith("fy:")) setPeriod("fy", v.slice(3));
     else setPeriod("range", null, P.start, P.end<=MAXDATE?P.end:MAXDATE); render(); return; }
@@ -2560,6 +2603,7 @@ document.addEventListener("click", e=>{
   const vg=e.target.closest("[data-vgcat]"); if(vg){VGS.cat=vg.dataset.vgcat; render(); return;}
   if(e.target.closest("[data-vgcsv]")){vgCsv(vgSel()); return;}
   const vx=e.target.closest("[data-vlcsv]"); if(vx){const k=vx.dataset.vlcsv; vlcCsv(vlcSel(k,VLCF[k]()),k); return;}
+  if(e.target.closest("[data-lvgo]")){liveFetch(); return;}
   const cfrB=e.target.closest("[data-cfr]"); if(cfrB){cfrGet(cfrB.dataset.cfr); return;}
   const ah=e.target.closest("[data-ahd]"); if(ah){AHDM=ah.dataset.ahd; render(); return;}
   const cc=e.target.closest("[data-ccat]"); if(cc){CCAT=cc.dataset.ccat; render(); return;}
@@ -2575,6 +2619,7 @@ document.addEventListener("mousemove", e=>{const el=e.target.closest("[data-tip]
   tip.textContent=el.dataset.tip; tip.hidden=false; tip.style.left=Math.min(e.clientX+14,innerWidth-tip.offsetWidth-8)+"px"; tip.style.top=(e.clientY+16)+"px";});
 // signed-in visitor (served by serve_dashboard.py): "Hi, <first name>"
 if (location.protocol.startsWith("http"))
+  fetch("/live-data/options", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(o=>{ if(o){ LV.on=true; LV.opt=o; if(!LV.period) LV.period=(o.periods[0]||{}).key||""; render(); } }).catch(()=>{});
   fetch("/whoami", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(w=>{ if(w&&w.name){ WHO=w; render(); } }).catch(()=>{});
 // phones have no hover: a tap shows the tooltip
 document.addEventListener("click", e=>{ if(matchMedia("(hover:hover)").matches) return; const el=e.target.closest("[data-tip]"); if(!el){tip.hidden=true;return;}
