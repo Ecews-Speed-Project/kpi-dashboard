@@ -620,7 +620,7 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         "prev_tx_curr": prev_active,
         # dated events: the dashboard picks them up for any date range
         "tx_new_q": in_hist(start) & (ti != "yes") & uniq,
-        "tx_new_all": in_hist(start),   # case finding report (EMR line list): everyone who started ART, no biometric, status or transfer-in filter
+        "tx_new_all": in_hist(start) & (ti != "yes"),   # case finding report (EMR line list): everyone newly started on ART, no biometric or status filter; transfer-ins are not new
         "ti_q": active & (ti == "yes") & ~prev_active,
         "rtt_q": active & prev.isin(STATUS["iit"] | STATUS["to"] | STATUS["stopped"] | STATUS["dead"]),
         "iit_q": status.isin(STATUS["iit"]) & in_hist(iit_date),

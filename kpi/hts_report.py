@@ -1,7 +1,7 @@
 """Monthly case finding report (HTS team, CDC template), filled from the dashboard's data.
 
 One PowerPoint per month of the fiscal year, from the HTS team's template: the DHIS2 *monthly* instance
-only (no weekly reports), plus everyone who started ART in the month (ART start date; no biometric, status or transfer-in filter) from the EMR line list as
+only (no weekly reports), plus everyone who started ART in the month (ART start date, excluding transfer-ins; no biometric or status filter) from the EMR line list as
 "Number linked to ART". "Reporting period" slides show the month; "Cumulative" slides show 1 October
 to the end of that month. Persons at high risk = key populations = testing at the CSCC sites; Gen Pop =
 all other sites (the two add up to the total).

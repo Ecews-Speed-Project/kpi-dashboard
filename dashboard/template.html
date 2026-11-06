@@ -1057,7 +1057,7 @@ async function cfrGet(month){
 function htsReports(){
   if(D.meta.archived) return "";
   const R=D.reports||[];
-  return `<section class="c3d">${secH("Monthly case finding report","CDC template · select a month to prepare its report · DHIS2 monthly instance · linked to ART = everyone in the EMR line list who started ART in the month, with no biometric or other filter")}
+  return `<section class="c3d">${secH("Monthly case finding report","CDC template · select a month to prepare its report · DHIS2 monthly instance · linked to ART = everyone in the EMR line list who started ART in the month, excluding transfer-ins, with no biometric or status filter")}
    <div class="cfr-tiles">${cfrMonths().map(k=>{const r=R.find(x=>x.month===k);
      return r?`<button type="button" class="cfr-tile" data-cfr="${esc(k)}" aria-pressed="${k===CFR.month}"><b>${esc(r.label)}</b><span>${n(r.month_figs[0])} tested · ${n(r.month_figs[1])} positive</span>${cfrPill(r)}</button>`
        :`<button type="button" class="cfr-tile" disabled><b>${esc(cfrLabel(k))}</b><span>No monthly reports yet</span></button>`;}).join("")}</div>
