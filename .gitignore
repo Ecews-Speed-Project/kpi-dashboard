@@ -26,3 +26,8 @@ data/manual/
 # sign-in signing key
 data/.dash_secret
 data/
+
+# who signed in: names and units stay out of git
+data/users.json
+data/users.tmp
+!dashboard/assets/trm_template.pptx

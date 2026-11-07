@@ -1,11 +1,14 @@
 """Serve live/ at http://localhost:8765 so the dashboard reloads itself after
 every update (it polls live/version.json once a minute).
 
-Sign-in: every visitor first gives their email address on /login. Only addresses
-allowed in settings.yaml (access: allowed_domains / allowed_emails) get in; the
-browser then keeps a signed session cookie for access.session_days. Sign-ins are
-written to logs/access.log. (The address is not verified by a code or password:
-this keeps casual visitors out; use the organisation's single sign-on when hosting.)
+Sign-in: every visitor gives their official email on /login. Only addresses allowed
+in settings.yaml (access: allowed_domains / partner_names / allowed_emails) get in.
+The first time, they also give their first name and unit (kept in data/users.json);
+after that the email is enough. The session ends after access.session_minutes without
+activity: the page reports activity to /session/alive, and background checks do not
+count. Only the SI unit gets the Live data entry page. Sign-ins are written to
+logs/access.log. (The address is not verified by a code or password: this keeps
+casual visitors out; use the organisation's single sign-on when hosting.)
 
 Compression: browsers that accept gzip get the precompressed live/index.html.gz
 (written by every build, about 7x smaller). Caching: the browser keeps its copy
@@ -49,9 +52,14 @@ LOGS = ROOT / cfg.get("paths", {}).get("logs", "logs")
 PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else int(os.environ.get("DASH_PORT", 8765))
 ACCESS = cfg.get("access") or {}
 DOMAINS = [d.lower().lstrip("@") for d in ACCESS.get("allowed_domains", ["ecews.org"])]
+PARTNER_NAMES = {k.lower(): n for k, n in (ACCESS.get("partner_names") or {}).items()}     # text in the email domain -> partner
 EMAILS = {e.lower() for e in ACCESS.get("allowed_emails", [])}
-DAYS = int(ACCESS.get("session_days", 30))
-COOKIE = "speed_session"
+SESSION_SECONDS = int(ACCESS.get("session_minutes", 30)) * 60
+LIVE_EMAILS = {e.lower() for e in ACCESS.get("live_emails") or []}       # optional: narrows Live data entry further
+UNITS = ["CSU", "Lab", "PSCM", "SI", "HSS/CQI", "CCMP/VP", "Comms/IT", "Admin", "Programs", "Mgt", "Prevention"]
+USERS_FILE = ROOT / "data" / "users.json"
+_USERS_LOCK = threading.Lock()
+COOKIE = "speed_s2"          # renamed so sessions from before the 30-minute rule end
 LOGO = ROOT / "dashboard" / "assets" / "ecews_logo.png"
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
@@ -73,9 +81,41 @@ def _secret() -> bytes:
 SECRET = _secret()
 
 
+def partner_of(addr: str) -> str:
+    """The partner whose name appears in the email domain (the part after @), else ''."""
+    domain = addr.rsplit("@", 1)[-1].lower()
+    return next((n for k, n in PARTNER_NAMES.items() if k in domain), "")
+
+
 def allowed(addr: str) -> bool:
     addr = addr.strip().lower()
-    return bool(EMAIL_RE.match(addr)) and (addr in EMAILS or addr.rsplit("@", 1)[1] in DOMAINS)
+    return bool(EMAIL_RE.match(addr)) and (addr in EMAILS or addr.rsplit("@", 1)[1] in DOMAINS or bool(partner_of(addr)))
+
+
+def users() -> dict:
+    try:
+        return json.loads(USERS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def register(addr: str, name: str, unit: str, partner: str = "") -> None:
+    """Keep who someone is after their first sign-in. Written whole, then swapped in, so a crash cannot damage it."""
+    with _USERS_LOCK:
+        u = users()
+        u[addr] = {"first_name": name, "unit": unit, "partner": partner, "first_seen": f"{dt.datetime.now():%Y-%m-%d %H:%M}"}
+        USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = USERS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(u, indent=1, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, USERS_FILE)
+
+
+def can_live(addr: str) -> bool:
+    return users().get(addr, {}).get("unit") == "SI" and (not LIVE_EMAILS or addr in LIVE_EMAILS)
+
+
+def clean_name(s: str) -> str:
+    return re.sub(r"\s+", " ", s).strip()[:40]
 
 
 def first_name(addr: str) -> str:
@@ -86,7 +126,7 @@ def first_name(addr: str) -> str:
 
 
 def sign(addr: str) -> str:
-    body = base64.urlsafe_b64encode(f"{addr}|{int(time.time()) + DAYS * 86400}".encode()).decode().rstrip("=")
+    body = base64.urlsafe_b64encode(f"{addr}|{int(time.time()) + SESSION_SECONDS}".encode()).decode().rstrip("=")
     return body + "." + hmac.new(SECRET, body.encode(), hashlib.sha256).hexdigest()
 
 
@@ -107,59 +147,7 @@ def log_access(addr: str, ip: str, outcome: str) -> None:
         f.write(f"{dt.datetime.now():%Y-%m-%d %H:%M:%S}\t{outcome}\t{addr}\t{ip}\n")
 
 
-LOGIN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>SPEED KPI Dashboard - sign in</title>
-<style>
-:root{--cloth:#1F3A2E;--gold:#C9A55A;--cream:#FBF5E4;--ink:#2A2418;--ink3:#6B5F49;--bad:#9A2F22}
-*{box-sizing:border-box}html,body{height:100%}
-body{margin:0;min-height:100vh;display:grid;place-items:center;color:var(--ink);font-family:Georgia,"EB Garamond",serif;padding:16px;
-  background:#22392E;overflow:hidden}
-.slides{position:fixed;inset:0;z-index:0}
-.slides div{position:absolute;inset:-4%;background:center/cover no-repeat;opacity:0;transition:opacity 2.4s ease;transform:scale(1.02);filter:blur(3px) saturate(.85)}
-.slides div.on{opacity:1}
-@media (prefers-reduced-motion:no-preference){.slides div.on{animation:drift 16s ease-out forwards}}
-@keyframes drift{from{transform:scale(1.02) translate(0,0)}to{transform:scale(1.10) translate(-1.2%,-.8%)}}
-.veil{position:fixed;inset:0;z-index:1;background:linear-gradient(160deg,rgba(251,245,228,.42),rgba(31,58,46,.50) 55%,rgba(20,38,30,.72))}
-.card{position:relative;z-index:2;width:100%;max-width:410px;background:rgba(251,245,228,.93);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
-  border:1px solid rgba(201,165,90,.7);border-radius:18px;padding:30px 28px 24px;box-shadow:0 30px 60px -28px rgba(0,0,0,.55);animation:rise .9s ease-out both}
-@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
-.logo{background:var(--cream);border:1px solid var(--gold);border-radius:8px;padding:6px 10px}.logo img{height:30px;display:block}
-.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--cloth);background:rgba(31,58,46,.08);border-radius:20px;padding:4px 10px}
-h1{font-size:27px;margin:0 0 6px;color:var(--cloth);font-weight:600}
-p.lead{margin:0 0 20px;color:var(--ink3);font-style:italic;font-size:16px}
-label{display:flex;align-items:center;gap:6px;font-size:12.5px;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:7px;color:var(--cloth)}
-.field{position:relative}.field svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:.6}
-input{width:100%;font:inherit;font-size:17px;padding:12px 12px 12px 40px;border-radius:10px;border:1px solid rgba(31,58,46,.25);background:#fff;color:var(--ink);transition:border-color .2s,box-shadow .2s}
-input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,165,90,.25)}
-button{margin-top:16px;width:100%;display:flex;justify-content:center;align-items:center;gap:8px;font:inherit;font-size:16.5px;padding:12px;border:0;border-radius:10px;
-  background:linear-gradient(180deg,#2B4C3C,#1F3A2E);color:var(--cream);font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 8px 18px -10px rgba(31,58,46,.8)}
-button:hover{transform:translateY(-1px);box-shadow:0 12px 22px -10px rgba(31,58,46,.9)}
-.err{margin-top:14px;background:#F6DCD6;color:var(--bad);border-radius:8px;padding:9px 11px;font-size:15px}
-.foot{display:flex;align-items:center;gap:6px;margin-top:18px;color:var(--ink3);font-size:13px}
-.caption{position:fixed;z-index:2;left:20px;bottom:16px;color:var(--cream);font-style:italic;font-size:14px;opacity:.9;text-shadow:0 1px 6px rgba(0,0,0,.5);max-width:70vw}
-.dots{position:fixed;z-index:2;right:20px;bottom:20px;display:flex;gap:7px}.dots i{width:7px;height:7px;border-radius:50%;background:var(--cream);opacity:.4;transition:opacity .6s}.dots i.on{opacity:1}
-@media (max-width:480px){.card{padding:24px 18px 20px;border-radius:14px}h1{font-size:23px}.caption{display:none}}
-</style></head><body>
-<div class="slides">__SLIDES__</div><div class="veil"></div>
-<form class="card" method="post" action="/login">
- <div class="brand"><div class="logo"><img src="/logo.png" alt="ECEWS"></div>
-  <span class="badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M6 16V10M11 16V6M16 16v-4M21 16V8"/></svg>SPEED project</span></div>
- <h1>Welcome back</h1><p class="lead">Sign in with your ECEWS email to open the KPI dashboard.</p>
- <label for="email"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/></svg>Email address</label>
- <div class="field"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F3A2E" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8.2" r="3.8"/><path d="M4.6 20.4c.8-4 3.8-6.4 7.4-6.4s6.6 2.4 7.4 6.4"/></svg>
- <input id="email" name="email" type="email" autocomplete="email" required autofocus value="__VALUE__" placeholder="name@ecews.org"></div>
- <button type="submit">Continue <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l7 7-7 7M20.6 12H3"/></svg></button>__ERROR__
- <div class="foot"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l7.6 3v5.8c0 4.8-3.2 8.2-7.6 9.6-4.4-1.4-7.6-4.8-7.6-9.6V5.8z"/></svg>For ECEWS staff and approved partners only.</div>
-</form>
-<div class="caption" id="cap"></div><div class="dots" id="dots"></div>
-<script>
-(()=>{const s=[...document.querySelectorAll(".slides div")], cap=document.getElementById("cap"), dots=document.getElementById("dots");
- if(!s.length) return; dots.innerHTML=s.map(()=>"<i></i>").join(""); const d=[...dots.children];
- let k=Math.floor(Math.random()*s.length);
- const show=()=>{s.forEach((x,i)=>x.classList.toggle("on",i===k)); d.forEach((x,i)=>x.classList.toggle("on",i===k)); cap.textContent=s[k].dataset.cap||"";};
- show(); if(s.length>1) setInterval(()=>{k=(k+1)%s.length; show();}, 9000);})();
-</script></body></html>"""
+LOGIN_PAGE = (ROOT / "dashboard" / "login.html").read_text(encoding="utf-8")
 
 PHOTOS = ROOT / "dashboard" / "assets" / "login"
 CAPTIONS = {"speed-project": "The SPEED team reviewing programme data", "063A10521": "Mothers and children at the heart of PMTCT",
@@ -228,16 +216,44 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _login_form(self, value: str = "", error: str = "", status: int = 200):
-        err = f'<div class="err">&#9888; {html.escape(error)}</div>' if error else ""
-        self._page(LOGIN_PAGE.replace("__SLIDES__", slides()).replace("__VALUE__", html.escape(value, quote=True))
-                   .replace("__ERROR__", err), status)
+    def _login_form(self, value: str = "", error: str = "", status: int = 200, first_time: bool = False, name: str = "", unit: str = ""):
+        esc = lambda x: html.escape(x, quote=True)
+        idle = "idle=1" in urllib.parse.urlsplit(self.path).query
+        if first_time:
+            partner = partner_of(value)
+            opts = "".join(f'<option value="{esc(u)}"{" selected" if u == unit else ""}>{esc(u)}</option>' for u in UNITS)
+            who = (f'<label>Unit</label><div class="fixed">Partners &middot; {esc(partner)}</div>' if partner else
+                   f'<label for="unit">Unit</label><select id="unit" name="unit" required><option value="">Choose your unit</option>{opts}</select>')
+            fields = (f'<label>Official email</label><div class="fixed">{esc(value)}</div><input type="hidden" name="email" value="{esc(value)}">'
+                      f'<label for="first_name">First name</label><input id="first_name" name="first_name" autocomplete="given-name" required maxlength="40" autofocus value="{esc(name)}">{who}')
+            words = dict(eyebrow="First sign-in", heading="Welcome", lead="Tell us who you are. Next time, your email is all you will need.", button="Enter the dashboard")
+        else:
+            fields = (f'<label for="email">Official email</label><input id="email" name="email" type="email" autocomplete="email" required autofocus value="{esc(value)}" placeholder="name@ecews.org">')
+            words = dict(eyebrow="Monitoring &amp; evaluation", heading="Sign in", lead="Enter your official email address to continue.", button="Continue")
+        page = LOGIN_PAGE
+        for k, v in words.items():
+            page = page.replace(f"__{k.upper()}__", v)
+        notice = '<div class="note">You were signed out after 30 minutes without activity.</div>' if idle and not first_time else ""
+        err = f'<div class="err" role="alert">{html.escape(error)}</div>' if error else ""
+        self._page(page.replace("__SLIDES__", slides()).replace("__NOTICE__", notice).replace("__FIELDS__", fields).replace("__ERROR__", err), status)
+
+    def _session_cookie(self, addr: str) -> str:
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "") == "https" else ""
+        return f"{COOKIE}={sign(addr)}; Path=/; Max-Age={SESSION_SECONDS}; HttpOnly; SameSite=Lax{secure}"
 
     def _route(self) -> str:
         return urllib.parse.urlsplit(self.path).path
 
     def do_POST(self):
         self._cached = False
+        if self._route() == "/session/alive":        # the page saw the person active: 30 more minutes
+            addr = self._user()
+            if not addr:
+                return self.send_error(401)
+            self.send_response(204)
+            self.send_header("Set-Cookie", self._session_cookie(addr))
+            self.send_header("Content-Length", "0")
+            return self.end_headers()
         if self._route() != "/login":
             return self.send_error(404)
         n = min(int(self.headers.get("Content-Length") or 0), 4096)
@@ -248,15 +264,27 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
             return self._login_form(addr, "Please enter a valid email address.", 400)
         if not allowed(addr):
             log_access(addr, ip, "denied")
-            return self._login_form(addr, "This address does not have access. Use your ECEWS email, or ask the M&E team to add you.", 403)
+            return self._login_form(addr, "This address does not have access. Use your official email, or ask the SI team to add you.", 403)
+        if addr not in users():
+            one = lambda k: (form.get(k) or [""])[0].strip()
+            name, unit = clean_name(one("first_name")), one("unit")
+            partner = partner_of(addr)
+            if "first_name" not in form:                       # known only by email so far: ask who they are
+                return self._login_form(addr, first_time=True)
+            if not name:
+                return self._login_form(addr, "Please enter your first name.", 400, True, name, unit)
+            if not partner and unit not in UNITS:
+                return self._login_form(addr, "Please choose your unit.", 400, True, name, unit)
+            register(addr, name, "Partners" if partner else unit, partner)
+            log_access(addr, ip, "registered")
         log_access(addr, ip, "signed-in")
-        secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "") == "https" else ""
-        self._redirect("/index.html#overview",
-                       f"{COOKIE}={sign(addr)}; Path=/; Max-Age={DAYS * 86400}; HttpOnly; SameSite=Lax{secure}")
+        self._redirect("/index.html#overview", self._session_cookie(addr))
 
     def _live_data(self, route: str, user: str):
         send = lambda obj, status=200: self._page(json.dumps(obj), status, "application/json")
         try:
+            if not can_live(user):
+                return self.send_error(403)
             from kpi import live
             if not live.enabled():
                 return self.send_error(404)
@@ -272,6 +300,26 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
             print(f"live data entry failed: {type(e).__name__}", flush=True)
             return send({"error": "DHIS2 could not be reached. Try again in a few minutes."}, 502)
 
+    def _trm(self, user: str):
+        try:
+            from kpi import trm_report
+            state = (urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("state") or [""])[0]
+            log_access(user, self.headers.get("X-Forwarded-For", self.client_address[0]), f"trm {state or 'all'}")
+            path, name = trm_report.get(LIVE, ROOT / "dashboard" / "assets" / "trm_template.pptx", ROOT / "data" / "trm", state)
+            data = path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", self.extensions_map[".pptx"])
+            self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+            self.send_header("X-Report-Name", name)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except ValueError:
+            self.send_error(400)
+        except Exception as e:           # the reason goes to the log; the page offers to try again
+            print(f"TRM report failed: {type(e).__name__}", flush=True)
+            self.send_error(500)
+
     def _gate(self, head: bool) -> bool:
         """Answer sign-in routes; False when the request may go on to the dashboard files."""
         route = self._route()
@@ -282,7 +330,8 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
                 self._login_form()
             return True
         if route == "/logout":
-            self._redirect("/login", f"{COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
+            where = "/login?idle=1" if "idle=1" in urllib.parse.urlsplit(self.path).query else "/login"
+            self._redirect(where, f"{COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
             return True
         photo = PHOTOS / urllib.parse.unquote(route[len("/photos/"):]) if route.startswith("/photos/") else None
         if photo is not None and photo.parent == PHOTOS and photo.suffix in (".webp", ".jpg") and photo.is_file():
@@ -315,8 +364,12 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         if route.startswith("/live-data"):      # live data entry monitor: only where DHIS2 logins are set
             self._live_data(route, user)
             return True
+        if route == "/reports/trm":             # built when asked for, one at a time, kept for this build
+            self._trm(user)
+            return True
         if route == "/whoami":
-            self._page(json.dumps({"email": user, "name": first_name(user)}), ctype="application/json")
+            p = users().get(user, {})
+            self._page(json.dumps({"email": user, "name": p.get("first_name") or first_name(user), "unit": p.get("unit", "")}), ctype="application/json")
             return True
         return False
 

@@ -19,7 +19,8 @@ def test_previous_periods_cross_year_and_stay_unpadded():
 def test_options_offer_weeks_then_months():
     o = live.options(dt.date(2026, 11, 6))
     keys = [p["key"] for p in o["periods"]]
-    assert keys[0] == "2026W45" and "2026W9" not in keys and keys[live.WEEKS] == "202611" and keys[-1] == "202608"
+    assert keys[0] == "2026W45" and "2026W9" not in keys and keys[live.WEEKS] == "202611" and keys[-1] == "202512"
+    assert o["periods"][0]["label"] == "Week 45 - 2026-11-02 - 2026-11-08" and o["periods"][live.WEEKS + 1]["label"] == "October 2026"
     assert live.valid_period("202610") and not live.valid_period("1' or '1")
 
 
@@ -63,3 +64,13 @@ def test_failed_pull_keeps_last_good_figures(monkeypatch):
     live._cache[("hts", "Ekiti", "202610")]["at"] -= live.CACHE_SECONDS + 1
     assert "did not answer" in live.get("hts", "Ekiti", "202610")["warning"]
     live._cache.clear()
+
+
+def test_flags_list_covers_sections_and_names_them():
+    usual = [("Ido", "Ido", "hts_tst_pos", p, 1) for p in ("2026-07", "2026-08", "2026-09")]
+    prep = [("Ido", "Ido", "prep_new", p, 2) for p in ("2026-07", "2026-08", "2026-09")]
+    cube = _rows(*usual, *prep, ("Ido", "Ido", "hts_tst_pos", "2026-10", 133), ("Ido", "Ido", "prep_new", "2026-10", 40)).assign(state="Ekiti")
+    out = live.collect_flags(cube, "202610")
+    assert [(f["section"], f["state"], f["value"]) for f in out["flags"]] == [("HIV testing", "Ekiti", 133), ("PrEP", "Ekiti", 40)]
+    assert {c["key"]: c["n"] for c in out["counts"]} == {"hts": 1, "pmtct": 0, "tb": 0, "ahd": 0, "prep": 1}
+    assert live.options()["sections"][-1]["key"] == live.FLAGS

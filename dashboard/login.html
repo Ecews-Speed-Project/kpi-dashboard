@@ -1,0 +1,66 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>SPEED KPI Dashboard - sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Cinzel:wght@500;600&display=swap">
+<style>
+:root{--cloth:#14291F;--cloth2:#1F3A2E;--gold:#B8924A;--gold2:#DCC07E;--paper:#F5EBD3;--paper2:#EADBB8;--ink:#2B2316;--ink3:#65573F;--bad:#8C2A1E;
+  --display:"Cormorant Garamond",Georgia,serif;--body:"EB Garamond",Georgia,serif;--caps:"Cinzel",Georgia,serif}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;color:var(--ink);font-family:var(--body);font-size:17px;background-color:var(--cloth);
+  background-image:repeating-linear-gradient(45deg,rgba(220,192,126,.035) 0 1px,transparent 1px 7px),repeating-linear-gradient(-45deg,rgba(220,192,126,.035) 0 1px,transparent 1px 7px)}
+.page{min-height:100%;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:center;gap:44px;max-width:1360px;margin:0 auto;padding:40px}
+.plate{display:flex;flex-direction:column;gap:14px;min-width:0}
+.title{color:var(--paper)}
+.title small{display:block;font-family:var(--caps);font-size:13px;letter-spacing:3px;color:var(--gold2);margin-bottom:8px}
+.title b{display:block;font-family:var(--display);font-weight:600;font-size:clamp(34px,3.6vw,52px);line-height:1.05}
+.frame{padding:7px;border:1px solid var(--gold);background:rgba(0,0,0,.2)}
+.frame>div{position:relative;aspect-ratio:3/2;max-height:66vh;width:100%;overflow:hidden;border:1px solid var(--gold2);background:var(--cloth2)}
+.slides div{position:absolute;inset:0;background:center/cover no-repeat;opacity:0;transition:opacity 1.8s ease;filter:sepia(.24) saturate(.92) contrast(1.05)}
+.slides div.on{opacity:1}
+.cap{min-height:24px;color:var(--paper2);font-style:italic;font-size:16px}
+.card{position:relative;padding:12px;background-color:var(--paper);background-image:radial-gradient(ellipse at center,rgba(255,250,235,.75),rgba(214,190,140,.42));box-shadow:0 26px 50px -24px rgba(0,0,0,.8)}
+.rule{position:relative;padding:34px 36px 26px;border:1px solid var(--gold);outline:1px solid rgba(184,146,74,.55);outline-offset:-6px}
+.corner{position:absolute;width:26px;height:26px;color:var(--gold)}
+.corner.tl{top:9px;left:9px}.corner.tr{top:9px;right:9px;transform:scaleX(-1)}.corner.bl{bottom:9px;left:9px;transform:scaleY(-1)}.corner.br{bottom:9px;right:9px;transform:scale(-1)}
+.logo{display:block;height:46px;margin:0 auto 14px}
+.eyebrow{text-align:center;font-family:var(--caps);font-size:12px;letter-spacing:2.6px;color:var(--cloth2)}
+h1{text-align:center;font-family:var(--display);font-weight:700;font-size:38px;line-height:1.1;margin:6px 0 8px;color:var(--cloth)}
+.orn{display:flex;align-items:center;gap:10px;color:var(--gold);margin:0 auto 12px;max-width:220px}.orn:before,.orn:after{content:"";flex:1;height:1px;background:var(--gold)}.orn i{width:7px;height:7px;background:currentColor;transform:rotate(45deg)}
+.lead{text-align:center;margin:0 0 20px;color:var(--ink3);font-style:italic;font-size:18px;line-height:1.35}
+label{display:block;font-family:var(--caps);font-size:12px;letter-spacing:1.6px;margin:14px 0 5px;color:var(--cloth2)}
+input,select{width:100%;font:inherit;font-size:18px;padding:11px 12px;border:1px solid rgba(101,87,63,.55);border-radius:2px;background:#FFFBF0;color:var(--ink)}
+input:focus,select:focus{outline:2px solid var(--gold);outline-offset:1px}
+.fixed{padding:11px 12px;border:1px dashed rgba(101,87,63,.5);font-size:18px;overflow-wrap:anywhere}
+button{margin-top:20px;width:100%;font-family:var(--caps);font-size:14px;letter-spacing:2.2px;padding:14px;border:1px solid var(--cloth);border-radius:2px;background:var(--cloth2);color:var(--paper);outline:1px solid var(--gold2);outline-offset:-5px;cursor:pointer}
+button:hover{background:var(--cloth)}button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.err,.note{margin-top:14px;padding:9px 11px;font-size:16px;border:1px solid}
+.err{color:var(--bad);border-color:var(--bad)}.note{color:var(--cloth2);border-color:var(--gold);margin:0 0 14px}
+.foot{text-align:center;margin-top:18px;color:var(--ink3);font-size:15px;font-style:italic}
+@media (prefers-reduced-motion:reduce){.slides div{transition:none}}
+@media (max-width:860px){.page{grid-template-columns:minmax(0,1fr);gap:18px;padding:16px;align-items:start}.frame>div{aspect-ratio:auto;height:170px}.cap{display:none}.rule{padding:30px 20px 22px}.title b{font-size:30px}h1{font-size:32px}}
+</style></head><body><main class="page">
+<section class="plate" aria-hidden="true">
+ <div class="title"><small>ECEWS &middot; SPEED PROJECT</small><b>SPEED KPI Dashboard</b></div>
+ <div class="frame"><div class="slides">__SLIDES__</div></div>
+ <div class="cap" id="cap"></div>
+</section>
+<form class="card" method="post" action="/login"><div class="rule">
+ <svg class="corner tl" viewBox="0 0 26 26" fill="none" stroke="currentColor"><path d="M1 25V8a7 7 0 0 1 7-7h17M6 25V11a5 5 0 0 1 5-5h14"/><circle cx="11" cy="11" r="1.6" fill="currentColor"/></svg>
+ <svg class="corner tr" viewBox="0 0 26 26" fill="none" stroke="currentColor"><path d="M1 25V8a7 7 0 0 1 7-7h17M6 25V11a5 5 0 0 1 5-5h14"/><circle cx="11" cy="11" r="1.6" fill="currentColor"/></svg>
+ <svg class="corner bl" viewBox="0 0 26 26" fill="none" stroke="currentColor"><path d="M1 25V8a7 7 0 0 1 7-7h17M6 25V11a5 5 0 0 1 5-5h14"/><circle cx="11" cy="11" r="1.6" fill="currentColor"/></svg>
+ <svg class="corner br" viewBox="0 0 26 26" fill="none" stroke="currentColor"><path d="M1 25V8a7 7 0 0 1 7-7h17M6 25V11a5 5 0 0 1 5-5h14"/><circle cx="11" cy="11" r="1.6" fill="currentColor"/></svg>
+ <img class="logo" src="/logo.png" alt="ECEWS">
+ <div class="eyebrow">__EYEBROW__</div>
+ <h1>__HEADING__</h1><div class="orn"><i></i></div>
+ <p class="lead">__LEAD__</p>
+ __NOTICE____FIELDS__
+ <button type="submit">__BUTTON__</button>__ERROR__
+ <div class="foot">For ECEWS staff and approved partners only.</div>
+</div></form>
+</main>
+<script>
+(()=>{const s=[...document.querySelectorAll(".slides div")],cap=document.getElementById("cap");
+ if(!s.length) return; let k=Math.floor(Math.random()*s.length);
+ const show=()=>{s.forEach((x,i)=>x.classList.toggle("on",i===k)); cap.textContent=s[k].dataset.cap||"";};
+ show(); if(s.length>1&&!matchMedia("(prefers-reduced-motion:reduce)").matches) setInterval(()=>{k=(k+1)%s.length; show();},9000);})();
+</script></body></html>

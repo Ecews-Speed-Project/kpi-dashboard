@@ -44,8 +44,10 @@ Either way, check `http://<server>:5100/version.json`: `"demo": false` and a rec
 ## Sign-in
 
 `serve_dashboard.py` asks for an email address before showing the dashboard:
-- **Who gets in:** only addresses allowed under `access:` in `config/settings.yaml` (`allowed_domains`, `allowed_emails`).
-- **Sessions:** the browser stays signed in for `session_days` (30).
+- **Who gets in:** only addresses allowed under `access:` in `config/settings.yaml` (`allowed_domains`, `partner_names`, `allowed_emails`).
+- **First sign-in:** the person also gives their first name and unit, kept in `data/users.json`. After that, the email is enough. To correct someone's unit, edit or remove their entry in that file.
+- **Sessions:** sign in again after `session_minutes` (30) without activity. Background checks don't count as activity.
+- **Live data entry:** only people whose unit is SI, optionally narrowed by `live_emails`. The unit is chosen by the person, so use `live_emails` if this must be enforced.
 - **Log:** every sign-in or refusal is written to `logs/access.log`.
 - **Background photos:** every `.webp` / `.jpg` in `dashboard/assets/login`. Add or remove files to change them.
 - **Signing key:** session cookies are signed with `DASH_SECRET` from `.env`, or a random key kept in `data/.dash_secret`.

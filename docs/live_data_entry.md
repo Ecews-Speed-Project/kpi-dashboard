@@ -1,6 +1,6 @@
 # Live data entry page
 
-A signed-in user picks a section (HTS, PMTCT, TB, AHD, PrEP), a state and a week or month. The dashboard server
+Someone signed in from the SI unit chooses weekly or monthly entry, then a section (HTS, PMTCT, TB, AHD, PrEP, or all flags), a state and a week or month. The dashboard server
 reads just that from DHIS2 and shows facilities reported, the figures with the same formulas as the dashboard, a
 table by LGA, facilities not yet reported, and entries to check. It does not need the laptop or the full update.
 

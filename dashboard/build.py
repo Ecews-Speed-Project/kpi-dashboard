@@ -122,8 +122,9 @@ def _write_split(data: dict, out_dir: Path) -> dict:
         bid = f"{bid}-{dt.datetime.now():%H%M%S}"
         final = root / bid
     os.replace(tmp, final)
-    builds = sorted((d for d in root.iterdir() if d.is_dir() and not d.name.startswith(".")), key=lambda d: d.name)
-    for old in builds[:-KEEP_BUILDS] + [d for d in root.iterdir() if d.name.startswith(".") and d != tmp]:
+    # oldest first by time written, not by name: a rebuilt folder's name can sort before older ones with a suffix
+    builds = sorted((d for d in root.iterdir() if d.is_dir() and not d.name.startswith(".") and d != final), key=lambda d: d.stat().st_mtime)
+    for old in builds[:-(KEEP_BUILDS - 1) or None] + [d for d in root.iterdir() if d.name.startswith(".") and d != tmp]:
         shutil.rmtree(old, ignore_errors=True)  # older builds, and temporary folders a failed run left behind
     return {"id": bid, "base": f"data/{bid}/", "core": files.pop("core"), "parts": files}
 

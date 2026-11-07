@@ -134,6 +134,7 @@ a.c3d{display:block;text-decoration:none;cursor:pointer}
 .cfr-tile:hover:not(:disabled){border-color:var(--s1)}
 .cfr-tile[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
 .cfr-tile:disabled{opacity:.55;cursor:default}
+.rp-bar{display:flex;justify-content:flex-end;margin-bottom:12px}
 .cfr-box{padding:14px;border:1px solid var(--track);border-radius:8px}
 .cfr-hint{text-align:center;color:var(--ink-3);padding:24px 14px}
 .cfr-bar{height:6px;margin:10px 0;border-radius:3px;background:var(--track);overflow:hidden}
@@ -920,7 +921,46 @@ function hero(href, eyebrow, title, value, label, sub, status, rows, mtr=""){
    <div class="hl"><span class="big num">${value}</span><span class="lab">${label}</span><small>${sub}</small><span>${chip(status, status==="none"&&value==="—"?"Needs data":null)}</span></div>${mtr}
    <div class="rows">${rows.join("")}</div><div class="open">Open the full page →</div></a>`;
 }
-function overview(){
+/* Reports: one place, at the top of the overview */
+const RP={open:false,which:""};
+let TRM={state:null,status:"",url:null,name:""};
+const trmName=s=>s||"All states";
+function trmPanel(){
+  if(TRM.state===null) return `<div class="cfr-box cfr-hint">Choose a state to build its report.</div>`;
+  if(TRM.status==="busy") return `<div class="cfr-box"><b>Building the ${esc(trmName(TRM.state))} report…</b><div class="cfr-bar"><span></span></div><span class="drillnote">Only the state you chose is built, so this takes a moment.</span></div>`;
+  if(TRM.status==="fail") return `<div class="cfr-box"><b>Could not build the ${esc(trmName(TRM.state))} report.</b><p class="drillnote">This needs the dashboard server. Try again in a few minutes.</p><button type="button" class="cfr-dl" data-trmgo>Try again</button></div>`;
+  return `<div class="cfr-box"><div class="cfr-ready"><div><b>${esc(trmName(TRM.state))} report is ready</b><br><span class="drillnote">Figures from the update of ${esc(String(D.meta.generated_at||"").replace("T"," "))}.</span></div><a class="cfr-dl" href="${TRM.url}" download="${esc(TRM.name)}">Download PowerPoint</a></div></div>`;
+}
+function trmPaint(){ const el=document.getElementById("trm-panel"); if(el) el.innerHTML=trmPanel(); }
+async function trmGet(){
+  const state=TRM.state; if(state===null) return;
+  if(TRM.url) URL.revokeObjectURL(TRM.url);
+  TRM={state,status:"busy",url:null,name:""}; trmPaint();
+  try{
+    const r=await fetch(`/reports/trm?state=${encodeURIComponent(state)}`,{cache:"no-store"});
+    if(!r.ok) throw new Error(r.status);
+    const name=r.headers.get("X-Report-Name")||"TRM.pptx", blob=await r.blob();
+    if(TRM.state!==state) return;
+    TRM={state,status:"ready",url:URL.createObjectURL(blob),name};
+  }catch(e){ if(TRM.state!==state) return; TRM={state,status:"fail",url:null,name:""}; }
+  trmPaint();
+}
+function trmReports(){
+  const v=TRM.state===null?"none":TRM.state, opt=(k,l)=>`<option value="${esc(k)}"${k===v?" selected":""}>${esc(l)}</option>`;
+  return `<section class="c3d">${secH("Technical review meeting (TRM)","Monthly reports, then weekly reports after them, as on the dashboard · built when you choose")}
+   <div class="dimbar"><span class="eyebrow">State</span><select id="trm-state">${opt("none","Choose a state")}${["Delta","Ekiti","Osun"].map(s=>opt(s,s)).join("")}${opt("","All states")}</select></div>
+   <div id="trm-panel" role="status" aria-live="polite" style="margin-top:12px">${trmPanel()}</div>
+   <p class="drillnote">Every section of the template: [ __ ] marks figures that are not in the dashboard's data, for the team to fill in. The template's FY27 targets picture and its how-to-edit slide are left out.</p></section>`;
+}
+function reportsBar(){
+  if(D.meta.archived) return "";
+  const tile=(k,t,s)=>`<button type="button" class="cfr-tile" data-rpw="${k}" aria-pressed="${RP.which===k}"><b>${t}</b><span>${s}</span></button>`;
+  return `<div class="rp-bar"><button type="button" class="cfr-dl" data-rp aria-expanded="${RP.open}">Download reports</button></div>
+   ${RP.open?`<section class="c3d">${secH("Download reports","Choose a report")}<div class="cfr-tiles">${tile("hts","HTS case finding report","Monthly · DHIS2 monthly instance")}${tile("trm","Technical review meeting (TRM)","Weekly · monthly reports plus the weeks after them")}</div></section>
+   ${RP.which==="hts"?htsReports():RP.which==="trm"?trmReports():""}`:""}`;
+}
+function overview(){ return reportsBar()+overviewPage(); }
+function overviewPage(){
   const v = agg(), E = c=>evaluate(c,v);
   const cf=E("NIPI_CASE_FINDING"), lk=E("IPI_ART_COV"), vls=E("IPI_VLS_ON_ART"), cur=E("NIPI_TX_CURR"), txn=E("TX_NEW"), hts=E("HTS_TST"), vr=E("NIPI_VLS_WITH_RESULT"), pvd=E("TX_PVLS_D");
   const sat = div(v.tx_curr, v.plhiv_est);
@@ -1024,7 +1064,7 @@ const cfrLabel = k => { const [y,m]=k.split("-").map(Number); return new Date(y,
 const cfrPill = r => r.provisional?`<span class="pill openm">provisional</span>`:`<span class="pill closed">final</span>`;
 function cfrPanel(){
   const r=(D.reports||[]).find(x=>x.month===CFR.month);
-  if(!r) return `<div class="cfr-box cfr-hint">Select a month above to prepare its report.</div>`;
+  if(!r) return `<div class="cfr-box cfr-hint">Choose a month above to prepare its report.</div>`;
   if(CFR.state==="busy") return `<div class="cfr-box"><b>Preparing the ${esc(r.label)} report…</b><div class="cfr-bar"><span></span></div><span class="drillnote">Downloading will be ready in a moment.</span></div>`;
   if(CFR.state==="fail") return `<div class="cfr-box"><b>Could not get the ${esc(r.label)} report.</b><p class="drillnote">Check your connection, then try again.</p><button type="button" class="cfr-dl" data-cfr="${esc(r.month)}">Try again</button></div>`;
   const cum=r.cum_from===r.label?r.label:`${r.cum_from} – ${r.label}`, y=f=>rpct(f[1],f[0]), l=f=>rpct(f[2],f[1]);
@@ -1038,7 +1078,6 @@ function cfrPanel(){
 }
 function cfrPaint(){
   const el=document.getElementById("cfr-panel"); if(el) el.innerHTML=cfrPanel();
-  document.querySelectorAll(".cfr-tile").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.cfr===CFR.month)));
 }
 async function cfrGet(month){
   const r=(D.reports||[]).find(x=>x.month===month); if(!r) return;
@@ -1057,20 +1096,26 @@ async function cfrGet(month){
 function htsReports(){
   if(D.meta.archived) return "";
   const R=D.reports||[];
-  return `<section class="c3d">${secH("Monthly case finding report","CDC template · select a month to prepare its report · DHIS2 monthly instance · linked to ART = everyone in the EMR line list who started ART in the month, excluding transfer-ins, with no biometric or status filter")}
-   <div class="cfr-tiles">${cfrMonths().map(k=>{const r=R.find(x=>x.month===k);
-     return r?`<button type="button" class="cfr-tile" data-cfr="${esc(k)}" aria-pressed="${k===CFR.month}"><b>${esc(r.label)}</b><span>${n(r.month_figs[0])} tested · ${n(r.month_figs[1])} positive</span>${cfrPill(r)}</button>`
-       :`<button type="button" class="cfr-tile" disabled><b>${esc(cfrLabel(k))}</b><span>No monthly reports yet</span></button>`;}).join("")}</div>
+  return `<section class="c3d">${secH("Monthly case finding report","CDC template · choose a month to prepare its report · DHIS2 monthly instance · linked to ART = everyone in the EMR line list who started ART in the month, excluding transfer-ins, with no biometric or status filter")}
+   <div class="dimbar"><span class="eyebrow">Month</span><select id="cfr-month"><option value="">Choose a month</option>${cfrMonths().map(k=>{const r=R.find(x=>x.month===k); return `<option value="${esc(k)}"${k===CFR.month?" selected":""}${r?"":" disabled"}>${esc(r?r.label:cfrLabel(k))}${r?(r.provisional?" (provisional)":""):" (no monthly reports yet)"}</option>`;}).join("")}</select></div>
    <div id="cfr-panel" role="status" aria-live="polite" style="margin-top:12px">${cfrPanel()}</div>
    <p class="drillnote">Reporting-period slides show the selected month; cumulative slides add every month from 1 October up to it. Figures are from the latest dashboard update, on the DHIS2 monthly instance as soon as facilities submit. High risk = the CSCC sites. Filled: Gen Pop and high-risk testing, yield by modality (one slide per state), sex and age, HIVST. Left for the HTS team: activities, RTK stock, retesting for verification, trainings, challenges.</p></section>`;
 }
 /* ---------- Live data entry: straight from DHIS2 for one state, period and section (server route /live-data) ---------- */
 const LV = {on:false, opt:null, section:"hts", state:"", period:"", res:null, busy:false, err:"", started:false};
 const lvKey = () => `${LV.section}|${LV.state}|${LV.period}`;
+const lvKind = () => (LV.opt.periods.find(p=>p.key===LV.period)||{}).kind;
 function liveBody(){
-  if(LV.busy && !LV.res) return `<div class="cfr-box"><b>Reading DHIS2…</b><div class="cfr-bar"><span></span></div><span class="drillnote">The first read of the day can take a little longer.</span></div>`;
+  if(LV.busy && !LV.res) return `<div class="cfr-box"><b>Reading DHIS2…</b><div class="cfr-bar"><span></span></div><span class="drillnote">${LV.section==="flags"?"Reading every section, so this can take a few minutes.":"The first read of the day can take a little longer."}</span></div>`;
   if(LV.err && !LV.res) return `<div class="cfr-box"><b>${esc(LV.err)}</b></div>`;
   const r=LV.res; if(!r) return "";
+  if(r.section==="flags"){
+    const at=new Date(r.as_of).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+    return `${LV.busy?`<div class="cfr-bar"><span></span></div>`:""}${LV.err?`<p class="drillnote"><b>${esc(LV.err)}</b></p>`:""}${r.warning?`<p class="drillnote"><b>${esc(r.warning)}</b></p>`:""}
+     <p class="drillnote"><b>${esc(r.state||"All states")} · ${esc(r.period_label)} · as of ${at}</b>. Provisional: entries change as entry continues.</p>
+     <div class="kpis">${kpi(n(r.flags.length),"Entries to check")}${r.counts.map(c=>kpi(n(c.n),c.label)).join("")}</div>
+     <section class="c3d">${secH("Check these entries","At least 3 times the site's highest entry of the last 3 periods · for the data officer to check, not a verdict")}${r.flags.length?`<div class="tw"><table><thead><tr><th>Section</th><th>State</th><th>LGA</th><th>Facility</th><th>Indicator</th><th class="n">Entered</th><th class="n">Usual</th></tr></thead><tbody>${r.flags.map(f=>`<tr><td>${esc(f.section)}</td><td>${esc(f.state)}</td><td>${esc(f.lga)}</td><td>${esc(f.facility)}</td><td>${esc(f.measure)}</td><td class="n">${n(f.value)}</td><td class="n">${n(f.usual)}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No unusual entries for this selection.</div>`}</section>`;
+  }
   const t=r.totals, p=r.previous, M=r.measures, rate=(a,b)=>rpct(a,b);
   const when=new Date(r.as_of), hhmm=when.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}), sc=r.state||"All states";
   const lastLab=m=>`${r.previous_label}: ${n(p[m])}`;
@@ -1094,14 +1139,30 @@ async function liveFetch(){
   }catch(e){ if(key!==lvKey()) return; LV.err=e.message&&!/fetch|JSON/i.test(e.message)?e.message:"DHIS2 could not be reached. Try again in a few minutes."; }
   LV.busy=false; livePaint();
 }
+/* Sign in again after 30 minutes without activity. Only real use counts: background checks do not renew the session. */
+function idleWatch(){
+  const LIMIT=30*60000, BEAT=2*60000; let last=Date.now(), beat=0;
+  const shared=()=>{ try{ return +localStorage.getItem("speed_active")||0; }catch(e){ return 0; } };
+  const expired=()=>Date.now()-Math.max(last,shared())>=LIMIT;
+  const out=()=>{ location.href="/logout?idle=1"; };
+  const active=()=>{
+    if(expired()) return out();
+    const t=Date.now(); if(t-last<5000&&beat) return;
+    last=t; try{ localStorage.setItem("speed_active",String(t)); }catch(e){}
+    if(t-beat>=BEAT){ beat=t; fetch("/session/alive",{method:"POST",cache:"no-store"}).then(r=>{ if(r.status===401) location.href="/login?idle=1"; }).catch(()=>{}); }
+  };
+  ["pointerdown","pointermove","keydown","scroll","touchstart"].forEach(ev=>addEventListener(ev,active,{passive:true,capture:true}));
+  const check=()=>{ if(expired()) out(); };
+  setInterval(check,30000); document.addEventListener("visibilitychange",check); active();
+}
 function livePage(){
-  if(!LV.on) return `<section class="c3d empty">Live data entry is not switched on for this server yet.</section>`;
+  if(!LV.on) return `<section class="c3d empty">Live data entry is not available for this account.</section>`;
   const o=LV.opt, sel=(id,val,opts)=>`<select id="lv-${id}">${opts.map(x=>`<option value="${esc(x[0])}"${x[0]===val?" selected":""}>${esc(x[1])}</option>`).join("")}</select>`;
-  const kinds=[...new Set(o.periods.map(p=>p.kind))];
-  const per=`<select id="lv-period">${kinds.map(k=>`<optgroup label="${esc(k)}">${o.periods.filter(p=>p.kind===k).map(p=>`<option value="${esc(p.key)}"${p.key===LV.period?" selected":""}>${esc(p.label)}</option>`).join("")}</optgroup>`).join("")}</select>`;
+  const kind=lvKind(), per=`<select id="lv-period" aria-label="Period">${o.periods.filter(p=>p.kind===kind).map(p=>`<option value="${esc(p.key)}"${p.key===LV.period?" selected":""}>${esc(p.label)}</option>`).join("")}</select>`;
+  const seg=`<span class="seg">${[["Weekly reports","Weekly entry"],["Monthly reports","Monthly entry"]].map(([k,l])=>`<button type="button" data-lvkind="${k}" aria-pressed="${k===kind}">${l}</button>`).join("")}</span>`;
   const v=agg({...F,state:LV.state,lga:"",fac:"",sex:"",age:""}), asOf=fmtDate(D.meta.linelist_as_of||D.meta.as_of);
   if(!LV.started) setTimeout(liveFetch,0);
-  return `<div class="dimbar"><span class="eyebrow">Section</span>${sel("section",LV.section,o.sections.map(s=>[s.key,s.label]))}<span class="eyebrow">State</span>${sel("state",LV.state,[["","All states"],...o.states.map(s=>[s,s])])}<span class="eyebrow">Period</span>${per}<button type="button" class="cfr-dl" data-lvgo>Refresh</button></div>
+  return `<div class="dimbar">${seg}<span class="eyebrow">Section</span>${sel("section",LV.section,o.sections.map(s=>[s.key,s.label]))}<span class="eyebrow">State</span>${sel("state",LV.state,[["","All states"],...o.states.map(s=>[s,s])])}<span class="eyebrow">${kind==="Monthly reports"?"Month":"Week"}</span>${per}<button type="button" class="cfr-dl" data-lvgo>Refresh</button></div>
    <div id="live-body" role="status" aria-live="polite" style="margin-top:12px">${liveBody()}</div>
    <section class="c3d">${secH("From the latest update",`Line list figures, not live · NDR file of ${asOf} · dashboard updated ${esc(String(D.meta.generated_at||"").replace("T"," "))}`)}<div class="kpis">${kpi(n(v.tx_curr),TXE())}${kpi(n(v.vl_eligible),"VL eligible")}${kpi(rpct(v.vl_result,v.vl_eligible),"VL coverage",`${n(v.vl_result)} results`)}${kpi(rpct(v.vl_suppressed,v.vl_result),"VL suppression")}</div>
      <p class="drillnote">The live figures above come straight from DHIS2 and use the same formulas as the rest of the dashboard. Answers are kept for 5 minutes, so Refresh may show the same read. Treatment and viral load follow the regular updates, because the line lists are not live.</p></section>`;
@@ -1143,7 +1204,6 @@ function htsPage(){
       C("Results",V("hivst_results")),C("Reported %",x=>div(x.hivst_results||0,(x.hivst_assisted||0)+(x.hivst_unassisted||0)),1),C("Reactive",V("hivst_reactive")),C("Reactivity",RV("hivst_reactive","hivst_results"),1),
       C("Referred",V("hivst_referred")),C("Confirmed",V("hivst_confirmed")),C("Linked",V("hivst_linked")),C("Linkage",RV("hivst_linked","hivst_confirmed"),1)],["org","sex","age"])}</section>
    ${csccSection()}
-   ${htsReports()}
    <section class="c3d">${secH("HTS breakdown","Drill like a DHIS2 pivot")}${pivot("hts",[C("HTS_TST",V("hts_tst"),0,0,"hts_tst"),C("HTS_POS",V("hts_tst_pos")),C("Yield",RV("hts_tst_pos","hts_tst"),1),
      C("TX_NEW",V("tx_new_q")),C("Linkage",RV("tx_new_q","hts_tst_pos"),1,v=>rateStatus(div(v.tx_new_q,v.hts_tst_pos),.98)),C("PrEP_NEW",V("prep_new"))],
      ["org","paed","sex","age","mod"])}</section>`;
@@ -2557,6 +2617,8 @@ function route(){ const [h,sub]=location.hash.slice(1).split("/"); page=PAGES.so
 addEventListener("hashchange", route);
 document.addEventListener("change", e=>{
   const id=e.target.id;
+  if(id==="cfr-month"){ if(e.target.value) cfrGet(e.target.value); else { CFR={month:"",state:"",url:null}; cfrPaint(); } return; }
+  if(id==="trm-state"){ TRM.state=e.target.value==="none"?null:e.target.value; if(TRM.state===null) trmPaint(); else trmGet(); return; }
   if(id==="lv-section"||id==="lv-state"||id==="lv-period"){ LV[id.slice(3)]=e.target.value; liveFetch(); return; }
   if(id==="f-period"){ const v=e.target.value;
     if(v.startsWith("q:")) setPeriod("quarter", v.slice(2)); else if(v.startsWith("m:")) setPeriod("month", v.slice(2)); else if(v.startsWith("fy:")) setPeriod("fy", v.slice(3));
@@ -2604,6 +2666,11 @@ document.addEventListener("click", e=>{
   if(e.target.closest("[data-vgcsv]")){vgCsv(vgSel()); return;}
   const vx=e.target.closest("[data-vlcsv]"); if(vx){const k=vx.dataset.vlcsv; vlcCsv(vlcSel(k,VLCF[k]()),k); return;}
   if(e.target.closest("[data-lvgo]")){liveFetch(); return;}
+  const lvk=e.target.closest("[data-lvkind]");
+  if(lvk){ if(lvk.dataset.lvkind!==lvKind()){ const list=LV.opt.periods.filter(p=>p.kind===lvk.dataset.lvkind); LV.period=(lvk.dataset.lvkind==="Monthly reports"&&list[1]?list[1]:list[0]).key; LV.res=null; render(); liveFetch(); } return; }
+  if(e.target.closest("[data-trmgo]")){trmGet(); return;}
+  if(e.target.closest("[data-rp]")){RP.open=!RP.open; render(); return;}
+  const rpw=e.target.closest("[data-rpw]"); if(rpw){RP.which=rpw.dataset.rpw; render(); return;}
   const cfrB=e.target.closest("[data-cfr]"); if(cfrB){cfrGet(cfrB.dataset.cfr); return;}
   const ah=e.target.closest("[data-ahd]"); if(ah){AHDM=ah.dataset.ahd; render(); return;}
   const cc=e.target.closest("[data-ccat]"); if(cc){CCAT=cc.dataset.ccat; render(); return;}
@@ -2620,7 +2687,7 @@ document.addEventListener("mousemove", e=>{const el=e.target.closest("[data-tip]
 // signed-in visitor (served by serve_dashboard.py): "Hi, <first name>"
 if (location.protocol.startsWith("http"))
   fetch("/live-data/options", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(o=>{ if(o){ LV.on=true; LV.opt=o; if(!LV.period) LV.period=(o.periods[0]||{}).key||""; render(); } }).catch(()=>{});
-  fetch("/whoami", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(w=>{ if(w&&w.name){ WHO=w; render(); } }).catch(()=>{});
+  fetch("/whoami", {cache:"no-store"}).then(r=>r.ok?r.json():null).then(w=>{ if(w&&w.name){ WHO=w; render(); idleWatch(); } }).catch(()=>{});
 // phones have no hover: a tap shows the tooltip
 document.addEventListener("click", e=>{ if(matchMedia("(hover:hover)").matches) return; const el=e.target.closest("[data-tip]"); if(!el){tip.hidden=true;return;}
   tip.textContent=el.dataset.tip; tip.hidden=false; const r=el.getBoundingClientRect();

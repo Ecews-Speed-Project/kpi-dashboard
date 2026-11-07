@@ -299,4 +299,8 @@ publish:
 access:
   allowed_domains: [ecews.org]   # any address @ecews.org
   allowed_emails: []             # extra individual addresses, e.g. [partner@cdc.gov]
-  session_days: 30               # stay signed in on that browser for this long
+  # Partners get in when this text appears in their email domain. Off until partners should see the whole dashboard,
+  # client-level lists included. To switch on: partner_names: {fhi: FHI, ahni: AHNI, howard: Howard}
+  partner_names: {}
+  live_emails: []                # optional: only these SI addresses get Live data entry; empty = everyone whose unit is SI
+  session_minutes: 30            # sign in again after this long without activity

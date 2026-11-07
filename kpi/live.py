@@ -19,7 +19,7 @@ TIMEOUT = 90
 META_SECONDS = 24 * 3600
 ENV_KEYS = ("DHIS2_WEEKLY_USER", "DHIS2_WEEKLY_PASS", "DHIS2_MONTHLY_USER", "DHIS2_MONTHLY_PASS")
 STATES = ["Delta", "Ekiti", "Osun"]
-WEEKS, MONTHS, PRIOR = 8, 4, 3          # periods offered; earlier periods read to spot unusual entries
+WEEKS, MONTHS, PRIOR = 12, 12, 3          # periods offered; earlier periods read to spot unusual entries
 FLAG_MIN, FLAG_TIMES = 20, 3            # flagged: at least 20, and at least 3 times the site's highest recent value
 
 # primary: the forms that decide whether a facility has reported in this section.
@@ -41,6 +41,8 @@ SECTIONS = {
                  measures=[("prep_offered", "Offered"), ("prep_new", "PrEP_NEW"), ("prep_ct", "PrEP_CT")],
                  rate=("Uptake", "prep_new", "prep_offered")),
 }
+
+FLAGS = "flags"                         # every section's unusual entries in one list, from one read of all the forms
 
 _lock = threading.Lock()
 _cache: dict[tuple, dict] = {}
@@ -78,8 +80,11 @@ def previous(p: str, n: int = PRIOR) -> list[str]:
 
 
 def period_label(p: str) -> str:
+    """As the DHIS2 data entry screen writes it: Week 45 - 2026-11-02 - 2026-11-08, or October 2026."""
     d = _period_date(p)
-    return f"Week of {d.day} {d:%b %Y}" if "W" in p else f"{d:%B %Y}"
+    if "W" in p:
+        return f"Week {d.isocalendar()[1]} - {d} - {d + dt.timedelta(days=6)}"
+    return f"{d:%B %Y}"
 
 
 def options(today: dt.date | None = None) -> dict:
@@ -87,7 +92,7 @@ def options(today: dt.date | None = None) -> dict:
     monday = today - dt.timedelta(days=today.weekday())
     weeks = [week_key(monday - dt.timedelta(days=7 * i)) for i in range(WEEKS)]
     months = [month_key(today)] + previous(month_key(today), MONTHS - 1)
-    return {"sections": [{"key": k, "label": s["label"]} for k, s in SECTIONS.items()], "states": STATES,
+    return {"sections": [{"key": k, "label": s["label"]} for k, s in SECTIONS.items()] + [{"key": FLAGS, "label": "Flags: all sections"}], "states": STATES,
             "periods": [{"key": p, "label": period_label(p), "kind": "Weekly reports"} for p in weeks]
             + [{"key": p, "label": period_label(p), "kind": "Monthly reports"} for p in months]}
 
@@ -153,6 +158,18 @@ def summarise(cube, reported: set, expected: dict, section: str, period: str) ->
             "by_lga": by_lga, "missing": missing, "flags": flags}
 
 
+def collect_flags(cube, period: str) -> dict:
+    """The unusual entries of every section, with the same rule as each section's own list."""
+    state_of = dict(zip(cube["facility"], cube["state"])) if "state" in cube else {}
+    flags, counts = [], []
+    for k, s in SECTIONS.items():
+        found = summarise(cube, set(), {}, k, period)["flags"]
+        flags += [{**f, "section": s["label"], "state": state_of.get(f["facility"], "")} for f in found]
+        counts.append({"key": k, "label": s["label"], "n": len(found)})
+    flags.sort(key=lambda x: -x["value"])
+    return {"section": FLAGS, "period": period, "period_label": period_label(period), "flags": flags, "counts": counts}
+
+
 # ---------------------------------------------------------------- DHIS2
 def enabled() -> bool:
     """On only where the DHIS2 logins are set (read from .env, never shown)."""
@@ -202,6 +219,7 @@ def _instance(which: str) -> dict:
 
 def _pull(section: str, state: str, period: str) -> dict:
     import pandas as pd
+    wanted = [t for s in SECTIONS.values() for t in s["tables"]] if section == FLAGS else SECTIONS[section]["tables"]
     from etl.dhis2_client import extract_instance
     from kpi.measures import dhis_cube, prefer_monthly_variants
     which = "weekly" if "W" in period else "monthly"
@@ -209,12 +227,14 @@ def _pull(section: str, state: str, period: str) -> dict:
     names = [state] if state in STATES else STATES
     c = m["client"]
     c.ou, c.periods = [m["states"][s] for s in names if s in m["states"]], [period] + previous(period)
-    tables = {t: m["tables"][t] for t in SECTIONS[section]["tables"]}
+    tables = {t: m["tables"][t] for t in dict.fromkeys(wanted)}
     facts = extract_instance(c, tables, which, None, None, m["fac"], m["field"], m["community"])
     facts = facts.assign(source=which)
     if which == "monthly":
         facts = prefer_monthly_variants(facts)
     cube = dhis_cube(facts) if len(facts) else pd.DataFrame(columns=["facility", "lga", "measure", "period", "value"])
+    if section == FLAGS:
+        return {**collect_flags(cube, period), "state": state if state in STATES else "", "as_of": dt.datetime.now().isoformat(timespec="seconds")}
     main = facts[facts["table"].isin(SECTIONS[section]["primary"])]
     expected = {f: clean_lga(l) for f, l in zip(main["facility"], main["lga"])}
     out = summarise(cube, set(main[main["period"].astype(str) == period]["facility"]), expected, section, period)
@@ -223,7 +243,7 @@ def _pull(section: str, state: str, period: str) -> dict:
 
 def get(section: str, state: str, period: str) -> dict:
     """The answer for a selection: from the cache when fresh, else from DHIS2, else the last good one with a warning."""
-    if section not in SECTIONS or not valid_period(period) or state not in STATES + [""]:
+    if (section not in SECTIONS and section != FLAGS) or not valid_period(period) or state not in STATES + [""]:
         raise ValueError("unknown selection")
     key = (section, state, period)
     with _lock:              # one pull at a time; those waiting then find the fresh answer
