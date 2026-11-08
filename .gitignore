@@ -18,7 +18,7 @@ inbox/*
 *.pptx
 # exception: the blank HTS case finding template (no data) - every other .pptx stays out
 !dashboard/assets/hts_case_finding_template.pptx
-docs/PowerBI_measure_export.xlsx
+docs/reference/PowerBI_measure_export.xlsx
 data/excel/
 data/manual/
 .claude/

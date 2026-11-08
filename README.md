@@ -21,7 +21,7 @@ Project home: `C:\Users\CalebGwaza\OneDrive - Excellence Community Education Wel
 | New NDR PBS export | Every week, download the **active + inactive (all status)** PBS line list from the NDR portal and drop it in `inbox\` as `pbs_all_<YYYY-MM-DD>_all_status.xlsx`. It drives every treatment number (`treatment_source: ndr`). The newest file wins, and older exports are saved to history and removed after the next run. |
 | Older NDR PBS files | `python scripts\import_ndr_history.py <folder or zip>` saves dated copies of past weekly files (named like `PBS Line List_13thJuly2026.xlsx`) for earlier periods and the weekly trend lines. Default folder: Downloads. |
 | Check the numbers agree | `python run_pipeline.py run --cached --export`, then `python scripts\check_consistency.py`: TX_CURR, waterfall, biometric categories, MMD / DSD and VL cross-checked by state. |
-| Sign-in | People enter their email at `/login`; allowed domains and extra addresses are under `access:` in `config\settings.yaml`. Sign-ins are logged in `logsccess.log`. |
+| Sign-in | People enter their email at `/login`; allowed domains and extra addresses are under `access:` in `config\settings.yaml`. Sign-ins are logged in `logs\access.log`. |
 | New targets / Naomi | Drop them in `inbox\` (`FY*Target*.xlsx`, `naomi*.xlsx`). |
 | Facility name mismatch | It's listed on the Data flow page. Add it under `facility_aliases` in `config\settings.yaml`. |
 
@@ -32,7 +32,7 @@ The Python environment lives in `%LOCALAPPDATA%\speed_kpi\.venv`, outside OneDri
 |---|---|---|
 | DHIS2 weekly + monthly | `/api/dataValueSets` per table, by month. A scheduled run re-pulls the last `refresh_months` (3), and everything is re-pulled every `full_refresh_days` (7). | `data\raw\cache\` (aggregate values only, ~20 MB). This is a speed cache; `--full` rebuilds it. |
 | CDR `linelist_flat` | Postgres, weekly stacked snapshots (`period`). Each run reads the latest period, plus any earlier period not yet saved; only the columns the pipeline uses (no names), in pages with retries. State names are tidied. If the table is unavailable, the latest saved copy is used and the dashboard shows a warning. | Every period as a dated copy in `data\history\sources\` |
-| CDR eac_linelist | Postgres, every run: the output of `docs\EAC_Script_Version11.sql` for every facility, loaded by the CDR team (request: `docs\CDR_request_EAC.md`). Names and DOB are never read. While the table is empty, an `eac_linelist*.csv` in `inbox\` is used instead, if present. | Not kept |
+| CDR eac_linelist | Postgres, every run: the output of `docs\sql\EAC_Script_Version11.sql` for every facility, loaded by the CDR team (request: `docs\CDR_request_EAC.md`). Names and DOB are never read. While the table is empty, an `eac_linelist*.csv` in `inbox\` is used instead, if present. | Not kept |
 | NDR PBS line list | Excel in `inbox\` | A fast-read copy in `data\raw\cache\files\`, plus a dated copy in `data\history\sources\` |
 | Targets, Naomi, FY26 targets | `inbox\`, `data\excel\`, `data\manual\` | As supplied |
 
@@ -48,7 +48,7 @@ When moving to a server, copy the project folder including `data\history\`. Leav
 
 ## How the numbers are made
 1. **Weekly + monthly merge** (`etl\period_merge.py`). For each facility × month × table, the monthly report is used when it exists; otherwise the facility's weeks are summed. A week belongs to the month containing its Thursday (`week_to_month_rule`). On the monthly instance, the TX_TB "(Monthly)" elements are used, because the plain ones hold half-year totals.
-2. **Measures** (`kpi\measures.py`) are Python ports of the DAX (`config\expo_python_formulas.xlsx`, `docs\PowerBI_measure_export.xlsx`). The "How it's calculated" page lists every DHIS2 element and rule behind each figure.
+2. **Measures** (`kpi\measures.py`) are Python ports of the DAX (`config\expo_python_formulas.xlsx`, `docs\reference\PowerBI_measure_export.xlsx`). The "How it's calculated" page lists every DHIS2 element and rule behind each figure.
 3. **Cube** (`kpi\engine.py`): facility × sex × age band × modality × period × measure, plus the targets. The browser forms rates and totals from it for any filter or period.
 
 Reference definitions:
@@ -101,9 +101,9 @@ Every breakdown table has rows by org unit (drill down, or straight to LGA or fa
 | `kpi\` | Measures, engine, targets, Naomi loader |
 | `dashboard\template.html` | The dashboard (no external libraries) |
 | `run_pipeline.py` | `run` (live), `demo` (synthetic data, writes to `data\demo\out`), `discover` (lists DHIS2 datasets) |
-| `test_dhis2.py` | First-time DHIS2 connection test |
+| `scripts\test_dhis2.py` | First-time DHIS2 connection test |
 | `tests\` | `python -m pytest -q` |
-| `docs\` | The FY26 Power BI deck, the Power BI measure export, and the original setup brief |
+| `docs\` | Hosting, server job and live data entry notes; `sql\` (EAC and line list SQL); `reference\` (FY26 Power BI deck, Power BI measure export, original setup brief, Q3 deck mapping) |
 
 ## Open decisions (defaults in brackets)
 1. Case-finding target: the Non-IPI sheet says 4,545, but the conventional sheet sums to 6,423 [6,423].

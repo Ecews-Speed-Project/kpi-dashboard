@@ -96,7 +96,7 @@ postgres:                     # central data repository
     # No "Trends" or "linelist7" table exists in public (2026-10-10);
     # nearest are waterfall_trend, linelist6, linelist_monthly. Not read by run.
     trends: waterfall_trend
-    # EAC line list: the output of EAC_Script_Version11 (docs/EAC_Script_Version11.sql) for every
+    # EAC line list: the output of EAC_Script_Version11 (docs/sql/EAC_Script_Version11.sql) for every
     # facility, loaded by the CDR team (request: docs/CDR_request_EAC.md). Empty / missing = no EAC section.
     eac: eac_linelist
 

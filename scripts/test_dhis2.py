@@ -1,6 +1,6 @@
 """Connection test for the two SPEED DHIS2 instances.
 
-    python test_dhis2.py
+    python scripts/test_dhis2.py
 
 Uses DHIS2_WEEKLY_USER/PASS and DHIS2_MONTHLY_USER/PASS from .env if they are
 set; otherwise asks for them (the password is typed, never saved).
@@ -25,7 +25,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 INSTANCES = {
     "weekly": "https://speeddhis-weekly.ecews.org",
