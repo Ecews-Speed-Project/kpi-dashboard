@@ -95,3 +95,17 @@ def test_monthly_waits_for_switch_day():
     assert before.value.sum() == 250 and set(before.source) == {"weekly"}
     after = merge_weekly_monthly(weekly, monthly, as_of=dt.date(2026, 11, 13), switch_day=13)
     assert after.value.sum() == 300 and set(after.source) == {"monthly"}
+
+
+def test_completed_quarter_is_monthly_only():
+    """A completed quarter (its last month past the switch day) is monthly instance only: a facility with weekly
+    reports but no monthly report no longer adds. The open quarter keeps the weekly fill-in."""
+    weekly = pd.DataFrame([row("HTS_TST", "2026W36", "CSCC", "HTS_TST", 50),    # Sep (FY26 Q4), no monthly
+                           row("HTS_TST", "2026W41", "CSCC", "HTS_TST", 20)])     # Oct (FY27 Q1), open quarter
+    monthly = pd.DataFrame([row("HTS_TST", "202609", "FTH", "HTS_TST", 470),
+                            row("HTS_TST", "202610", "FTH", "HTS_TST", 300)])
+    before = merge_weekly_monthly(weekly, monthly, as_of=dt.date(2026, 10, 12), switch_day=13)
+    assert before[before.month == "2026-09"].value.sum() == 50          # Sep not switched yet: weekly
+    out = merge_weekly_monthly(weekly, monthly, as_of=dt.date(2026, 11, 20), switch_day=13)
+    assert out[out.month == "2026-09"].value.sum() == 470               # Q4 done: monthly only
+    assert out[out.month == "2026-10"].value.sum() == 320               # Q1 open: monthly + weekly fill-in

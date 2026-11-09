@@ -8,8 +8,9 @@ only from that day (switch_day): until then the whole month stays on its weekly 
 
 So while a month is open, the weeks keep adding up ("real time"). As soon as
 a facility submits its monthly report, that facility's weeks for the month are
-dropped and the monthly value replaces them. Nothing is ever double counted,
-and a late facility keeps showing its weekly numbers until it reports.
+dropped and the monthly value replaces them. Nothing is ever double counted.
+Completed quarters (last month past its switch day) are monthly instance only: a facility
+with weekly reports but no monthly report no longer counts, so they equal DHIS2 monthly exactly.
 
 Input frames (long format, one row per value) need these columns:
     table, period, facility_key, state, lga, facility, dataname, disagg, value
@@ -93,6 +94,18 @@ def merge_weekly_monthly(weekly: pd.DataFrame, monthly: pd.DataFrame,
         submitted = m[KEYS].drop_duplicates()
         w = w.merge(submitted.assign(_has_monthly=True), on=KEYS, how="left")
         w = w[w["_has_monthly"].isna()].drop(columns="_has_monthly")
+        if switch_day and as_of and len(m):
+            # Completed quarters come from the monthly instance only: once a quarter's last month has
+            # switched, weekly reports from facilities with no monthly report no longer add to any of its
+            # months, so a completed quarter equals DHIS2 monthly exactly. The open quarter keeps the
+            # weekly fill-in. Tables the monthly instance lacks stay weekly.
+            def quarter_done(mo: str) -> bool:
+                y, n = map(int, mo.split("-"))
+                last = n + (-n) % 3                       # Dec, Mar, Jun or Sep
+                return switch_date(f"{y}-{last:02d}", switch_day) <= as_of
+            done = m.loc[m["month"].map(quarter_done), ["table", "month"]].drop_duplicates().assign(_closed=True)
+            w = w.merge(done, on=["table", "month"], how="left")
+            w = w[w["_closed"].isna()].drop(columns="_closed")
     elif takeover == "all":
         closed = closed_months or set()
         w = w[~w["month"].isin(closed)]

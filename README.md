@@ -47,7 +47,7 @@ Outputs:
 When moving to a server, copy the project folder including `data\history\`. Leave out `.venv`, `live\`, `archive\` and `logs\`.
 
 ## How the numbers are made
-1. **Weekly + monthly merge** (`etl\period_merge.py`). For each facility × month × table, the monthly report is used when it exists; otherwise the facility's weeks are summed. A week belongs to the month containing its Thursday (`week_to_month_rule`). On the monthly instance, the TX_TB "(Monthly)" elements are used, because the plain ones hold half-year totals.
+1. **Weekly + monthly merge** (`etl\period_merge.py`). For each facility × month × table, the monthly report is used when it exists; otherwise the facility's weeks are summed. Completed quarters (the quarter's last month past the 13th of the next month) come from the monthly instance only, so they equal DHIS2 monthly exactly; only the open quarter uses weekly reports. A week belongs to the month containing its Thursday (`week_to_month_rule`). On the monthly instance, the TX_TB "(Monthly)" elements are used, because the plain ones hold half-year totals.
 2. **Measures** (`kpi\measures.py`) are Python ports of the DAX (`config\expo_python_formulas.xlsx`, `docs\reference\PowerBI_measure_export.xlsx`). The "How it's calculated" page lists every DHIS2 element and rule behind each figure.
 3. **Cube** (`kpi\engine.py`): facility × sex × age band × modality × period × measure, plus the targets. The browser forms rates and totals from it for any filter or period.
 
