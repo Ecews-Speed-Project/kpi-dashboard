@@ -620,6 +620,7 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         "prev_tx_curr": prev_active,
         # dated events: the dashboard picks them up for any date range
         "tx_new_q": in_hist(start) & (ti != "yes") & uniq,
+        "tx_new_ti": in_hist(start) & (ti != "yes"),    # TX_NEW before the CDC pillar rules: transfer-ins removed only
         "tx_new_all": in_hist(start) & (ti != "yes"),   # case finding report (EMR line list): everyone newly started on ART, no biometric or status filter; transfer-ins are not new
         "ti_q": active & (ti == "yes") & ~prev_active,
         "rtt_q": active & prev.isin(STATUS["iit"] | STATUS["to"] | STATUS["stopped"] | STATUS["dead"]),
@@ -671,7 +672,7 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         "wf_stopped": prev_active & status.isin(STATUS["stopped"]),
     })
     # appointments are classified in the dashboard from appointment_clients() (any date range)
-    dated = {"tx_new_q": pd.Series(start, index=d.index), "tx_new_all": pd.Series(start, index=d.index), "iit_q": pd.Series(iit_date, index=d.index)}
+    dated = {"tx_new_q": pd.Series(start, index=d.index), "tx_new_all": pd.Series(start, index=d.index), "tx_new_ti": pd.Series(start, index=d.index), "iit_q": pd.Series(iit_date, index=d.index)}
     col = lambda k: _norm(d[c[k]]).fillna("").astype(object) if c.get(k) in d else pd.Series("", index=d.index)   # blanks -> ""
     has = lambda k: ~col(k).isin({"", "nan", "none", "<na>", "null", "nat", "n/a"})   # a value was recorded
 

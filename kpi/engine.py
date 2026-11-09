@@ -460,13 +460,20 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
             qs = quarter_start(d, p.fy_start.month).isoformat()
             stock = pd.concat([stock[~stock["measure"].str.startswith("appt_")],
                                stock[stock["measure"] == "prev_tx_curr"].assign(measure="wf_prev")], ignore_index=True)
-            flows = ("tx_new_q", "iit_q")
+            flows = ("tx_new_q", "tx_new_ti", "iit_q")
             inq = lambda y: y["measure"].isin(flows) & (y["period"].fillna("") >= qs) & (y["period"].fillna("") <= d.isoformat())
             parts[1] = parts[1][~inq(parts[1])]
             parts.append(attach_master(x[inq(x)], master, "quarter_linelist", {}))
         else:
             stock = stock[~stock["measure"].str.match(r"^(?:wf_|appt_)")]
         parts.append(attach_master(stock.assign(period=f"SL{d.isoformat()}"), master, "past_linelist", {}))
+    # TX_NEW with the CDC pillars (unique rule) starts with FY26 Q3: before that date TX_NEW is every new
+    # start with transfer-ins removed (tx_new_ti), with no deduction from today's status or prints
+    pf = str(settings["reporting"].get("tx_new_pillars_from") or "")
+    if pf:
+        y = parts[1]
+        early = lambda m: (y["measure"] == m) & (y["period"].fillna("").str.match(r"^\d{4}-\d{2}-\d{2}$")) & (y["period"].fillna("") < pf)
+        parts[1] = pd.concat([y[~early("tx_new_q")], y[early("tx_new_ti")].assign(measure="tx_new_q")], ignore_index=True)
     if pbs_source == "ndr":
         nd = [d for d, _ in (past or {}).get("ndr", [])]
         ndr_date = max(nd) if nd else None          # the newest saved copy is today's file
@@ -580,7 +587,7 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
     t = targets.copy()
     t = t.astype(object).where(t.notna(), None)
     data = {
-        "meta": dict(programme=settings["programme"], fiscal_year=settings["fiscal_year"], quarter=p.label,
+        "meta": dict(programme=settings["programme"], fiscal_year=settings["fiscal_year"], tx_new_pillars_from=str(settings["reporting"].get("tx_new_pillars_from") or ""), quarter=p.label,
                      q_index=p.q_index, q_start=p.q_start.isoformat(), q_end=p.q_end.isoformat(),
                      q_months=p.q_months, as_of=as_of.isoformat(), fy_start=p.fy_start.isoformat(),
                      dhis_through=dhis_through.isoformat(), elapsed=p.elapsed(dhis_through),

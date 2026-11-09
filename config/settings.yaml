@@ -34,6 +34,8 @@ reporting:
   # How far back to pull (months before FY start) so earlier quarters can be
   # selected on the dashboard
   history_months: 12
+  # TX_NEW follows the CDC pillars (NDR unique rule) from this date (FY26 Q3); earlier TX_NEW = new starts, transfer-ins removed
+  tx_new_pillars_from: "2026-04-01"
   # Scheduled runs re-pull only the last refresh_months from DHIS2 and reuse the
   # cached older months (data/raw/cache); a full re-pull happens every
   # full_refresh_days, or on demand with: update_dashboard.bat --full
