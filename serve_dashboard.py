@@ -218,7 +218,6 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
 
     def _login_form(self, value: str = "", error: str = "", status: int = 200, first_time: bool = False, name: str = "", unit: str = ""):
         esc = lambda x: html.escape(x, quote=True)
-        idle = "idle=1" in urllib.parse.urlsplit(self.path).query
         if first_time:
             partner = partner_of(value)
             opts = "".join(f'<option value="{esc(u)}"{" selected" if u == unit else ""}>{esc(u)}</option>' for u in UNITS)
@@ -233,9 +232,8 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         page = LOGIN_PAGE
         for k, v in words.items():
             page = page.replace(f"__{k.upper()}__", v)
-        notice = '<div class="note">You were signed out after 30 minutes without activity.</div>' if idle and not first_time else ""
         err = f'<div class="err" role="alert">{html.escape(error)}</div>' if error else ""
-        self._page(page.replace("__SLIDES__", slides()).replace("__NOTICE__", notice).replace("__FIELDS__", fields).replace("__ERROR__", err), status)
+        self._page(page.replace("__SLIDES__", slides()).replace("__NOTICE__", "").replace("__FIELDS__", fields).replace("__ERROR__", err), status)
 
     def _session_cookie(self, addr: str) -> str:
         secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "") == "https" else ""
@@ -330,8 +328,7 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
                 self._login_form()
             return True
         if route == "/logout":
-            where = "/login?idle=1" if "idle=1" in urllib.parse.urlsplit(self.path).query else "/login"
-            self._redirect(where, f"{COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
+            self._redirect("/login", f"{COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
             return True
         photo = PHOTOS / urllib.parse.unquote(route[len("/photos/"):]) if route.startswith("/photos/") else None
         if photo is not None and photo.parent == PHOTOS and photo.suffix in (".webp", ".jpg") and photo.is_file():
