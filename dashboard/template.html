@@ -199,6 +199,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .kpi .k-v{font-family:var(--display);font-weight:700;font-size:32px;line-height:1}
 .kpi .k-l{font-size:14px;color:var(--ink-2);margin-top:4px}
 .kpi .k-s{font-size:13px;color:var(--ink-3);margin-top:2px}
+.kpi2{text-align:center}.kpi2 .k-l{margin-top:6px}
 .k2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.k2 .k-v{font-size:26px}.k2 .k-t{font-size:12px;color:var(--ink-3);margin-top:3px;line-height:1.25}.k2>div+div{border-left:1px solid var(--rule-soft);padding-left:10px}
 
 /* bars */
@@ -679,7 +680,7 @@ function kpi(v, label, sub, status, tip){
   return `<div class="c3d kpi"${tip?` data-tip="${esc(tip)}"`:""}><div class="k-v num">${v}</div><div class="k-l">${label}</div>${sub||status?`<div class="k-s">${sub||""} ${status?dot(status):""}</div>`:""}</div>`;
 }
 function kpi2(label, pair, sub, status, tip){   // one card, two figures side by side (e.g. without / with the CDC pillars)
-  return `<div class="c3d kpi"${tip?` data-tip="${esc(tip)}"`:""}><div class="k2">${pair.map(([v,t])=>`<div><div class="k-v num">${v}</div><div class="k-t">${t}</div></div>`).join("")}</div><div class="k-l">${label}</div>${sub||status?`<div class="k-s">${sub||""} ${status?dot(status):""}</div>`:""}</div>`;
+  return `<div class="c3d kpi kpi2"${tip?` data-tip="${esc(tip)}"`:""}><div class="k2">${pair.map(([v,t])=>`<div><div class="k-v num">${v}</div><div class="k-t">${t}</div></div>`).join("")}</div><div class="k-l">${label}</div>${sub||status?`<div class="k-s">${sub||""} ${status?dot(status):""}</div>`:""}</div>`;
 }
 function secH(title, note){ const ic=/<svg/.test(String(title)) ? "" : iconForTitle(String(title).replace(/<[^>]*>/g,""));
   return `<div class="sec-h"><h2${ic||/<svg/.test(String(title))?' class="has-ico"':""}>${ic?ico(ic,24):""}${title}</h2>${note?`<p>${note}</p>`:""}</div>`; }
@@ -1191,11 +1192,10 @@ function htsPage(){
    ${kpi(n(v.hts_tst_pos),"HTS_TST_POS",cf.target!=null?`${TL()} target ${n(cf.target)}`:"",cf.status)}
    ${kpi(pct(div(v.hts_tst_pos,v.hts_tst)),"Testing yield","HTS_TST_POS ÷ HTS_TST")}
    ${(()=>{ const ipiYr=periodFY()===TFY, pf=D.meta.tx_new_pillars_from||"";
-     const note=pf&&P.start<pf?(P.end<pf?"No pillars before FY26 Q3: both the same":"Pillars apply from FY26 Q3 only"):"";
-     const lab=["TI removed","CDC pillars"], tip="TI removed: every new ART start in the dates, transfer-ins removed. CDC pillars: also in the NDR unique TX_CURR (valid print or under 15), applied from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; earlier months have no pillars, so both figures are the same there.";
-     return kpi2("TX_NEW",[[n(v.tx_new_ti),lab[0]],[n(v.tx_new_q),lab[1]]],note,null,tip)
+     const lab=["Non-unique","Unique"], tip="Non-unique: new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same.";
+     return kpi2("TX_NEW",[[n(v.tx_new_ti),lab[0]],[n(v.tx_new_q),lab[1]]],"",null,tip)
        +kpi2(ipiYr?"Linkage (IPI)":"Linkage",[[pct(div(v.tx_new_ti,v.hts_tst_pos)),lab[0]],[pct(div(v.tx_new_q,v.hts_tst_pos)),lab[1]]],
-             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)} (pillars)`:"TX_NEW ÷ HTS_TST_POS",ipiYr?lk.status:null,tip); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
+             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"",ipiYr?lk.status:null,tip); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
    <section class="c3d">${secH("Testing by modality","Tests, positives and share of all positives")}
     ${hbars(modRows.map(r=>({l:r.l,v:r.t,txt:`<b>${n(r.t)}</b> · ${n(r.p)} pos · ${pct(div(r.p,v.hts_tst_pos),0)} of POS`, tip:`${r.l}: ${n(r.t)} tests · ${n(r.p)} positive · yield ${pct(div(r.p,r.t))} · ${pct(div(r.p,v.hts_tst_pos),0)} of all positives`})))}</section>
    <section class="c3d">${secH("By month","HTS_TST and HTS_TST_POS · yield = POS ÷ TST · the latest month is provisional")}${testedByMonth("hts_tst","hts_tst_pos","HTS_TST","HTS_TST_POS")}</section>
