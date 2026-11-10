@@ -76,6 +76,8 @@ button,select{font:inherit;color:inherit}
 .seg button{border:0;background:var(--card-hi);padding:4px 10px;cursor:pointer;font-size:14.5px}
 .seg button+button{border-left:1px solid var(--edge)}
 .seg button[aria-pressed="true"]{background:var(--cloth);color:var(--on-cloth)}
+.dhcsv{display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-family:var(--caps);font-size:11px;letter-spacing:1px;text-transform:uppercase;background:transparent;border:1px solid var(--s1);border-radius:4px;padding:3px 9px;color:var(--ink-2);cursor:pointer;transition:background-color .18s,color .18s,border-color .18s}
+.dhcsv:hover,.dhcsv:focus-visible{background:var(--cloth);border-color:var(--cloth);color:var(--on-cloth)}
 .reset{border:1px solid var(--edge);background:transparent;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:14px;color:var(--ink-2)}
 .crumbs{font-style:italic;color:var(--ink-2);font-size:14.5px;margin-left:auto}
 
@@ -815,6 +817,32 @@ function concCsv(rows){
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv"}));
   a.download=`emr_vs_ndr_${CCAT.replace("conc_","")}_${(F.fac||F.lga||F.state||"SPEED").replace(/[^\w-]+/g,"_")}_${D.meta.as_of}.csv`; a.click(); URL.revokeObjectURL(a.href);
 }
+/* ---------- DHIS2 data behind a page, as CSV: the selected period and filters, one row per facility x DHIS2
+   reporting period x sex x age x modality, one column per DHIS2 figure on that page ---------- */
+const DHIS_PAGE = {overview:/./, ipi:/./, hts:/^(hts_|index_|fit_|hivst_|prep_)/, pmtct:/^(pmtct_|hei_)/, tb:/^(tb_|tpt_|tx_tb_)/, ahd:/^ahd_/};
+let _DH = null;
+const dhisAll = () => _DH || (_DH = (()=>{ const z=new Set(); for(let r=0;r<N;r++){ const k=PM[rt[r]].kind; if(k==="W"||k==="M") z.add(rk[r]); } return z; })());
+function dhisMeas(){ const re=DHIS_PAGE[page]; return re ? [...dhisAll()].filter(i=>re.test(MEAS[i])).sort((a,b)=>MEAS[a]<MEAS[b]?-1:1) : []; }
+function dhisCsv(){
+  const ms=dhisMeas(), col=new Map(ms.map((m,j)=>[m,j])), win=WIN||(WIN=windowSet());
+  const fp=FAC.map((_,i)=>facPass(i,F)), sexI=F.sex?DM.sex.indexOf(F.sex):-1, ageOk=AGE.map((_,a)=>agePass(a,F.age));
+  const g=new Map(), tot=new Float64Array(ms.length);
+  for(let r=0;r<N;r++){
+    const t=rt[r], k=PM[t].kind; if(k!=="W"&&k!=="M") continue;
+    const j=col.get(rk[r]); if(j===undefined||!fp[rf[r]]||(sexI>=0&&rs[r]!==sexI)||!ageOk[ra[r]]||!win.has(t)) continue;
+    const key=`${rf[r]}|${t}|${rs[r]}|${ageOf(AGE[ra[r]])}|${rm[r]}`; let o=g.get(key); if(!o){o=new Float64Array(ms.length); g.set(key,o);}
+    o[j]+=rv[r]; tot[j]+=rv[r];
+  }
+  const keep=ms.map((_,j)=>j).filter(j=>tot[j]), q=x=>{const v=String(x??""); return /[",\n]/.test(v)?`"${v.replaceAll('"','""')}"`:v;};
+  const num=v=>v?String(Math.round(v*1e4)/1e4):"";
+  const rows=[...g.entries()].map(([key,o])=>{ const [f,t,sx,age,mo]=key.split("|"), fc=FAC[+f], pm=PM[+t];
+    return [fc.state,fc.lga,fc.facility,pm.key,pm.kind==="M"?"Monthly":"Weekly",pm.month,DM.sex[+sx],age,DM.mod[+mo]||"",...keep.map(j=>num(o[j]))]; })
+    .sort((a,b)=>a[0].localeCompare(b[0])||a[1].localeCompare(b[1])||a[2].localeCompare(b[2])||a[5].localeCompare(b[5])||a[3].localeCompare(b[3]));
+  const head=["State","LGA","Facility","DHIS2 period","Report","Month","Sex","Age","Modality",...keep.map(j=>MEAS[ms[j]].toUpperCase())];
+  const lines=[head,...rows].map(r=>r.map(q).join(","));
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"}));
+  a.download=`dhis2_${page}_${(F.fac||F.lga||F.state||"SPEED").replace(/[^\w-]+/g,"_")}_${P.start}_to_${P.end}.csv`; a.click(); URL.revokeObjectURL(a.href);
+}
 function concurrenceSection(v){
   if(!STOCK) return "";
   if(D.meta.pbs_source!=="ndr" || !MEAS.includes("conc_both")) return "";
@@ -885,6 +913,7 @@ Object.assign(IGLYPH, {
   user:`<circle cx="12" cy="8.2" r="3.8"/><path d="M4.6 20.4c.8-4 3.8-6.4 7.4-6.4s6.6 2.4 7.4 6.4"/>`,
   back:`<path d="M10 5l-7 7 7 7M3.4 12H21"/>`,
   arrow:`<path d="M14 5l7 7-7 7M20.6 12H3"/>`,
+  download:`<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>`,
 });
 let _icoN = 0;
 function ico(name, size=22, title=""){
@@ -2587,7 +2616,7 @@ try { FHIDE = localStorage.getItem("speed.filtersHidden")==="1"; } catch(e){}
 function filtersSummary(){ const p=[P.label, F.fac||F.lga||F.state||"All states"];
   p.push(F.sex?SEXL[F.sex]:"Both sexes"); p.push(F.age?(["<15","15+","<20","20+"].includes(F.age)?F.age:F.age+" yrs"):"All ages"); return p.join(" · "); }
 function filtersBar(){
-  if(FHIDE) return `<button class="ftog" id="f-toggle" aria-expanded="false" title="Show the period and filter controls">Show filters ▾</button><span class="fsum">${esc(filtersSummary())}</span>`;
+  if(FHIDE) return `<button class="ftog" id="f-toggle" aria-expanded="false" title="Show the period and filter controls">Show filters ▾</button><span class="fsum">${esc(filtersSummary())}</span>${dhisMeas().length?`<button class="dhcsv" id="dhis-csv" title="Download the DHIS2 data behind this page for the selected period and filters">${ico("download",14)} DHIS2 data (CSV)</button>`:""}`;
   const lgas=[...new Set(FAC.filter(f=>!F.state||f.state===F.state).map(f=>f.lga))].sort();
   const facs=FAC.filter(f=>(!F.state||f.state===F.state)&&(!F.lga||f.lga===F.lga)).map(f=>f.facility).sort();
   const opt=(arr,sel,all)=>`<option value="">${all}</option>`+arr.map(x=>`<option${x===sel?" selected":""}>${esc(x)}</option>`).join("");
@@ -2605,7 +2634,7 @@ function filtersBar(){
    <label>Facility <select id="f-fac">${opt(facs,F.fac,"All facilities")}</select></label>
    <label>Sex <span class="seg">${[["","All"],["F","Female"],["M","Male"]].map(([k,l])=>`<button data-sex="${k}" aria-pressed="${F.sex===k}">${l}</button>`).join("")}</span></label>
    <label>Age <select id="f-age"><option value="">All ages</option>${ages.map(a=>`<option${a===F.age?" selected":""} value="${esc(a)}">${a==="<15"||a==="15+"?a:a==="<20"?"<20 (paediatric & adolescent)":a==="20+"?"20+ (adult)":a+" yrs"}</option>`).join("")}</select></label>
-   ${F.state||F.lga||F.fac||F.sex||F.age?`<button class="reset" id="f-reset">Reset</button>`:""}<button class="ftog" id="f-toggle" aria-expanded="true" title="Hide the period and filter controls">Hide ▴</button>`;
+   ${F.state||F.lga||F.fac||F.sex||F.age?`<button class="reset" id="f-reset">Reset</button>`:""}<button class="ftog" id="f-toggle" aria-expanded="true" title="Hide the period and filter controls">Hide ▴</button>${dhisMeas().length?`<button class="dhcsv" id="dhis-csv" title="Download the DHIS2 data behind this page for the selected period and filters">${ico("download",14)} DHIS2 data (CSV)</button>`:""}`;
 }
 function render(){
   const m=D.meta; WIN=null;
@@ -2665,6 +2694,7 @@ document.addEventListener("change", e=>{
 document.addEventListener("click", e=>{
   const s=e.target.closest("[data-sex]"); if(s){F.sex=s.dataset.sex; render(); return;}
   if(e.target.closest("#f-toggle")){ FHIDE=!FHIDE; try{localStorage.setItem("speed.filtersHidden",FHIDE?"1":"0");}catch(err){} render(); return; }
+  if(e.target.closest("#dhis-csv")){ dhisCsv(); return; }
   if(e.target.closest("#f-reset")){Object.assign(F,{state:"",lga:"",fac:"",sex:"",age:""}); render(); return;}
   const d=e.target.closest("[data-drill]"); if(d){const lv=d.dataset.drill, val=d.dataset.val;
     if(lv==="state"){F.state=val;F.lga="";F.fac="";} else if(lv==="lga"){const x=FAC.find(f=>f.lga===val); F.lga=val;F.fac=""; if(x) F.state=x.state;}
