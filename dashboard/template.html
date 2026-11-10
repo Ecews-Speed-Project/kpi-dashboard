@@ -996,12 +996,558 @@ function trmReports(){
    <div id="trm-panel" role="status" aria-live="polite" style="margin-top:12px">${trmPanel()}</div>
    <p class="drillnote">Every section of the template: [ __ ] marks figures that are not in the dashboard's data, for the team to fill in. The template's FY27 targets picture and its how-to-edit slide are left out.</p></section>`;
 }
+/* ---------- Management briefing: a 17-slide PowerPoint built in the browser from the dashboard's own figures
+   (same sums as the pages) for one state or all states and a chosen period. Charts are native PowerPoint
+   charts or shapes, so they can be edited. The slide library is fetched only when someone builds a deck. ---------- */
+const BRF = {state:"", period:"", status:"", url:null, name:"", err:""};
+let _PPTX = null;
+function pptxLib(){
+  return _PPTX || (_PPTX = new Promise((ok, no) => {
+    const urls = ["https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js", "https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"];
+    const go = i => { if(i >= urls.length){ _PPTX = null; return no(new Error("The slide library could not be loaded")); }
+      const s = document.createElement("script"); s.src = urls[i]; s.crossOrigin = "anonymous";
+      s.integrity = "sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ";
+      s.onload = () => window.PptxGenJS ? ok(window.PptxGenJS) : go(i+1); s.onerror = () => { s.remove(); go(i+1); };
+      document.head.appendChild(s); };
+    go(0); }));
+}
+// the period choices: every quarter, and each fiscal year to date
+const brfPeriods = () => [...D.quarters.map(q=>({k:"q:"+q.label, l:q.label})), ...[...new Set(D.quarters.map(q=>q.fy))].map(fy=>({k:"fy:"+fy, l:fy+" to date"}))].reverse();
+const brfCur = () => BRF.period || (P.mode==="fy" ? "fy:"+P.fy : "q:"+(P.mode==="quarter" ? P.q.label : CURQ.label));
+// the parts a deck needs, fetched and kept (the page's own loader re-renders; this one waits)
+async function brfParts(names){
+  if(!MAN) return;
+  await Promise.all(names.filter(n=>MAN.parts[n] && PART[n]!=="ready").map(async n=>{
+    const r = await fetch(MAN.base+MAN.parts[n]); if(!r.ok) throw new Error("data "+r.status);
+    usePart(n, await r.json()); PART[n] = "ready"; }));
+}
+function brfPanel(){
+  if(BRF.status==="busy") return `<div class="cfr-box"><b>Building the briefing…</b><div class="cfr-bar"><span></span></div><span class="drillnote">Built in this browser from the dashboard's figures; it takes a few seconds.</span></div>`;
+  if(BRF.status==="fail") return `<div class="cfr-box"><b>Could not build the briefing.</b><p class="drillnote">${esc(BRF.err||"Check the internet connection and try again.")}</p><button type="button" class="cfr-dl" data-brfgo>Try again</button></div>`;
+  if(BRF.status==="ready") return `<div class="cfr-box"><div class="cfr-ready"><div><b>${esc(BRF.name)} is ready</b><br><span class="drillnote">Figures from the update of ${esc(String(D.meta.generated_at||"").replace("T"," "))}.</span></div><a class="cfr-dl" href="${BRF.url}" download="${esc(BRF.name)}">Download PowerPoint</a></div></div>`;
+  return `<button type="button" class="cfr-dl" data-brfgo>Build the briefing</button>`;
+}
+function brfPaint(){ const el=document.getElementById("brf-panel"); if(el) el.innerHTML=brfPanel(); }
+function brfReports(){
+  const sel=(id,cur,opts)=>`<select id="${id}">${opts.map(([k,l])=>`<option value="${esc(k)}"${k===cur?" selected":""}>${esc(l)}</option>`).join("")}</select>`;
+  return `<section class="c3d">${secH("Management briefing","17 slides for a management meeting · 95-95-95, biometrics, AHD, PMTCT and the IPI review · built in your browser")}
+   <div class="dimbar"><span class="eyebrow">State</span>${sel("brf-state",BRF.state,[["","All states"],...STATES.map(s=>[s,s])])}
+    <span class="eyebrow">Period</span>${sel("brf-period",brfCur(),brfPeriods().map(p=>[p.k,p.l]))}</div>
+   <div id="brf-panel" role="status" aria-live="polite" style="margin-top:12px">${brfPanel()}</div>
+   <p class="drillnote">Same figures as the dashboard pages for the state and period chosen: DHIS2 figures follow the period; TX_CURR, viral load and biometrics are stock figures as of the line-list date (a past quarter uses the copy saved in it). Charts are native PowerPoint charts, so they can be edited.</p></section>`;
+}
+async function brfGet(){
+  if(BRF.url) URL.revokeObjectURL(BRF.url);
+  Object.assign(BRF, {status:"busy", url:null, name:"", err:""}); brfPaint();
+  const keepF={...F}, keepP=P, keepW=WIN;
+  try{
+    const Lib = await pptxLib();
+    const [mode, value] = brfCur().split(/:(.*)/);
+    setPeriod(mode==="fy"?"fy":"quarter", value);
+    Object.assign(F, {state:BRF.state, lga:"", fac:"", sex:"", age:"", grp:""}); WIN = windowSet();
+    await brfParts(["trends", ...[SNL,SNN].filter(Boolean).map(k=>"snap:"+k)]);
+    WIN = windowSet();
+    const pres = await brfDeck(Lib);
+    const blob = await pres.write({outputType:"blob"});
+    const name = `SPEED_management_briefing_${(BRF.state||"All_states").replace(/\W+/g,"_")}_${P.label.replace(/\W+/g,"_")}.pptx`;
+    Object.assign(BRF, {status:"ready", url:URL.createObjectURL(blob), name});
+  }catch(e){ console.error(e); Object.assign(BRF, {status:"fail", err:/library/.test(e.message)?"The slide library could not be loaded: check the internet connection and try again.":""}); }
+  finally{ for(const k of Object.keys(F)) delete F[k]; Object.assign(F, keepF); P=keepP; WIN=keepW; }
+  brfPaint();
+}
+
+/* ---------- the deck ---------- */
+const BC = {cloth:"163F31", cloth2:"0F3125", gold:"B8913A", goldInk:"7A5A16", paper:"FBF8F0", card:"FFFFFF", edge:"DED0AE", track:"ECE3CC",
+  ink:"2A2015", ink2:"55452F", ink3:"85735A", s1:"0E7350", s2:"B07A22", s3:"2C6E8F", onCloth:"F3E9CF",
+  st:{exceeds:"2A7F86", good:"4C7A3A", warning:"C08A1E", critical:"9C3220", none:"9A8C70"}, stBg:{exceeds:"D5EAE7", good:"DFE8CC", warning:"F4E4B8", critical:"F2D3C7", none:"ECE5D3"}};
+const BW = 13.333, BH = 7.5, HF = "Cambria", BF = "Calibri";
+async function brfLogo(){
+  const img = document.querySelector(".cartouche img"); const src = img && img.src && img.src.startsWith("data:image") ? img.src : null;
+  if(!src) return null;
+  // the size of the logo already on the page (decoding a new copy can wait forever in a background tab)
+  let w = img.naturalWidth, h = img.naturalHeight;
+  if(!w){ const im = new Image(); im.src = src; await Promise.race([im.decode().catch(()=>{}), new Promise(r=>setTimeout(r,1500))]); w = im.naturalWidth; h = im.naturalHeight; }
+  return {data: src.slice(5), r: w ? h/w : 0.45};
+}
+async function brfDeck(Lib){
+  const pres = new Lib(); pres.layout = "LAYOUT_WIDE"; pres.author = "ECEWS SPEED M&E"; pres.company = "ECEWS"; pres.title = "SPEED management briefing";
+  pres.theme = {headFontFace: HF, bodyFontFace: BF};
+  const logo = await brfLogo(), scope = F.state || "All states (ECEWS SPEED)", m = D.meta;
+  const dates = `DHIS2 through ${fmtDate(m.dhis_through)} · ${NDRT()?"NDR line list":"line list"} as of ${brfStock()}${STOCK?"":" (copy saved in the period)"}`;
+  pres.defineSlideMaster({title:"BRF_CONTENT", background:{color:BC.paper}, objects:[
+      {rect:{x:0, y:7.08, w:BW, h:0.42, fill:{color:BC.cloth}}},
+      {text:{text:`ECEWS SPEED  ·  ${scope}  ·  ${P.label}  ·  ${dates}`, options:{x:0.5, y:7.1, w:10.8, h:0.38, fontFace:BF, fontSize:9, color:BC.onCloth, valign:"middle", margin:0}}},
+      ...(logo?[{image:{data:logo.data, x:BW-0.5-0.62, y:0.32, w:0.62, h:0.62*logo.r}}]:[])],
+    slideNumber:{x:BW-1.0, y:7.13, w:0.5, h:0.32, fontFace:BF, fontSize:9, color:BC.onCloth, align:"right"}});
+  pres.defineSlideMaster({title:"BRF_DARK", background:{color:BC.cloth}, objects:[]});
+  const ctx = {pres, logo, scope, dates};
+  const S = [brfCover, brfGlance, brfScorecard, brfTargets, brfHts, brfHtsDetail, brfArt, brfContinuity, brfArtTrend, brfVl, brfVlDetail, brfBio, brfBioTrend, brfAhd, brfPmtct, brfAhdPmtctState, brfClose];
+  for(const f of S) f(ctx);
+  return pres;
+}
+
+/* ---------- drawing helpers ---------- */
+const bN = v => v==null||isNaN(v) ? "—" : n(v);
+const bP = (v,d=1) => pct(v,d);
+const units = () => F.state ? [...new Set(FAC.filter(x=>x.state===F.state).map(x=>x.lga))].sort().map(l=>({l, f:{...F, lga:l}})) : STATES.map(s=>({l:s, f:{...F, state:s}}));
+const unitWord = () => F.state ? "LGA" : "state";
+function bSlide(ctx, kicker, title, sub){
+  const s = ctx.pres.addSlide({masterName:"BRF_CONTENT"});
+  s.addShape(ctx.pres.shapes.ROUNDED_RECTANGLE, {x:0.5, y:0.36, w:Math.max(1.1, 0.11*kicker.length+0.4), h:0.3, rectRadius:0.15, fill:{color:BC.gold}, line:{color:BC.gold}});
+  s.addText(kicker.toUpperCase(), {x:0.5, y:0.36, w:Math.max(1.1, 0.11*kicker.length+0.4), h:0.3, fontFace:BF, fontSize:10, bold:true, color:"FFFFFF", align:"center", valign:"middle", charSpacing:1.5, margin:0, isTextBox:true});
+  s.addText(title, {x:0.5, y:0.72, w:11.2, h:0.6, fontFace:HF, fontSize:26, bold:true, color:BC.cloth, margin:0, valign:"top", isTextBox:true});
+  if(sub) s.addText(sub, {x:0.5, y:1.3, w:11.2, h:0.32, fontFace:BF, fontSize:12, color:BC.ink3, margin:0, isTextBox:true});
+  return s;
+}
+function bTake(ctx, s, text){        // the slide's message, in a band above the footer
+  if(!text) return;
+  s.addShape(ctx.pres.shapes.RECTANGLE, {x:0.5, y:6.42, w:0.07, h:0.5, fill:{color:BC.gold}, line:{color:BC.gold}});
+  s.addText(text, {x:0.7, y:6.42, w:12.1, h:0.5, fontFace:BF, fontSize:13, italic:true, color:BC.ink, valign:"middle", margin:0, isTextBox:true});
+}
+function bCard(ctx, s, x, y, w, h, value, label, sub, status){
+  s.addShape(ctx.pres.shapes.ROUNDED_RECTANGLE, {x, y, w, h, rectRadius:0.08, fill:{color:BC.card}, line:{color:BC.edge, width:0.75},
+    shadow:{type:"outer", blur:4, offset:1.5, angle:90, color:"8C7A55", opacity:0.18}});
+  if(status && status!=="none") s.addShape(ctx.pres.shapes.OVAL, {x:x+w-0.3, y:y+0.16, w:0.15, h:0.15, fill:{color:BC.st[status]}, line:{color:BC.st[status]}});
+  s.addText(String(value), {x:x+0.15, y:y+0.12, w:w-0.45, h:h*0.46, fontFace:HF, fontSize:Math.min(h>1.25?30:24, Math.floor((w-0.45)*72/(String(value).length*0.56))), bold:true, color:BC.cloth, valign:"bottom", margin:0, fit:"shrink", isTextBox:true});
+  s.addText(label, {x:x+0.15, y:y+0.12+h*0.46, w:w-0.3, h:0.3, fontFace:BF, fontSize:11.5, bold:true, color:BC.ink2, margin:0, valign:"top", isTextBox:true});
+  const st = status && status!=="none" ? [{text:LABEL[status], options:{bold:true, color:BC.st[status]}}] : [];
+  const sb = sub ? [{text:(st.length?"  ·  ":"")+sub, options:{color:BC.ink3}}] : [];
+  if(st.length || sb.length) s.addText([...st, ...sb], {x:x+0.15, y:y+h-0.38, w:w-0.3, h:0.28, fontFace:BF, fontSize:10, margin:0, valign:"middle", fit:"shrink", isTextBox:true});
+}
+function bCards(ctx, s, y, h, cards, x0=0.5, x1=BW-0.5){
+  const gap = 0.18, w = (x1-x0-gap*(cards.length-1))/cards.length;
+  cards.forEach((c,i)=>bCard(ctx, s, x0+i*(w+gap), y, w, h, ...c));
+}
+// horizontal bars drawn as shapes: rows {l, v, txt, c}
+function bBars(ctx, s, x, y, w, rows, {labelW=2.2, rowH=0.42, max=null, valW=1.6, color=BC.s1, title=""}={}){
+  if(title){ s.addText(title, {x, y, w, h:0.3, fontFace:BF, fontSize:12, bold:true, color:BC.ink2, margin:0, isTextBox:true}); y += 0.38; }
+  const mx = max ?? Math.max(...rows.map(r=>r.v||0), 1), tw = w-labelW-valW-0.1;
+  rows.forEach((r,i)=>{ const yy = y+i*rowH, bh = Math.min(0.26, rowH*0.62), by = yy+(rowH-bh)/2;
+    s.addText(r.l, {x, y:yy, w:labelW-0.1, h:rowH, fontFace:BF, fontSize:11, color:BC.ink, align:"right", valign:"middle", margin:0, fit:"shrink", isTextBox:true});
+    s.addShape(ctx.pres.shapes.RECTANGLE, {x:x+labelW, y:by, w:tw, h:bh, fill:{color:BC.track}, line:{color:BC.track}});
+    const fw = Math.max(0.02, Math.min(1,(r.v||0)/mx)*tw);
+    if(r.v) s.addShape(ctx.pres.shapes.RECTANGLE, {x:x+labelW, y:by, w:fw, h:bh, fill:{color:r.c||color}, line:{color:r.c||color}});
+    if(r.tick!=null){ const tx = x+labelW+Math.min(1,r.tick/mx)*tw; s.addShape(ctx.pres.shapes.LINE, {x:tx, y:by-0.06, w:0, h:bh+0.12, line:{color:BC.ink, width:1.5}}); }
+    s.addText(r.txt ?? bN(r.v), {x:x+labelW+tw+0.1, y:yy, w:valW, h:rowH, fontFace:BF, fontSize:11, color:BC.ink, valign:"middle", margin:0, fit:"shrink", isTextBox:true}); });
+  return y + rows.length*rowH;
+}
+// a waterfall drawn as shapes: steps [label, value, "total"?]
+function bWaterfall(ctx, s, x, y, w, h, steps){
+  let run = 0; const bars = steps.map(([l,v,k])=>{ if(k){ run=v; return {l,v,a:0,b:v,k}; } const a=run; run+=v; return {l,v,a,b:run,k:v>=0?"up":"down"}; });
+  const mx = Math.max(...bars.flatMap(b=>[b.a,b.b]),1), mn = Math.min(...bars.filter(b=>b.k!=="total").flatMap(b=>[b.a,b.b]), mx);
+  const lo = Math.max(0, mn-(mx-mn)*.6), pt = 0.35, pb = 0.62, Y = v => y+pt+(h-pt-pb)*(1-(v-lo)/((mx-lo)||1)), bw = w/bars.length;
+  const col = {total:BC.s1, up:BC.st.good, down:BC.st.critical};
+  s.addShape(ctx.pres.shapes.LINE, {x, y:y+h-pb, w, h:0, line:{color:BC.edge, width:1}});
+  bars.forEach((b,i)=>{ const bx = x+i*bw+bw*0.16, ww = bw*0.68;
+    const y1 = b.k==="total" ? Y(b.b) : Y(Math.max(b.a,b.b)), y2 = b.k==="total" ? y+h-pb : Y(Math.min(b.a,b.b)), hh = Math.max(0.03, y2-y1);
+    s.addShape(ctx.pres.shapes.RECTANGLE, {x:bx, y:y1, w:ww, h:hh, fill:{color:col[b.k]}, line:{color:col[b.k]}});
+    s.addText(Math.abs(b.v)<0.5 ? "0" : (b.k==="total"?"":b.v>0?"+":"")+bN(b.v), {x:bx-0.2, y:y1-0.3, w:ww+0.4, h:0.26, fontFace:BF, fontSize:10.5, bold:b.k==="total", color:BC.ink, align:"center", margin:0, isTextBox:true});
+    s.addText(b.l, {x:bx-0.12, y:y+h-pb+0.05, w:ww+0.24, h:pb-0.05, fontFace:BF, fontSize:9.5, color:BC.ink2, align:"center", valign:"top", margin:0, fit:"shrink", isTextBox:true}); });
+  s.addText(`Axis starts at ${bN(lo)} so the movements show.`, {x, y:y+h+0.02, w, h:0.22, fontFace:BF, fontSize:9, italic:true, color:BC.ink3, margin:0, isTextBox:true});
+}
+function bChartBase(extra){
+  return Object.assign({catAxisLabelColor:BC.ink2, valAxisLabelColor:BC.ink3, catAxisLabelFontFace:BF, valAxisLabelFontFace:BF, catAxisLabelFontSize:10, valAxisLabelFontSize:9,
+    valGridLine:{color:"E6DCC4", size:0.5}, catGridLine:{style:"none"}, catAxisLineShow:true, valAxisLineShow:false, dataLabelFontFace:BF, dataLabelFontSize:9.5, dataLabelColor:BC.ink,
+    legendFontFace:BF, legendFontSize:10, legendColor:BC.ink2, titleFontFace:BF, titleFontSize:12, titleColor:BC.ink2, titleBold:true}, extra);
+}
+function bNoData(s, x, y, w, h, what){
+  s.addShape("rect", {x, y, w, h, fill:{color:"F3ECDB"}, line:{color:BC.edge, dashType:"dash"}});
+  s.addText(what, {x, y, w, h, fontFace:BF, fontSize:12, color:BC.ink3, align:"center", valign:"middle", isTextBox:true});
+}
+const lastMonths = (k=12) => { const end = (D.meta.as_of < P.end ? D.meta.as_of : P.end).slice(0,7);
+  return [...new Set(PM.filter(p=>p.kind==="M"||p.kind==="W").map(p=>p.month))].filter(mo=>mo && mo<=end && `${mo}-01`<=D.meta.as_of).sort().slice(-k); };
+// weekly points up to the period end, last 16 weeks, starting no earlier than the NDR fingerprint rule change (31 Aug 2026)
+const brfStock = () => { const k = STOCK ? null : (SNN||SNL); return k ? fmtDate(k.slice(2)) : fmtDate(D.meta.linelist_as_of||D.meta.as_of); };
+const brfWk4 = ds => ds.filter(d=>dOf(d)<=new Date(dOf(ds.at(-1)).getTime()-27*DAY)).at(-1) ?? ds[0];   // 4 weeks before the latest, as the dashboard
+const brfWeeks = (keys, end, k=16) => { const ds = keys.filter(d=>d<=end).sort(), rc = ds.find(d=>d>="2026-08-31"), from = rc && ds.filter(d=>d>=rc).length>=4 ? rc : ds[0];
+  return ds.filter(d=>d>=from).slice(-k); };
+// short axis labels: month names alone (the span is in the title), weeks as "6 Sep"
+const monthTick = mo => new Date(mo+"-01T00:00:00").toLocaleDateString("en-GB",{month:"short"});
+const monthSpan = ms => ms.length ? `${monthLab(ms[0])} – ${monthLab(ms.at(-1))}` : "";
+const wkTick = d => dOf(d).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+const monthShort = mo => monthLab(mo).replace(" 20","’");
+const ev = (code, v, f=F) => evaluate(code, v, f);
+const tgtTxt = (code, r) => r.target==null ? (r.note||"no target") : `${REG[code].kind==="rate" ? "target "+pct(r.target,0) : TL()+" target "+n(r.target)}`;
+
+/* ---------- 1. cover ---------- */
+function brfCover(ctx){
+  const s = ctx.pres.addSlide({masterName:"BRF_DARK"});
+  s.addShape(ctx.pres.shapes.RECTANGLE, {x:0, y:0, w:0.28, h:BH, fill:{color:BC.gold}, line:{color:BC.gold}});
+  if(ctx.logo){ s.addShape(ctx.pres.shapes.ROUNDED_RECTANGLE, {x:0.9, y:0.8, w:1.5, h:1.5*ctx.logo.r+0.3, rectRadius:0.1, fill:{color:"FBF6E8"}, line:{color:"FBF6E8"}});
+    s.addImage({data:ctx.logo.data, x:1.05, y:0.95, w:1.2, h:1.2*ctx.logo.r}); }
+  s.addText("ECEWS SPEED PROGRAMME", {x:0.9, y:2.75, w:11, h:0.4, fontFace:BF, fontSize:14, bold:true, color:BC.gold, charSpacing:3, margin:0, isTextBox:true});
+  s.addText("Programme performance briefing", {x:0.9, y:3.15, w:11.5, h:1.0, fontFace:HF, fontSize:44, bold:true, color:BC.onCloth, margin:0, isTextBox:true});
+  s.addText(`${ctx.scope}  ·  ${P.label}`, {x:0.9, y:4.2, w:11.5, h:0.5, fontFace:HF, fontSize:24, color:"FFFFFF", margin:0, isTextBox:true});
+  s.addText("95-95-95 cascade · biometrics · advanced HIV disease · PMTCT · IPI review", {x:0.9, y:4.85, w:11.5, h:0.4, fontFace:BF, fontSize:15, color:BC.onCloth, margin:0, isTextBox:true});
+  s.addShape(ctx.pres.shapes.LINE, {x:0.9, y:5.75, w:4.5, h:0, line:{color:BC.gold, width:1.25}});
+  s.addText(`Figures from the dashboard update of ${String(D.meta.generated_at||"").replace("T"," ")}\n${ctx.dates}`, {x:0.9, y:5.9, w:11.5, h:0.7, fontFace:BF, fontSize:12, color:BC.onCloth, margin:0, isTextBox:true});
+  s.addNotes("Built from the SPEED KPI dashboard (Download reports → Management briefing). Every figure is the same sum the dashboard pages show for this state and period.");
+}
+
+/* ---------- 2. the cascade at a glance ---------- */
+function brfGlance(ctx){
+  const v = agg(), cf = ev("NIPI_CASE_FINDING", v), cur = ev("NIPI_TX_CURR", v), vls = ev("IPI_VLS_ON_ART", v), lk = ev("IPI_ART_COV", v);
+  const sat = div(v.tx_curr, v.plhiv_est);
+  const s = bSlide(ctx, "At a glance", "The 95-95-95 cascade", `${ctx.scope} · ${P.label}`);
+  const cols = [["1st 95", "Diagnose", bN(v.hts_tst_pos), "new HIV diagnoses (HTS_TST_POS)", cf.target!=null?`${TL()} target ${n(cf.target)}`:"", cf.status,
+      [["Tested (HTS_TST)", bN(v.hts_tst)], ["Testing yield", bP(div(v.hts_tst_pos,v.hts_tst))], ["Linkage to ART", bP(lk.value)]]],
+    ["2nd 95", "Treat", bN(v.tx_curr), TXL(), cur.target!=null?`${pct(cur.score,0)} of target ${n(cur.target)}`:"", cur.status,
+      [["Saturation vs Naomi PLHIV", bP(sat)], ["TX_NEW in period", bN(v.tx_new_q)], STOCK ? ["IIT rate", bP(WF().rate(v),2)] : ["On 3+ month refills", bP(div(v.mmd3, v.tx_curr_emr))]]],
+    ["3rd 95", "Suppress", bP(vls.value), "suppressed ÷ all on ART (IPI)", vls.target!=null?`milestone ${pct(vls.target,0)}`:"", vls.status,
+      [["VL coverage", bP(div(v.vl_result,v.vl_eligible))], ["Suppression among results", bP(div(v.vl_suppressed,v.vl_result))], ["Unsuppressed ≥1,000", bN(v.vl_unsuppressed)]]]];
+  const w = 3.95, gap = 0.22;
+  cols.forEach(([k, verb, big, lab, sub, st, rows], i)=>{ const x = 0.5+i*(w+gap), y = 1.8, h = 4.45;
+    s.addShape(ctx.pres.shapes.ROUNDED_RECTANGLE, {x, y, w, h, rectRadius:0.08, fill:{color:BC.card}, line:{color:BC.edge, width:0.75}, shadow:{type:"outer", blur:4, offset:1.5, angle:90, color:"8C7A55", opacity:0.18}});
+    s.addShape(ctx.pres.shapes.OVAL, {x:x+0.25, y:y+0.25, w:0.62, h:0.62, fill:{color:BC.cloth}, line:{color:BC.cloth}});
+    s.addText(String(i+1), {x:x+0.25, y:y+0.25, w:0.62, h:0.62, fontFace:HF, fontSize:22, bold:true, color:BC.gold, align:"center", valign:"middle", margin:0, isTextBox:true});
+    s.addText([{text:k, options:{bold:true, color:BC.cloth, fontSize:16, breakLine:true}}, {text:verb, options:{color:BC.ink3, fontSize:12}}], {x:x+1.0, y:y+0.22, w:w-1.2, h:0.7, fontFace:BF, margin:0, valign:"middle", isTextBox:true});
+    s.addText(big, {x:x+0.25, y:y+1.05, w:w-0.5, h:0.85, fontFace:HF, fontSize:40, bold:true, color:BC.cloth, margin:0, valign:"bottom", fit:"shrink", isTextBox:true});
+    s.addText(lab, {x:x+0.25, y:y+1.92, w:w-0.5, h:0.3, fontFace:BF, fontSize:11.5, color:BC.ink2, margin:0, isTextBox:true});
+    const stt = st && st!=="none" ? [{text:LABEL[st]+"  ", options:{bold:true, color:BC.st[st]}}] : [];
+    s.addText([...stt, {text:sub||" ", options:{color:BC.ink3}}], {x:x+0.25, y:y+2.22, w:w-0.5, h:0.3, fontFace:BF, fontSize:11, margin:0, isTextBox:true});
+    s.addShape(ctx.pres.shapes.LINE, {x:x+0.25, y:y+2.65, w:w-0.5, h:0, line:{color:BC.edge, width:0.75}});
+    rows.forEach(([l,val],j)=>{ s.addText(l, {x:x+0.25, y:y+2.78+j*0.5, w:w-1.6, h:0.42, fontFace:BF, fontSize:12, color:BC.ink2, margin:0, valign:"middle", isTextBox:true});
+      s.addText(val, {x:x+w-1.45, y:y+2.78+j*0.5, w:1.2, h:0.42, fontFace:BF, fontSize:13, bold:true, color:BC.ink, align:"right", margin:0, valign:"middle", isTextBox:true}); }); });
+  const weak = [["case finding", cf], ["TX_CURR", cur], ["viral suppression on ART", vls]].filter(([,r])=>r.status==="critical"||r.status==="warning").map(([l])=>l);
+  const scored = [cf, cur, vls].filter(r=>r.status && r.status!=="none").length;
+  bTake(ctx, s, weak.length ? `Attention: ${weak.join(" and ")} ${weak.length>1?"are":"is"} behind the pace for ${P.label}.` : !scored ? `No targets are loaded for ${P.label}: figures only.` : scored<3 ? `No 95 with a target is behind the pace for ${P.label}.` : `All three 95s are on track against the ${P.label} targets.`);
+  s.addNotes(`Diagnose: HTS_TST_POS, DHIS2. Treat: ${TXL()}; saturation = TX_CURR ÷ Naomi PLHIV estimate (95% × 95% = 90.25%). Suppress: suppressed ÷ all on ART (IPI definition). IIT rate = IIT ÷ (previous TX_CURR + TX_NEW).`);
+}
+
+/* ---------- 3. IPI scorecard ---------- */
+function brfScorecard(ctx){
+  const order = ["1st 95","2nd 95","3rd 95","PMTCT","Prevention","TB","Systems"];
+  const inds = D.registry.filter(i=>i.group==="IPI"||i.group==="Non-IPI").sort((a,b)=>(a.group===b.group?0:a.group==="IPI"?-1:1)||order.indexOf(a.pillar)-order.indexOf(b.pillar));
+  const v = agg(), st = F.state ? [] : STATES, per = st.map(x=>({x, f:{...F,state:x}, v:agg({...F,state:x})}));
+  const s = bSlide(ctx, "IPI review", "IPI and Non-IPI scorecard", `${ctx.scope} · ${P.label} · rates against targets, counts against the period target paced to the data date`);
+  const H = (t,o={}) => ({text:t, options:Object.assign({bold:true, color:"FFFFFF", fill:{color:BC.cloth}, fontSize:11, align:"center", valign:"middle"}, o)});
+  const head = [H("Group"), H("Pillar"), H("Indicator",{align:"left"}), H("Result"), H("Target"), H("Status"), ...st.map(x=>H(x))];
+  const cnt = {};
+  const rows = inds.map(i=>{ const r = ev(i.code, v), sv = r.value==null ? "—" : fmtInd(i.code, r); cnt[r.status]=(cnt[r.status]||0)+1;
+    const tg = r.target==null ? "—" : i.kind==="rate" ? pct(r.target,0) : n(r.target);
+    const lab = r.value==null ? "Needs data" : i.neutral ? "Monitored" : r.note && r.status==="none" ? "Not due" : LABEL[r.status];
+    const c = (t,o={}) => ({text:t, options:Object.assign({fontSize:10.5, color:BC.ink, valign:"middle", align:"center"}, o)});
+    return [c(i.group,{color:i.group==="IPI"?BC.goldInk:BC.ink3, bold:i.group==="IPI"}), c(i.pillar,{color:BC.ink2}), c(i.name,{align:"left"}), c(sv,{bold:true}), c(tg,{color:BC.ink2}),
+      c(lab,{bold:true, color:BC.st[r.status], fill:{color:BC.stBg[r.status]}}),
+      ...per.map(p=>{ const x = ev(i.code, p.v, p.f); return c(x.value==null?"—":fmtInd(i.code,x), {color:BC.st[x.status]==BC.st.none?BC.ink:BC.st[x.status], bold:x.status!=="none"}); })]; });
+  const cw = st.length ? [0.85, 1.0, 4.55, 1.05, 1.0, 1.15, 0.9, 0.9, 0.9] : [0.95, 1.15, 6.2, 1.3, 1.25, 1.45];
+  s.addTable([head, ...rows], {x:0.5, y:1.72, w:cw.reduce((a,b)=>a+b,0), colW:cw, rowH:0.335, fontFace:BF, border:{type:"solid", pt:0.5, color:BC.edge}, fill:{color:BC.card}, margin:[0.02,0.06,0.02,0.06]});
+  const off = inds.filter(i=>{ const r=ev(i.code,v); return r.status==="critical"; }).map(i=>i.name);
+  bTake(ctx, s, `${cnt.exceeds||0} exceeding, ${cnt.good||0} on track, ${cnt.warning||0} to watch, ${cnt.critical||0} off track` + (off.length ? ` — off track: ${off.slice(0,3).join("; ")}${off.length>3?"…":""}.` : "."));
+  s.addNotes("Status rules as on the dashboard: rates are met when they reach the target (within 5 points = Watch); counts are compared with the period target paced to the data date (75% of the expected value or more = On track, 50–74% = Watch). State columns are coloured by their own status.");
+}
+
+/* ---------- 5. 1st 95: where the positives come from ---------- */
+function brfHtsDetail(ctx){
+  const v = agg(), mods = agg(F, {by:"mod"});
+  const mr = [...mods.entries()].filter(([k,o])=>k && o.hts_tst_pos).map(([k,o])=>({l:k, v:o.hts_tst_pos, t:o.hts_tst||0})).sort((a,b)=>b.v-a.v).slice(0,9);
+  const s = bSlide(ctx, "1st 95", "Where the positives come from", `${ctx.scope} · ${P.label} · by testing modality and by ${unitWord()} against targets`);
+  if(mr.length) bBars(ctx, s, 0.5, 1.75, 5.9, mr.map(r=>({l:r.l, v:r.v, txt:`${n(r.v)} · ${bP(div(r.v, v.hts_tst_pos),0)} · yield ${bP(div(r.v, r.t))}`})),
+    {labelW:2.3, valW:1.95, rowH:Math.min(0.46, 4.2/mr.length), title:"HTS_TST_POS by modality · share of positives · yield"});
+  else bNoData(s, 0.5, 1.75, 5.9, 4.4, "No testing by modality for this period.");
+  const U = units(), H = t => ({text:t, options:{bold:true, color:"FFFFFF", fill:{color:BC.cloth}, fontSize:10.5, align:"center", valign:"middle"}});
+  const c = (t,o={}) => ({text:t, options:Object.assign({fontSize:10.5, color:BC.ink, align:"center", valign:"middle"}, o)});
+  const sc = r => r.pctQ==null ? "—" : pct(r.pctQ,0);
+  const lga = !!F.state;
+  const rowOf = (l, f, tot) => { const x = agg(f), t = ev("HTS_TST", x, f), p = ev("HTS_TST_POS", x, f), b = tot ? {bold:true, fill:{color:"F3ECDB"}} : {};
+    const tc = r => c(sc(r), Object.assign({color:BC.st[r.status]===BC.st.none?BC.ink:BC.st[r.status], bold:true}, b.fill?{fill:b.fill}:{}));
+    return [c(l, Object.assign({align:"left"}, b)), c(bN(x.hts_tst), b), ...(lga?[]:[tc(t)]), c(bN(x.hts_tst_pos), b), ...(lga?[]:[tc(p)]), c(bP(div(x.hts_tst_pos, x.hts_tst)), b),
+      ...(lga?[c(bN(x.tx_new_q), b)]:[]), c(bP(div(x.tx_new_q, x.hts_tst_pos)), b)]; };
+  const body = U.length > 12 ? U.map(u=>({u, x:agg(u.f)})).sort((a,b)=>(b.x.hts_tst_pos||0)-(a.x.hts_tst_pos||0)).slice(0,11).map(o=>o.u) : U;
+  const rows = [lga ? [H("LGA"), H("HTS_TST"), H("HTS_POS"), H("Yield"), H("TX_NEW"), H("Linkage")] : [H("State"), H("HTS_TST"), H("% of target"), H("HTS_POS"), H("% of target"), H("Yield"), H("Linkage")],
+    ...body.map(u=>rowOf(u.l, u.f)), rowOf(F.state||"All states", F, true)];
+  const cw = lga ? [1.9, 0.95, 0.9, 0.8, 0.85, 0.8] : [1.45, 0.9, 0.85, 0.8, 0.85, 0.65, 0.7];
+  const st = lga ? (()=>{ const x = agg(F), t = ev("HTS_TST", x), p = ev("HTS_TST_POS", x); return ` · ${F.state}: ${t.pctQ==null?"—":pct(t.pctQ,0)} of the HTS_TST target, ${p.pctQ==null?"—":pct(p.pctQ,0)} of HTS_POS`; })() : "";
+  s.addText(lga ? `By LGA${U.length>12?" (top 11 by positives)":""}${st}` : `By state · % of the ${P.label} target`, {x:6.65, y:1.75, w:6.2, h:0.3, fontFace:BF, fontSize:12, bold:true, color:BC.ink2, margin:0, isTextBox:true});
+  const rh = Math.min(0.36, 4.1/rows.length);
+  s.addTable(rows, {x:6.65, y:2.13, w:cw.reduce((a,b)=>a+b,0), colW:cw, rowH:rh, fontFace:BF, border:{type:"solid", pt:0.5, color:BC.edge}, fill:{color:BC.card}, margin:[0.02,0.05,0.02,0.05]});
+  const tb = body.map(u=>({l:u.l, r:ev("HTS_TST_POS", agg(u.f), u.f)})).filter(o=>o.r.pctQ!=null);
+  if(tb.length && body.length<=6) bBars(ctx, s, 6.65, 2.13+rows.length*rh+0.3, 6.2, tb.map(o=>({l:o.l, v:Math.min(o.r.pctQ,1.2), tick:o.r.elapsed, c:BC.st[o.r.status], txt:`${pct(o.r.pctQ,0)} · ${LABEL[o.r.status]}`})),
+    {labelW:1.45, valW:1.5, max:1.2, rowH:0.36, title:"HTS_TST_POS against the period target · line = expected by the data date"});
+  const top = mr[0];
+  bTake(ctx, s, top ? `${top.l} gives the most positives: ${n(top.v)} (${bP(div(top.v, v.hts_tst_pos),0)} of all), at a ${bP(div(top.v, top.t))} yield.` : "");
+  s.addNotes("Targets are for the period chosen, at programme and state level (LGAs have no targets). % of target uses the whole period target; the colour follows the pace to the data date. Linkage = TX_NEW (unique) ÷ HTS_TST_POS.");
+}
+
+/* ---------- 6. 2nd 95: on treatment ---------- */
+function brfArt(ctx){
+  const v = agg(), cur = ev("NIPI_TX_CURR", v), sat = div(v.tx_curr, v.plhiv_est), W = WF();
+  const s = bSlide(ctx, "2nd 95", "On treatment and saturation", `${ctx.scope} · ${TXL()} as of ${brfStock()} · Naomi PLHIV estimates`);
+  bCards(ctx, s, 1.75, 1.3, [[bN(v.tx_curr), TXL(), cur.target!=null?`${pct(cur.score,0)} of ${n(cur.target)}`:"", cur.status], [bP(sat), "Saturation (Naomi)", "ref. 90.25%", rateStatus(sat,.9025)],
+    ...(STOCK ? [[bN(v[W.new]), "TX_NEW", W.label], [bN(v[W.iit]), "IIT", `rate ${bP(W.rate(v),2)}`], [bN(v[W.rtt]), "Returned to treatment", W.label]]
+      : [[bN(v.tx_new_q), "TX_NEW", P.label], [bP(div(v.mmd3, v.tx_curr_emr)), "On 3+ month refills", "share of TX_CURR"]])]);
+  const U = units().map(u=>({...u, x:agg(u.f)})).filter(u=>u.x.tx_curr), withPl = U.filter(u=>u.x.plhiv_est);
+  if(U.length){
+    const show = U.length>10 ? U.sort((a,b)=>b.x.tx_curr-a.x.tx_curr).slice(0,10) : U;
+    const series = withPl.length===U.length ? [{name:"Naomi PLHIV estimate", labels:show.map(u=>u.l), values:show.map(u=>Math.round(u.x.plhiv_est))}] : [];
+    series.push({name:TXL(), labels:show.map(u=>u.l), values:show.map(u=>Math.round(u.x.tx_curr))});
+    s.addChart(ctx.pres.charts.BAR, series, bChartBase({x:0.5, y:3.3, w:withPl.length?7.6:12.33, h:3.0, barDir:"col", chartColors:series.length>1?[BC.edge, BC.s1]:[BC.s1], showValue:true, dataLabelPosition:"outEnd",
+      dataLabelFormatCode:"#,##0", valAxisLabelFormatCode:"#,##0", showLegend:series.length>1, legendPos:"t", barGapWidthPct:40, showTitle:true, title:`${TXL()} by ${unitWord()}${U.length>10?" (top 10)":""}`}));
+    if(withPl.length) bBars(ctx, s, 8.35, 3.3, 4.5, withPl.map(u=>{ const r = div(u.x.tx_curr, u.x.plhiv_est); return {l:u.l, v:r, tick:.9025, c:BC.st[rateStatus(r,.9025)]||BC.s1, txt:bP(r)}; }).slice(0,9),
+      {labelW:1.3, valW:0.75, max:Math.max(1, ...withPl.map(u=>div(u.x.tx_curr,u.x.plhiv_est)||0)), rowH:Math.min(0.5, 2.5/Math.min(9,withPl.length)), title:"Saturation · line at 90.25%"});
+  } else bNoData(s, 0.5, 3.3, 12.33, 3.0, `No ${TXL()} for ${P.label}: stock figures need a line-list copy dated in the period.`);
+  bTake(ctx, s, v.tx_curr ? `${bN(v.tx_curr)} on treatment = ${bP(sat)} of the estimated PLHIV${sat!=null?(sat>=.9025?", above the 90.25% mark":`, ${n(Math.max(0, .9025*v.plhiv_est-v.tx_curr))} short of 90.25%`):""}.` : "");
+  s.addNotes(`${TXTIP()} Saturation = ${TXL()} ÷ Naomi PLHIV estimate; 95% diagnosed × 95% on treatment = 90.25%.`);
+}
+
+/* ---------- 8. 3rd 95: viral load cascade ---------- */
+function brfVl(ctx){
+  const v = agg(), ip = ev("IPI_VLS_ON_ART", v), vr = ev("NIPI_VLS_WITH_RESULT", v), cov = div(v.vl_result, v.vl_eligible);
+  const s = bSlide(ctx, "3rd 95", "Viral load coverage and suppression", `${ctx.scope} · ${NDRT()?"NDR line list":"EMR line list"} as of ${brfStock()} · results in the last 12 months`);
+  if(!v.vl_eligible){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `No viral load figures for ${P.label}: they are stock figures as of the line-list date.`); return; }
+  bCards(ctx, s, 1.75, 1.3, [[bP(cov), "VL coverage", "results ÷ eligible · ref. 95%", rateStatus(cov,.95)], [bP(vr.value), "Suppression among results", tgtTxt("NIPI_VLS_WITH_RESULT", vr), vr.status],
+    [bP(ip.value), "Suppressed ÷ all on ART (IPI)", tgtTxt("IPI_VLS_ON_ART", ip), ip.status], [bN(v.vl_unsuppressed), "Unsuppressed ≥1,000", "need EAC and a repeat VL"]]);
+  const steps = [[TXE(), v.tx_curr_emr, BC.edge], ["VL eligible", v.vl_eligible, BC.s3], ["Sample collected", v.vl_sample, BC.s3], ["Result received", v.vl_result, BC.s1], ["Suppressed <1,000", v.vl_suppressed, BC.s1], ["Undetectable <50", v.vl_undetectable, BC.st.exceeds]];
+  bBars(ctx, s, 0.5, 3.3, 7.4, steps.map(([l,x,c],i)=>({l, v:x, c, txt:`${bN(x)}${i>1?`  ·  ${bP(div(x, i===2||i===3?v.vl_eligible:v.vl_result))}`:""}`})),
+    {labelW:2.1, valW:1.75, rowH:0.44, title:"Viral load cascade · rates: sample and result ÷ eligible, suppression ÷ results"});
+  const rows = [["Pending result", v.vl_pending], ["Low-level viraemia 50–999", v.vl_llv], ["Unsuppressed ≥1,000", v.vl_unsuppressed]];
+  s.addText("Follow-up lists", {x:8.3, y:3.3, w:4.5, h:0.3, fontFace:BF, fontSize:12, bold:true, color:BC.ink2, margin:0, isTextBox:true});
+  rows.forEach(([l,x],i)=>{ const y = 3.72+i*0.85;
+    s.addShape(ctx.pres.shapes.ROUNDED_RECTANGLE, {x:8.3, y, w:4.55, h:0.72, rectRadius:0.06, fill:{color:i===2?BC.stBg.critical:BC.card}, line:{color:BC.edge, width:0.75}});
+    s.addText(bN(x), {x:8.45, y, w:1.6, h:0.72, fontFace:HF, fontSize:22, bold:true, color:i===2?BC.st.critical:BC.cloth, valign:"middle", margin:0, isTextBox:true});
+    s.addText(l, {x:10.05, y, w:2.7, h:0.72, fontFace:BF, fontSize:11.5, color:BC.ink2, valign:"middle", margin:0, isTextBox:true}); });
+  bTake(ctx, s, `${bP(cov)} of eligible clients have a result and ${bP(vr.value)} of them are suppressed; ${bN(v.vl_unsuppressed)} clients ≥1,000 copies need enhanced adherence counselling.`);
+  s.addNotes("Eligible = on ART at least 180 days. Coverage = result in the last 12 months ÷ eligible. Suppressed = VL <1,000 copies/mL. IPI suppression divides by everyone on ART, so it rises with coverage as well as with suppression.");
+}
+
+/* ---------- 9. 3rd 95: by place and age ---------- */
+function brfVlDetail(ctx){
+  const s = bSlide(ctx, "3rd 95", "Viral load by place and age", `${ctx.scope} · coverage and suppression against the 95% reference`);
+  const U = units().map(u=>({...u, x:agg(u.f)})).filter(u=>u.x.vl_eligible);
+  if(!U.length){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `No viral load figures for ${P.label}.`); return; }
+  const show = U.length>10 ? U.sort((a,b)=>b.x.vl_eligible-a.x.vl_eligible).slice(0,10) : U;
+  s.addChart(ctx.pres.charts.BAR, [{name:"Coverage", labels:show.map(u=>u.l), values:show.map(u=>div(u.x.vl_result,u.x.vl_eligible))},
+      {name:"Suppression", labels:show.map(u=>u.l), values:show.map(u=>div(u.x.vl_suppressed,u.x.vl_result))}],
+    bChartBase({x:0.5, y:1.75, w:6.0, h:4.5, barDir:"col", chartColors:[BC.s3, BC.s1], showValue:true, dataLabelPosition:"outEnd", dataLabelFormatCode:"0%", valAxisLabelFormatCode:"0%",
+      valAxisMinVal:0, valAxisMaxVal:1, showLegend:true, legendPos:"t", barGapWidthPct:50, showTitle:true, title:`By ${unitWord()}${U.length>10?" (10 largest)":""}`}));
+  const ga = agg({...F, age:""}, {by:"age"}), bands = AGE.filter(a=>a!=="50+"&&a!=="Unknown"&&ga.has(a)&&(ga.get(a).vl_result||0)>0);
+  if(bands.length) s.addChart(ctx.pres.charts.BAR, [{name:"Coverage", labels:bands, values:bands.map(a=>div(ga.get(a).vl_result, ga.get(a).vl_eligible))},
+      {name:"Suppression", labels:bands, values:bands.map(a=>div(ga.get(a).vl_suppressed, ga.get(a).vl_result))}],
+    bChartBase({x:6.75, y:1.75, w:6.08, h:4.5, barDir:"col", chartColors:[BC.s3, BC.s1], showValue:false, valAxisLabelFormatCode:"0%", valAxisMinVal:0, valAxisMaxVal:1,
+      showLegend:true, legendPos:"t", barGapWidthPct:35, showTitle:true, title:"By age band", catAxisLabelFontSize:9}));
+  const pd = agg({...F, age:"<20"}), ad = agg({...F, age:"20+"});
+  const worst = bands.map(a=>({a, r:div(ga.get(a).vl_suppressed, ga.get(a).vl_result)})).filter(x=>x.r!=null).sort((p,q)=>p.r-q.r)[0];
+  bTake(ctx, s, `Under 20: coverage ${bP(div(pd.vl_result,pd.vl_eligible))}, suppression ${bP(div(pd.vl_suppressed,pd.vl_result))} · 20 and over: ${bP(div(ad.vl_result,ad.vl_eligible))} and ${bP(div(ad.vl_suppressed,ad.vl_result))}${worst?` · lowest suppression at ${worst.a} (${bP(worst.r)})`:""}.`);
+  s.addNotes("Coverage = results ÷ eligible; suppression = suppressed ÷ results. Both against the 95% reference.");
+}
+
+/* ---------- 10. biometrics ---------- */
+function brfBio(ctx){
+  const v = agg(), g = k => bx(v,k), act = g("pbs_active"), uq = g("tx_curr"), sh = div(uq, act);
+  const s = bSlide(ctx, "Biometrics", "Unique fingerprints and TX_CURR_Unique", `${ctx.scope} · NDR PBS as of ${brfStock()} · who is on treatment but not yet counted`);
+  if(!act){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `No biometric figures for ${P.label}.`); return; }
+  bCards(ctx, s, 1.75, 1.3, [[bN(act), "All on treatment (NDR)", "active clients"], [bN(uq), "TX_CURR_Unique", "counted by the NDR"], [bP(sh), "Unique share", "ref. 95%", rateStatus(sh,.95)],
+    [bN(act-uq), "Gap to close", "on treatment, not counted"]]);
+  const rows = BIOX.map(([k,l],i)=>({l, v:g(k), c:[BC.st.critical, BC.s2, "8A5FB8", BC.s3][i], txt:`${bN(g(k))}  ·  ${bP(div(g(k),act))}`}));
+  bBars(ctx, s, 0.5, 3.3, 6.6, [...rows, {l:"Under 15, counted anyway", v:g("bio_u15back"), c:BC.st.good, txt:`+${bN(g("bio_u15back"))}`}], {labelW:2.25, valW:1.5, rowH:0.5, title:"Not counted, by reason (all ages) · share of all on treatment"});
+  const U = units().map(u=>({...u, x:agg(u.f)})).filter(u=>u.x.pbs_active).slice(0,10);
+  if(U.length) bBars(ctx, s, 7.45, 3.3, 5.4, U.map(u=>{ const r = div(u.x.tx_curr, u.x.pbs_active); return {l:u.l, v:r, tick:.95, c:BC.st[rateStatus(r,.95)], txt:bP(r)}; }),
+    {labelW:1.4, valW:0.8, max:1, rowH:Math.min(0.5, 2.6/U.length), title:`Unique share by ${unitWord()} · line at 95%`});
+  const big = rows.slice().sort((a,b)=>b.v-a.v)[0];
+  bTake(ctx, s, `${bN(act-uq)} clients on treatment are not in TX_CURR_Unique; the largest group is ${big.l.toLowerCase()} (${bN(big.v)}).`);
+  s.addNotes("TX_CURR_Unique, as the NDR / PHIS3 summary: enrolled with a valid unique print + ABIS duplicates kept + every active client under 15 whatever the print status. Adjudication waiting = baseline print the national ABIS has not resolved; yet to capture = no baseline print; invalid = NO_VALID_DATA.");
+}
+
+/* ---------- 1st 95: testing ---------- */
+function brfHts(ctx){
+  const v = agg(), ht = ev("HTS_TST", v), cf = ev("HTS_TST_POS", v), lk = ev("IPI_ART_COV", v);
+  const s = bSlide(ctx, "1st 95", "Testing and linkage", `${ctx.scope} · ${P.label} · DHIS2${P.mode==="quarter"?" monthly reports":""} · TX_NEW from the line list`);
+  bCards(ctx, s, 1.75, 1.3, [[bN(v.hts_tst), "HTS_TST", tgtTxt("HTS_TST", ht), ht.status], [bN(v.hts_tst_pos), "HTS_TST_POS", tgtTxt("HTS_TST_POS", cf), cf.status],
+    [bP(div(v.hts_tst_pos, v.hts_tst)), "Testing yield", "POS ÷ TST"], [`${bN(v.tx_new_ti)} | ${bN(v.tx_new_q)}`, "TX_NEW", "non-unique | unique"],
+    [`${bP(div(v.tx_new_ti, v.hts_tst_pos))} | ${bP(div(v.tx_new_q, v.hts_tst_pos))}`, "Linkage", "non-unique | unique", periodFY()===TFY ? lk.status : null]]);
+  const ms = lastMonths(12), g = agg(F, {by:"month", months:"all"}), x = mo => g.get(mo) || {};
+  if(ms.length){
+    s.addChart(ctx.pres.charts.BAR, [{name:"HTS_TST_POS", labels:ms.map(monthTick), values:ms.map(mo=>x(mo).hts_tst_pos||0)}], bChartBase({x:0.5, y:3.3, w:7.5, h:3.0,
+      barDir:"col", chartColors:[BC.s1], showValue:true, dataLabelPosition:"outEnd", dataLabelFormatCode:"#,##0", valAxisLabelFormatCode:"#,##0", showLegend:false, barGapWidthPct:50,
+      showTitle:true, title:`New HIV diagnoses by month · ${monthSpan(ms)}`, catAxisLabelFontSize:10.5}));
+    s.addChart(ctx.pres.charts.LINE, [{name:"Yield", labels:ms.map(monthTick), values:ms.map(mo=>x(mo).hts_tst ? (x(mo).hts_tst_pos||0)/x(mo).hts_tst : null)}], bChartBase({x:8.25, y:3.3, w:4.6, h:3.0,
+      chartColors:[BC.st.critical], lineSize:2.5, lineDataSymbol:"circle", lineDataSymbolSize:6, showValue:false, valAxisLabelFormatCode:"0.0%", valAxisMinVal:0,
+      showLegend:false, showTitle:true, title:"Testing yield by month", catAxisLabelFontSize:10}));
+  } else bNoData(s, 0.5, 3.3, 12.33, 3.0, "No monthly testing data for this period.");
+  bTake(ctx, s, `${bN(v.hts_tst_pos)} new diagnoses from ${bN(v.hts_tst)} tests (yield ${bP(div(v.hts_tst_pos,v.hts_tst))}); ${bP(div(v.tx_new_q, v.hts_tst_pos))} linked to ART (unique)${lk.target!=null&&periodFY()===TFY?` against a ${pct(lk.target,0)} target`:""}.`);
+  s.addNotes("The latest month is provisional while facilities submit. TX_NEW non-unique = new ART starts with transfer-ins removed. Unique = also counted in the NDR unique TX_CURR (CDC pillar rules, from FY26 Q3); before that both are the same. Linkage = TX_NEW ÷ HTS_TST_POS.");
+}
+
+/* ---------- a small by-state (or by-LGA) table that sits beside a slide's main visual ---------- */
+// cols: {h, f:x=>text, st:x=>status}; a state's deck shows its largest LGAs
+function brfMini(ctx, s, x, y, w, title, {has, size, cols, max=6}){
+  let U = units().map(u=>({...u, x:agg(u.f)})).filter(u=>has(u.x));
+  if(F.state) U = U.sort((a,b)=>(size(b.x)||0)-(size(a.x)||0)).slice(0, max);
+  brfMini.last = U;
+  if(!U.length) return y;
+  s.addText(`${title} · by ${unitWord()}${F.state?` (${U.length} largest)`:""}`, {x, y, w, h:0.3, fontFace:BF, fontSize:12, bold:true, color:BC.ink2, margin:0, isTextBox:true});
+  const H = t => ({text:t, options:{bold:true, color:"FFFFFF", fill:{color:BC.cloth}, fontSize:10, align:"center", valign:"middle"}});
+  const cell = (xx, c, tot) => { const st = c.st ? c.st(xx) : null, on = st && st!=="none";
+    return {text:String(c.f(xx)), options:{fontSize:10.5, color:on?BC.st[st]:BC.ink, bold:!!tot||on, align:"center", valign:"middle", ...(tot?{fill:{color:"F3ECDB"}}:{})}}; };
+  const nm = (l, tot) => ({text:l, options:{fontSize:10.5, color:BC.ink, bold:!!tot, align:"left", valign:"middle", ...(tot?{fill:{color:"F3ECDB"}}:{})}});
+  const all = agg(F), rows = [[H(F.state?"LGA":"State"), ...cols.map(c=>H(c.h))], ...U.map(u=>[nm(u.l), ...cols.map(c=>cell(u.x, c))]), [nm(F.state||"All states", true), ...cols.map(c=>cell(all, c, true))]];
+  const first = F.state ? 1.55 : 1.1, cw = [first, ...cols.map(()=>(w-first)/cols.length)], rh = 0.34;
+  s.addTable(rows, {x, y:y+0.38, w, colW:cw, rowH:rh, fontFace:BF, border:{type:"solid", pt:0.5, color:BC.edge}, fill:{color:BC.card}, margin:[0.02,0.04,0.02,0.04]});
+  return y + 0.38 + rows.length*rh;
+}
+const miniSt = (a, b, ref) => x => rateStatus(div(x[a], x[b]), ref);
+
+/* ---------- 2nd 95: continuity ---------- */
+function brfContinuity(ctx){
+  const v = agg(), W = WF();
+  const s = bSlide(ctx, "2nd 95", "Continuity of treatment", STOCK ? `${ctx.scope} · ${W.label} · from TX_CURR at the end of last quarter to TX_CURR now` : `${ctx.scope} · ${P.label}`);
+  if(!STOCK){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `The continuity waterfall, IIT and returns are built from the current NDR line list only (as on the dashboard): choose ${CURQ.label} to see them.`); return; }
+  if(!(v[W.curr] || v[W.prev])){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "No waterfall for this period: it is built from the current line list."); return; }
+  const steps = NDRT() ? stepsEMR(v) : stepsNDR(v);
+  s.addText(`Gains and losses · IIT rate ${bP(W.rate(v),2)}`, {x:0.5, y:1.75, w:7.8, h:0.3, fontFace:BF, fontSize:12, bold:true, color:BC.ink2, margin:0, isTextBox:true});
+  bWaterfall(ctx, s, 0.5, 2.1, 7.9, 3.95, steps.map(([l,val,k],i)=>[i===steps.length-1?"TX_CURR now":l==="TX_CURR end Q4"?"TX_CURR end of Q4":l, val, k]));
+  const rateSt = x => { const r = W.rate(x); return r==null ? null : r<=.01 ? "good" : r<=.02 ? "warning" : "critical"; };
+  brfMini(ctx, s, 8.7, 1.75, 4.15, "IIT and returns", {has:x=>x[W.curr]||x[W.prev], size:x=>x[W.curr],
+    cols:[{h:"IIT", f:x=>bN(x[W.iit])}, {h:"IIT rate", f:x=>bP(W.rate(x),2), st:rateSt}, {h:"RTT", f:x=>bN(x[W.rtt])}, {h:"Net", f:x=>{ const d=(x[W.curr]||0)-(x[W.prev]||0); return (d>0?"+":"")+n(d); }}]});
+  const net = (v[W.curr]||0)-(v[W.prev]||0);
+  bTake(ctx, s, v[W.prev] ? `Net ${net>=0?"gain":"loss"} of ${n(Math.abs(net))} this quarter; ${bN(v[W.iit])} interrupted treatment (IIT rate ${bP(W.rate(v),2)}) while ${bN(v[W.rtt])} returned.` : "");
+  s.addNotes("IIT = counted at the end of last quarter and inactive now; transfers out and deaths count only when dated on or after the last pick-up. IIT rate = IIT ÷ (previous TX_CURR + TX_NEW); colour up to 1% green, up to 2% amber, above 2% red, as on the dashboard. Net = TX_CURR now − TX_CURR at the end of last quarter.");
+}
+
+/* ---------- 2nd 95: the weekly trend ---------- */
+function brfArtTrend(ctx){
+  const trk = NDRT()||D.meta.tx_curr_source==="NDR" ? "tx_curr" : EMRK(), T = TS.rows.length ? trendAgg(F) : {}, m = T[trk] || new Map();
+  const end = P.end < D.meta.as_of ? P.end : D.meta.as_of, ds = brfWeeks([...m.keys()], end, 12);
+  const s = bSlide(ctx, "2nd 95", `${TXL()} week by week`, `${ctx.scope} · snapshot saved by each dashboard update${ds.length ? ` · ${fmtDate(ds[0])} – ${fmtDate(ds.at(-1))}` : ""}`);
+  if(ds.length < 2){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "No weekly snapshots for this period."); return; }
+  const lo = Math.min(...ds.map(d=>m.get(d))), hi = Math.max(...ds.map(d=>m.get(d)));
+  s.addChart(ctx.pres.charts.LINE, [{name:TXL(), labels:ds.map(wkTick), values:ds.map(d=>m.get(d))}], bChartBase({x:0.5, y:1.75, w:8.6, h:4.45, chartColors:[BC.s1], lineSize:3,
+    lineDataSymbol:"circle", lineDataSymbolSize:8, showValue:true, dataLabelPosition:"t", dataLabelFormatCode:"#,##0", dataLabelFontSize:9, valAxisLabelFormatCode:"#,##0", showLegend:false,
+    showTitle:false, catAxisLabelFontSize:10.5, valAxisMinVal:Math.floor(lo*0.995/100)*100, valAxisMaxVal:Math.ceil(hi*1.005/100)*100}));
+  const w4 = brfWk4(ds), a = m.get(w4), b = m.get(ds.at(-1)), f0 = m.get(ds[0]), sg = d => (d>=0?"+":"")+n(d);
+  bCard(ctx, s, 9.4, 1.75, 3.45, 1.35, bN(b), `Now · week of ${wkTick(ds.at(-1))}`, "");
+  const pk = ds.reduce((x,d)=>m.get(d)>m.get(x)?d:x, ds[0]);
+  bCard(ctx, s, 9.4, 3.3, 3.45, 1.35, sg(b-a), "Change in the last 4 weeks", `from ${bN(a)} in the week of ${wkTick(w4)}`);
+  bCard(ctx, s, 9.4, 4.85, 3.45, 1.35, bN(m.get(pk)), "Highest week", `week of ${wkTick(pk)}`);
+  if(ds[0] < "2026-08-31" && ds.at(-1) >= "2026-08-31") s.addText("The NDR fingerprint rule change of 31 Aug 2026 lowered the count that week; weeks either side are not like for like.",
+    {x:0.5, y:6.2, w:8.6, h:0.2, fontFace:BF, fontSize:9, italic:true, color:BC.ink3, margin:0, isTextBox:true});
+  const rule = w4 < "2026-08-31" && ds.at(-1) >= "2026-08-31";
+  bTake(ctx, s, `${TXL()} ${b>=a?"rose":"fell"} by ${n(Math.abs(b-a))} in the last 4 weeks, to ${bN(b)}${rule?" — mostly the NDR fingerprint rule change of 31 Aug 2026, not clients lost":""}.`);
+  s.addNotes("One point per week: the latest snapshot saved in that week, at most 12 weeks. The line starts at the week of the NDR fingerprint rule change (31 Aug 2026) when the period reaches past it, so the weeks are like for like.");
+}
+
+/* ---------- biometrics: the trend ---------- */
+function brfBioTrend(ctx){
+  const T = TS.rows.length ? trendAgg(F) : {}, get = k => T[k] || new Map(), end = P.end < D.meta.as_of ? P.end : D.meta.as_of;
+  const ds = brfWeeks([...get("pbs_active").keys()], end, 12);
+  const s = bSlide(ctx, "Biometrics", "Is the gap closing?", `${ctx.scope} · weekly NDR files${ds.length ? ` · ${fmtDate(ds[0])} – ${fmtDate(ds.at(-1))}` : ""}`);
+  if(ds.length < 2){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "Not enough weekly NDR files for a trend in this period."); return; }
+  const nocap = d => (get("pbs_active").get(d)||0)-(get("pbs_baseline").get(d)||0), val = (k,d) => k==="pbs_nocap" ? nocap(d) : get(k).get(d);
+  s.addChart(ctx.pres.charts.LINE, [{name:"Unique share", labels:ds.map(wkTick), values:ds.map(d=>div(get("tx_curr").get(d), get("pbs_active").get(d)))}],
+    bChartBase({x:0.5, y:1.7, w:12.33, h:2.25, chartColors:[BC.s1], lineSize:3, lineDataSymbol:"circle", lineDataSymbolSize:7, showValue:true, dataLabelPosition:"t", dataLabelFormatCode:"0.0%",
+      dataLabelFontSize:9, valAxisLabelFormatCode:"0%", showLegend:false, showTitle:true, title:"TX_CURR_Unique ÷ all on treatment", catAxisLabelFontSize:10}));
+  const ser = BIOX.filter(([k])=>k==="pbs_nocap"||get(k).size).map(([k,l])=>({name:l, labels:ds.map(wkTick), values:ds.map(d=>val(k,d)??null)}));
+  s.addChart(ctx.pres.charts.LINE, ser, bChartBase({x:0.5, y:4.05, w:12.33, h:2.3, chartColors:[BC.st.critical, BC.s2, "8A5FB8", BC.s3], lineSize:2.25, lineDataSymbol:"circle", lineDataSymbolSize:5,
+    showValue:false, valAxisLabelFormatCode:"#,##0", showLegend:true, legendPos:"r", showTitle:true, title:"Not counted, by reason", catAxisLabelFontSize:10}));
+  const a = brfWk4(ds), b = ds.at(-1), sa = div(get("tx_curr").get(a), get("pbs_active").get(a)), sb = div(get("tx_curr").get(b), get("pbs_active").get(b));
+  const ch = k => (val(k,b)||0)-(val(k,a)||0), cs = k => `${ch(k)<=0?"down":"up"} ${n(Math.abs(ch(k)))}`;
+  bTake(ctx, s, `In the last 4 weeks the unique share went ${sb>=sa?"up":"down"} from ${bP(sa)} to ${bP(sb)}; adjudication waiting ${cs("pbs_adjudication")}, yet to capture ${cs("pbs_nocap")}.`);
+  s.addNotes("At most 12 weeks. The trend starts at the week of the NDR rule change when the period reaches past it. The NDR tightened 'Fingerprint Valid' at the end of August 2026 (about 19,000 more prints marked not valid on 31 August), so weeks either side of that date are not like-for-like.");
+}
+
+/* ---------- AHD and PMTCT side by side, by state ---------- */
+function brfAhdPmtctState(ctx){
+  const s = bSlide(ctx, "AHD · PMTCT", `AHD and PMTCT by ${unitWord()}`, `${ctx.scope} · ${P.label} · DHIS2 · coloured: below the reference`);
+  const A = (x,k) => x[`ahd_${k}_n`]||0, R = (x,a,b) => div(A(x,a), A(x,b));
+  const ya = brfMini(ctx, s, 0.5, 1.75, 6.0, "AHD among new clients", {has:x=>A(x,"enrolled"), size:x=>A(x,"enrolled"), max:8,
+    cols:[{h:"Enrolled", f:x=>bN(A(x,"enrolled"))}, {h:"CD4 uptake", f:x=>bP(R(x,"cd4","enrolled")), st:x=>rateStatus(R(x,"cd4","enrolled"),.95)}, {h:"AHD", f:x=>bN(A(x,"confirmed"))},
+      {h:"LF-LAM", f:x=>bP(R(x,"lam_test","confirmed")), st:x=>rateStatus(R(x,"lam_test","confirmed"),.95)}, {h:"CrAg", f:x=>bP(R(x,"crag_test","confirmed")), st:x=>rateStatus(R(x,"crag_test","confirmed"),.95)}]});
+  const UAs = brfMini.last;
+  const yp = brfMini(ctx, s, 6.85, 1.75, 6.0, "PMTCT", {has:x=>x.pmtct_stat_den, size:x=>x.pmtct_stat_num, max:8,
+    cols:[{h:"STAT_N", f:x=>bN(x.pmtct_stat_num)}, {h:"Uptake", f:x=>bP(div(x.pmtct_stat_num, x.pmtct_stat_den)), st:miniSt("pmtct_stat_num","pmtct_stat_den",.95)},
+      {h:"POS", f:x=>bN(x.pmtct_stat_pos)}, {h:"ART cov.", f:x=>bP(div(x.pmtct_art, x.pmtct_stat_pos)), st:miniSt("pmtct_art","pmtct_stat_pos",.98)},
+      {h:"EID ≤2 mo", f:x=>bP(div(x.pmtct_eid_lt2, x.pmtct_eid)), st:miniSt("pmtct_eid_lt2","pmtct_eid",.95)}]});
+  const UPs = brfMini.last;
+  if(ya===1.75 && yp===1.75){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `No AHD or PMTCT reports for ${P.label}.`); return; }
+  // one small picture under each table: the screening and testing rates side by side
+  const U = units().map(u=>({...u, x:agg(u.f)})), y0 = Math.max(ya, yp) + 0.25, h = 6.3 - y0;
+  if(h > 1.3 && !F.state){
+    const UA = U.filter(u=>A(u.x,"enrolled")), UP = U.filter(u=>u.x.pmtct_stat_den);
+    const ch = (x, UU, ser, title) => s.addChart(ctx.pres.charts.BAR, ser.map(se=>({name:se.name, labels:UU.map(u=>u.l), values:UU.map(u=>se.v(u.x)||0)})), bChartBase({x, y:y0, w:6.0, h,
+      barDir:"col", chartColors:ser.map(se=>se.c), showValue:true, dataLabelPosition:"outEnd", dataLabelFormatCode:"0%", valAxisLabelFormatCode:"0%", valAxisMinVal:0,
+      valAxisMaxVal:Math.max(1, ...UU.flatMap(u=>ser.map(se=>se.v(u.x)||0)))*1.12, showLegend:true, legendPos:"t", barGapWidthPct:60, showTitle:false, dataLabelFontSize:9}));
+    if(UA.length) ch(0.5, UA, [{name:"LF-LAM uptake", c:BC.s2, v:x=>R(x,"lam_test","confirmed")}, {name:"CrAg uptake", c:BC.s3, v:x=>R(x,"crag_test","confirmed")}]);
+    if(UP.length) ch(6.85, UP, [{name:"ART coverage", c:BC.s1, v:x=>div(x.pmtct_art, x.pmtct_stat_pos)}, {name:"EID by 2 months", c:BC.s2, v:x=>div(x.pmtct_eid_lt2, x.pmtct_eid)}]);
+  }
+  const low = (UU, fn) => (UU||[]).map(u=>({l:u.l, v:fn(u.x)})).filter(o=>o.v!=null).sort((a,b)=>a.v-b.v)[0];
+  const lam = low(UAs, x=>A(x,"confirmed")?R(x,"lam_test","confirmed"):null), eid = low(UPs, x=>x.pmtct_eid?div(x.pmtct_eid_lt2, x.pmtct_eid):null);
+  bTake(ctx, s, [lam&&`Lowest LF-LAM uptake: ${lam.l} (${bP(lam.v)})`, eid&&`earliest infant testing weakest in ${eid.l} (${bP(eid.v)} by 2 months)`].filter(Boolean).join(" · ") + ".");
+  s.addNotes("AHD: new clients only. CD4 uptake = CD4 tests ÷ newly enrolled; LF-LAM and CrAg = tests ÷ AHD diagnosed; references 95%. PMTCT: facility + community. Uptake = STAT_N ÷ STAT_D (95%); ART coverage = PMTCT_ART ÷ PMTCT_STAT_POS (98%); EID ≤2 mo = first tests before 2 months ÷ all first tests (95%).");
+}
+
+/* ---------- AHD ---------- */
+function brfAhd(ctx){
+  const v = agg(), A = k => gv(v, `ahd_${k}_n`);
+  const s = bSlide(ctx, "AHD", "Advanced HIV disease among new clients", `${ctx.scope} · ${P.label} · DHIS2 AHD_MSF elements, newly initiated`);
+  if(!A("enrolled")){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "No AHD reports for this period."); return; }
+  bCards(ctx, s, 1.75, 1.3, [[bP(div(A("cd4"), A("enrolled"))), "CD4 uptake", `${bN(A("cd4"))} of ${bN(A("enrolled"))} newly enrolled`], [bN(A("confirmed")), "AHD confirmed", `${bP(div(A("confirmed"),A("enrolled")))} of newly enrolled`],
+    [bP(div(A("lam_test"), A("confirmed"))), "LF-LAM uptake", "LF-LAM tests ÷ AHD diagnosed"], [bP(div(A("crag_test"), A("confirmed"))), "CrAg uptake", "serum CrAg tests ÷ AHD diagnosed"]]);
+  const bar = (rows, x, w, title, c) => bBars(ctx, s, x, 3.3, w, rows.map(([l,val])=>({l, v:val, c, txt:bN(val)})), {labelW:2.35, valW:0.75, rowH:0.44, title});
+  bar([["HTS_TST_POS", v.hts_tst_pos], ["Newly enrolled", A("enrolled")], ["CD4 test done", A("cd4")], ["CD4 <200", A("cd4lt200")], ["WHO 3/4, CD4 ≥200 or none", A("who34")], ["AHD confirmed", A("confirmed")]], 0.5, 4.15, "Screening cascade", BC.s1);
+  bar([["AHD diagnosed", A("confirmed")], ["LF-LAM test", A("lam_test")], ["LF-LAM positive", A("lam_pos")], ["On TB treatment", A("tb_tx")], ["GeneXpert test", A("xpert_test")], ["GeneXpert positive", A("xpert_pos")]], 4.75, 4.0, "TB in AHD", BC.s2);
+  bar([["AHD diagnosed", A("confirmed")], ["Serum CrAg test", A("crag_test")], ["Serum CrAg positive", A("crag_pos")], ["Pre-emptive therapy", A("preempt")], ["CSF test", A("csf_test")], ["Cryptococcal meningitis", A("cm")]], 8.85, 4.0, "Cryptococcal disease in AHD", BC.s3);
+  bTake(ctx, s, `${bP(div(A("cd4"), A("enrolled")))} of new clients had a CD4 test; ${bN(A("confirmed"))} AHD cases were confirmed, ${bP(div(A("lam_test"), A("confirmed")))} screened with LF-LAM and ${bP(div(A("crag_test"), A("confirmed")))} with CrAg.`);
+  s.addNotes("New clients only (DHIS2 AHD_MSF, newly initiated). Clients already on ART are left out until the AHD-on-ART method is agreed.");
+}
+
+/* ---------- 13. PMTCT ---------- */
+function brfPmtct(ctx){
+  const v = agg(), ps = ev("PMTCT_STAT", v), pa = ev("IPI_PMTCT_ART_COV", v), part = ev("PMTCT_ART", v);
+  const s = bSlide(ctx, "PMTCT", "Mothers and HIV-exposed infants", `${ctx.scope} · ${P.label} · DHIS2, facility PMTCT + community PMTCT`);
+  bCards(ctx, s, 1.75, 1.3, [[bN(v.pmtct_stat_num), "PMTCT_STAT_N", tgtTxt("PMTCT_STAT", ps), ps.status], [bP(div(v.pmtct_stat_num, v.pmtct_stat_den)), "Testing uptake", "STAT_N ÷ STAT_D"],
+    [bN(v.pmtct_stat_pos), "PMTCT_STAT_POS", `yield ${bP(div(v.pmtct_stat_pos, v.pmtct_stat_num),2)}`], [bP(pa.value), "ART coverage (IPI)", tgtTxt("IPI_PMTCT_ART_COV", pa), pa.status]]);
+  bBars(ctx, s, 0.5, 3.3, 6.0, [["New ANC clients (STAT_D)", v.pmtct_stat_den], ["Known HIV status (STAT_N)", v.pmtct_stat_num], ["HIV positive", v.pmtct_stat_pos], ["On ART (PMTCT_ART)", v.pmtct_art]]
+    .map(([l,x],i)=>({l, v:x, c:i<2?BC.s3:BC.s1, txt:bN(x)})), {labelW:2.4, valW:0.95, rowH:0.6, title:"Mothers' cascade"});
+  const hei = [["HEI delivered alive", v.hei_delivered], ["NVP prophylaxis", v.hei_nvp], ["EID (first test)", v.pmtct_eid], ["Tested by 2 months", v.pmtct_eid_lt2], ["HEI positive", v.pmtct_eid_pos], ["HEI on ART", v.hei_art]];
+  bBars(ctx, s, 6.85, 3.3, 6.0, hei.map(([l,x])=>({l, v:x, c:BC.s2, txt:bN(x)})), {labelW:2.1, valW:0.85, rowH:0.44, title:"HIV-exposed infants"});
+  bTake(ctx, s, `${bP(div(v.pmtct_stat_num, v.pmtct_stat_den))} of pregnant women know their status and ${bP(pa.value)} of those positive are on ART; ${bP(div(v.pmtct_eid_lt2, v.pmtct_eid))} of infant tests were by 2 months, ${bN(v.pmtct_eid_pos)} infants positive.`);
+  s.addNotes("Headline figures = facility + Community PMTCT, as in the DAX and the deck. ART coverage above 100% means women identified positive elsewhere started ART here. EID = first virologic test.");
+}
+
+/* ---------- 14. targets: achievement against pace ---------- */
+function brfTargets(ctx){
+  const v = agg(), inds = D.registry.filter(i=>i.group==="Conventional"&&i.kind!=="rate").map(i=>({i, r:ev(i.code, v)})).filter(o=>o.r.target);
+  const s = bSlide(ctx, "IPI review", "Results against targets", `${ctx.scope} · ${P.label} · bar = share of the period target reached · line = where we should be by ${fmtDate(D.meta.dhis_through < P.end ? D.meta.dhis_through : P.end)}`);
+  if(!inds.length){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `No targets loaded for ${P.label}.`); return; }
+  const fr = o => o.i.flow==="snapshot" ? o.r.score : o.r.pctQ, ex = o => o.i.flow==="snapshot" ? 1 : o.r.elapsed;
+  const rows = inds.map(o=>({l:o.i.name, v:fr(o)==null?null:Math.min(fr(o),1.5), tick:ex(o), c:BC.st[o.r.status],
+    txt:o.r.value==null ? `No data · target ${n(o.r.target)}` : `${n(o.r.value)} of ${n(o.r.target)}  ·  ${pct(fr(o),0)}  ·  ${LABEL[o.r.status]}`}));
+  bBars(ctx, s, 0.5, 1.75, 12.33, rows, {labelW:2.2, valW:3.4, max:Math.min(1.5, Math.max(1.0, ...rows.map(r=>r.v||0))), rowH:Math.min(0.42, 4.5/rows.length)});
+  const behind = inds.filter(o=>o.r.status==="critical"||o.r.status==="warning").map(o=>o.i.name);
+  bTake(ctx, s, behind.length ? `Behind the pace: ${behind.join(", ")}.` : "Every count indicator with a target is on or ahead of the pace.");
+  s.addNotes("Count targets for the period, paced to the data date: On track = 75% of the expected value or more, Watch = 50–74%, Off track = below 50%, Exceeds = above the expected value. TX_CURR is compared with the full fiscal-year target. Bars stop at 150% of the target.");
+}
+
+/* ---------- 15. close: priorities ---------- */
+function brfClose(ctx){
+  const v = agg(), inds = D.registry.filter(i=>i.group!=="Conventional"||i.kind!=="rate").map(i=>({i, r:ev(i.code, v)})).filter(o=>o.r.value!=null && o.r.status!=="none");
+  const seen = new Set(), uniq = a => a.filter(o=>!seen.has(o.i.num) && seen.add(o.i.num));
+  const bad = uniq(inds.filter(o=>o.r.status==="critical"||o.r.status==="warning").sort((a,b)=>(a.r.status==="critical"?0:1)-(b.r.status==="critical"?0:1))).slice(0,5);
+  const good = uniq(inds.filter(o=>o.r.status==="exceeds"||o.r.status==="good").sort((a,b)=>(a.r.status==="exceeds"?0:1)-(b.r.status==="exceeds"?0:1))).slice(0,5);
+  const s = ctx.pres.addSlide({masterName:"BRF_DARK"});
+  s.addText("FOR DISCUSSION", {x:0.7, y:0.5, w:8, h:0.35, fontFace:BF, fontSize:13, bold:true, color:BC.gold, charSpacing:3, margin:0, isTextBox:true});
+  s.addText("Where to focus next", {x:0.7, y:0.85, w:11, h:0.8, fontFace:HF, fontSize:36, bold:true, color:BC.onCloth, margin:0, isTextBox:true});
+  const col = (x, title, items, c, empty) => {
+    s.addText(title, {x, y:1.95, w:5.7, h:0.4, fontFace:BF, fontSize:16, bold:true, color:c, margin:0, isTextBox:true});
+    s.addShape(ctx.pres.shapes.LINE, {x, y:2.4, w:5.7, h:0, line:{color:c, width:1.25}});
+    (items.length ? items : [null]).forEach((o,j)=>{ const y = 2.6+j*0.82;
+      if(!o){ s.addText(empty, {x, y, w:5.7, h:0.5, fontFace:BF, fontSize:13, italic:true, color:BC.onCloth, margin:0, isTextBox:true}); return; }
+      s.addShape(ctx.pres.shapes.OVAL, {x, y:y+0.1, w:0.22, h:0.22, fill:{color:BC.st[o.r.status]}, line:{color:"FFFFFF", width:0.75}});
+      s.addText([{text:o.i.name, options:{bold:true, color:"FFFFFF", fontSize:13.5, breakLine:true}},
+        {text:`${fmtInd(o.i.code, o.r)}${o.r.target!=null?` · target ${o.i.kind==="rate"?pct(o.r.target,0):n(o.r.target)}`:""} · ${LABEL[o.r.status]}`, options:{color:BC.onCloth, fontSize:11.5}}],
+        {x:x+0.38, y, w:5.3, h:0.72, fontFace:BF, margin:0, valign:"top", isTextBox:true}); }); };
+  col(0.7, "Behind the pace", bad, "EE8A72", "Nothing is off track for this period.");
+  col(6.95, "Going well", good, "A9CF8E", "No indicator is on track yet.");
+  s.addText(`ECEWS SPEED · ${ctx.scope} · ${P.label} · ${ctx.dates}`, {x:0.7, y:6.95, w:12, h:0.3, fontFace:BF, fontSize:9.5, color:BC.onCloth, margin:0, isTextBox:true});
+  s.addNotes("Indicators off track or to watch, most serious first, and those exceeding or on track, from the scorecard and the target slides. The dashboard has the facility detail behind each one.");
+}
+
 function reportsBar(){
   if(D.meta.archived) return "";
   const tile=(k,t,s)=>`<button type="button" class="cfr-tile" data-rpw="${k}" aria-pressed="${RP.which===k}"><b>${t}</b><span>${s}</span></button>`;
   return `<div class="rp-bar"><button type="button" class="cfr-dl" data-rp aria-expanded="${RP.open}">Download reports</button></div>
-   ${RP.open?`<section class="c3d">${secH("Download reports","Choose a report")}<div class="cfr-tiles">${tile("hts","HTS case finding report","Monthly · DHIS2 monthly instance")}${tile("trm","Technical review meeting (TRM)","Weekly · monthly reports plus the weeks after them")}</div></section>
-   ${RP.which==="hts"?htsReports():RP.which==="trm"?trmReports():""}`:""}`;
+   ${RP.open?`<section class="c3d">${secH("Download reports","Choose a report")}<div class="cfr-tiles">${tile("hts","HTS case finding report","Monthly · DHIS2 monthly instance")}${tile("trm","Technical review meeting (TRM)","Weekly · monthly reports plus the weeks after them")}${tile("brf","Management briefing","17 slides · 95-95-95, biometrics, AHD, PMTCT, IPI review")}</div></section>
+   ${RP.which==="hts"?htsReports():RP.which==="trm"?trmReports():RP.which==="brf"?brfReports():""}`:""}`;
 }
 function overview(){ return reportsBar()+overviewPage(); }
 function overviewPage(){
@@ -2669,6 +3215,7 @@ addEventListener("hashchange", route);
 document.addEventListener("change", e=>{
   const id=e.target.id;
   if(id==="cfr-month"){ if(e.target.value) cfrGet(e.target.value); else { CFR={month:"",state:"",url:null}; cfrPaint(); } return; }
+  if(id==="brf-state"||id==="brf-period"){ BRF[id.slice(4)]=e.target.value; if(BRF.status!=="busy"){ BRF.status=""; brfPaint(); } return; }
   if(id==="trm-state"){ TRM.state=e.target.value==="none"?null:e.target.value; if(TRM.state===null) trmPaint(); else trmGet(); return; }
   if(id==="lv-section"||id==="lv-state"||id==="lv-period"){ LV[id.slice(3)]=e.target.value; liveFetch(); return; }
   if(id==="f-period"){ const v=e.target.value;
@@ -2721,6 +3268,7 @@ document.addEventListener("click", e=>{
   const lvk=e.target.closest("[data-lvkind]");
   if(lvk){ if(lvk.dataset.lvkind!==lvKind()){ const list=LV.opt.periods.filter(p=>p.kind===lvk.dataset.lvkind); LV.period=(lvk.dataset.lvkind==="Monthly reports"&&list[1]?list[1]:list[0]).key; LV.res=null; render(); liveFetch(); } return; }
   if(e.target.closest("[data-trmgo]")){trmGet(); return;}
+  if(e.target.closest("[data-brfgo]")){ if(BRF.status!=="busy") brfGet(); return; }
   if(e.target.closest("[data-rp]")){RP.open=!RP.open; render(); return;}
   const rpw=e.target.closest("[data-rpw]"); if(rpw){RP.which=rpw.dataset.rpw; render(); return;}
   const cfrB=e.target.closest("[data-cfr]"); if(cfrB){cfrGet(cfrB.dataset.cfr); return;}
