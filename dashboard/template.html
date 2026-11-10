@@ -1081,7 +1081,7 @@ async function brfDeck(Lib){
     slideNumber:{x:BW-1.0, y:7.13, w:0.5, h:0.32, fontFace:BF, fontSize:9, color:BC.onCloth, align:"right"}});
   pres.defineSlideMaster({title:"BRF_DARK", background:{color:BC.cloth}, objects:[]});
   const ctx = {pres, logo, scope, dates};
-  const S = [brfCover, brfGlance, brfScorecard, brfTargets, brfHts, brfHtsDetail, brfArt, brfContinuity, brfArtTrend, brfVl, brfVlDetail, brfBio, brfBioTrend, brfAhd, brfPmtct, brfAhdPmtctState, brfClose];
+  const S = [brfCover, brfGlance, brfScorecard, brfTargets, brfHts, brfHtsDetail, brfArt, brfContinuity, brfArtTrend, brfVl, brfVlDetail, brfBio, brfBioTrend, brfAhd, brfTb, brfPmtct, brfClose];
   for(const f of S) f(ctx);
   return pres;
 }
@@ -1132,18 +1132,18 @@ function bBars(ctx, s, x, y, w, rows, {labelW=2.2, rowH=0.42, max=null, valW=1.6
   return y + rows.length*rowH;
 }
 // a waterfall drawn as shapes: steps [label, value, "total"?]
-function bWaterfall(ctx, s, x, y, w, h, steps){
+function bWaterfall(ctx, s, x, y, w, h, steps, {small=false}={}){
   let run = 0; const bars = steps.map(([l,v,k])=>{ if(k){ run=v; return {l,v,a:0,b:v,k}; } const a=run; run+=v; return {l,v,a,b:run,k:v>=0?"up":"down"}; });
   const mx = Math.max(...bars.flatMap(b=>[b.a,b.b]),1), mn = Math.min(...bars.filter(b=>b.k!=="total").flatMap(b=>[b.a,b.b]), mx);
-  const lo = Math.max(0, mn-(mx-mn)*.6), pt = 0.35, pb = 0.62, Y = v => y+pt+(h-pt-pb)*(1-(v-lo)/((mx-lo)||1)), bw = w/bars.length;
+  const lo = Math.max(0, mn-(mx-mn)*.6), pt = small?0.22:0.35, pb = small?0.24:0.62, Y = v => y+pt+(h-pt-pb)*(1-(v-lo)/((mx-lo)||1)), bw = w/bars.length;
   const col = {total:BC.s1, up:BC.st.good, down:BC.st.critical};
   s.addShape(ctx.pres.shapes.LINE, {x, y:y+h-pb, w, h:0, line:{color:BC.edge, width:1}});
   bars.forEach((b,i)=>{ const bx = x+i*bw+bw*0.16, ww = bw*0.68;
     const y1 = b.k==="total" ? Y(b.b) : Y(Math.max(b.a,b.b)), y2 = b.k==="total" ? y+h-pb : Y(Math.min(b.a,b.b)), hh = Math.max(0.03, y2-y1);
     s.addShape(ctx.pres.shapes.RECTANGLE, {x:bx, y:y1, w:ww, h:hh, fill:{color:col[b.k]}, line:{color:col[b.k]}});
-    s.addText(Math.abs(b.v)<0.5 ? "0" : (b.k==="total"?"":b.v>0?"+":"")+bN(b.v), {x:bx-0.2, y:y1-0.3, w:ww+0.4, h:0.26, fontFace:BF, fontSize:10.5, bold:b.k==="total", color:BC.ink, align:"center", margin:0, isTextBox:true});
-    s.addText(b.l, {x:bx-0.12, y:y+h-pb+0.05, w:ww+0.24, h:pb-0.05, fontFace:BF, fontSize:9.5, color:BC.ink2, align:"center", valign:"top", margin:0, fit:"shrink", isTextBox:true}); });
-  s.addText(`Axis starts at ${bN(lo)} so the movements show.`, {x, y:y+h+0.02, w, h:0.22, fontFace:BF, fontSize:9, italic:true, color:BC.ink3, margin:0, isTextBox:true});
+    s.addText(Math.abs(b.v)<0.5 ? "0" : (b.k==="total"?"":b.v>0?"+":"")+bN(b.v), {x:bx-0.2, y:y1-(small?0.21:0.3), w:ww+0.4, h:small?0.2:0.26, fontFace:BF, fontSize:small?8.5:10.5, bold:b.k==="total", color:BC.ink, align:"center", margin:0, isTextBox:true});
+    s.addText(b.l, {x:bx-0.12, y:y+h-pb+(small?0.02:0.05), w:ww+0.24, h:pb-(small?0.02:0.05), fontFace:BF, fontSize:small?8:9.5, color:BC.ink2, align:"center", valign:"top", margin:0, fit:"shrink", isTextBox:true}); });
+  if(!small) s.addText(`Axis starts at ${bN(lo)} so the movements show.`, {x, y:y+h+0.02, w, h:0.22, fontFace:BF, fontSize:9, italic:true, color:BC.ink3, margin:0, isTextBox:true});
 }
 function bChartBase(extra){
   return Object.assign({catAxisLabelColor:BC.ink2, valAxisLabelColor:BC.ink3, catAxisLabelFontFace:BF, valAxisLabelFontFace:BF, catAxisLabelFontSize:10, valAxisLabelFontSize:9,
@@ -1370,155 +1370,188 @@ function brfHts(ctx){
 
 /* ---------- a small by-state (or by-LGA) table that sits beside a slide's main visual ---------- */
 // cols: {h, f:x=>text, st:x=>status}; a state's deck shows its largest LGAs
-function brfMini(ctx, s, x, y, w, title, {has, size, cols, max=6}){
+function brfMini(ctx, s, x, y, w, title, {has, size, cols, max=6, rowH=0.34}){
   let U = units().map(u=>({...u, x:agg(u.f)})).filter(u=>has(u.x));
   if(F.state) U = U.sort((a,b)=>(size(b.x)||0)-(size(a.x)||0)).slice(0, max);
   brfMini.last = U;
   if(!U.length) return y;
   s.addText(`${title} · by ${unitWord()}${F.state?` (${U.length} largest)`:""}`, {x, y, w, h:0.3, fontFace:BF, fontSize:12, bold:true, color:BC.ink2, margin:0, isTextBox:true});
   const H = t => ({text:t, options:{bold:true, color:"FFFFFF", fill:{color:BC.cloth}, fontSize:10, align:"center", valign:"middle"}});
-  const cell = (xx, c, tot) => { const st = c.st ? c.st(xx) : null, on = st && st!=="none";
-    return {text:String(c.f(xx)), options:{fontSize:10.5, color:on?BC.st[st]:BC.ink, bold:!!tot||on, align:"center", valign:"middle", ...(tot?{fill:{color:"F3ECDB"}}:{})}}; };
+  const cell = (xx, c, tot, f) => { const st = c.st ? c.st(xx, f) : null, on = st && st!=="none";
+    return {text:String(c.f(xx, f)), options:{fontSize:10.5, color:on?BC.st[st]:BC.ink, bold:!!tot||on, align:"center", valign:"middle", ...(tot?{fill:{color:"F3ECDB"}}:{})}}; };
   const nm = (l, tot) => ({text:l, options:{fontSize:10.5, color:BC.ink, bold:!!tot, align:"left", valign:"middle", ...(tot?{fill:{color:"F3ECDB"}}:{})}});
-  const all = agg(F), rows = [[H(F.state?"LGA":"State"), ...cols.map(c=>H(c.h))], ...U.map(u=>[nm(u.l), ...cols.map(c=>cell(u.x, c))]), [nm(F.state||"All states", true), ...cols.map(c=>cell(all, c, true))]];
-  const first = F.state ? 1.55 : 1.1, cw = [first, ...cols.map(()=>(w-first)/cols.length)], rh = 0.34;
+  const all = agg(F), rows = [[H(F.state?"LGA":"State"), ...cols.map(c=>H(c.h))], ...U.map(u=>[nm(u.l), ...cols.map(c=>cell(u.x, c, false, u.f))]), [nm(F.state||"All states", true), ...cols.map(c=>cell(all, c, true, F))]];
+  const first = F.state ? 1.55 : 1.1, cw = [first, ...cols.map(()=>(w-first)/cols.length)], rh = rowH;
   s.addTable(rows, {x, y:y+0.38, w, colW:cw, rowH:rh, fontFace:BF, border:{type:"solid", pt:0.5, color:BC.edge}, fill:{color:BC.card}, margin:[0.02,0.04,0.02,0.04]});
   return y + 0.38 + rows.length*rh;
 }
 const miniSt = (a, b, ref) => x => rateStatus(div(x[a], x[b]), ref);
 
-/* ---------- 2nd 95: continuity ---------- */
+/* ---------- targets: achievement against pace, with each state's share of its own target ---------- */
+function brfTargets(ctx){
+  const v = agg(), inds = D.registry.filter(i=>i.group==="Conventional"&&i.kind!=="rate").map(i=>({i, r:ev(i.code, v)})).filter(o=>o.r.target);
+  const s = bSlide(ctx, "IPI review", "Results against targets", `${ctx.scope} · ${P.label} · bar = share of the period target reached · line = where we should be by ${fmtDate(D.meta.dhis_through < P.end ? D.meta.dhis_through : P.end)}`);
+  if(!inds.length){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `No targets loaded for ${P.label}.`); return; }
+  const fr = (i, r) => i.flow==="snapshot" ? r.score : r.pctQ, ex = (i, r) => i.flow==="snapshot" ? 1 : r.elapsed;
+  const st = F.state ? [] : STATES, per = st.map(x=>({x, f:{...F, state:x}, v:agg({...F, state:x})}));
+  const sw = st.length ? 1.05 : 0, bw = 12.33 - st.length*sw - (st.length ? 0.15 : 0), y0 = st.length ? 2.1 : 1.75, rh = Math.min(0.4, (6.3-y0)/inds.length);
+  const rows = inds.map(o=>({l:o.i.name, v:fr(o.i,o.r)==null?null:Math.min(fr(o.i,o.r),1.5), tick:ex(o.i,o.r), c:BC.st[o.r.status],
+    txt:o.r.value==null ? `No data · target ${n(o.r.target)}` : `${n(o.r.value)} of ${n(o.r.target)}  ·  ${pct(fr(o.i,o.r),0)}`}));
+  bBars(ctx, s, 0.5, y0, bw, rows, {labelW:2.1, valW:st.length?2.35:3.4, max:Math.min(1.5, Math.max(1.0, ...rows.map(r=>r.v||0))), rowH:rh});
+  if(st.length){
+    const x0 = 0.5 + bw + 0.15;
+    s.addText("All states", {x:0.5+2.1+0.1, y:1.72, w:bw-2.2, h:0.3, fontFace:BF, fontSize:10.5, bold:true, color:BC.ink3, margin:0, isTextBox:true});
+    st.forEach((x,j)=>{ const cx = x0 + j*sw;
+      s.addShape(ctx.pres.shapes.ROUNDED_RECTANGLE, {x:cx+0.05, y:1.72, w:sw-0.1, h:0.3, rectRadius:0.1, fill:{color:BC.cloth}, line:{color:BC.cloth}});
+      s.addText(x, {x:cx, y:1.72, w:sw, h:0.3, fontFace:BF, fontSize:10.5, bold:true, color:"FFFFFF", align:"center", valign:"middle", margin:0, isTextBox:true});
+      inds.forEach((o,k)=>{ const r = ev(o.i.code, per[j].v, per[j].f), val = fr(o.i, r), on = r.status && r.status!=="none";
+        s.addShape(ctx.pres.shapes.ROUNDED_RECTANGLE, {x:cx+0.08, y:y0+k*rh+rh*0.14, w:sw-0.16, h:rh*0.72, rectRadius:0.06, fill:{color:BC.stBg[r.status]||BC.stBg.none}, line:{color:BC.stBg[r.status]||BC.stBg.none}});
+        s.addText(val==null?"—":pct(val,0), {x:cx, y:y0+k*rh, w:sw, h:rh, fontFace:BF, fontSize:11, bold:on, color:on?BC.st[r.status]:BC.ink3, align:"center", valign:"middle", margin:0, isTextBox:true}); }); });
+  }
+  const behind = inds.filter(o=>o.r.status==="critical"||o.r.status==="warning").map(o=>o.i.name);
+  const weak = st.length ? per.map(p=>({x:p.x, c:inds.filter(o=>{ const r=ev(o.i.code,p.v,p.f); return r.status==="critical"; }).length})).sort((a,b)=>b.c-a.c)[0] : null;
+  bTake(ctx, s, (behind.length ? `Behind the pace: ${behind.join(", ")}.` : "Every count indicator with a target is on or ahead of the pace.") + (weak&&weak.c ? ` ${weak.x} has the most off track (${weak.c}).` : ""));
+  s.addNotes("Count targets for the period, paced to the data date: On track = 75% of the expected value or more, Watch = 50–74%, Off track = below 50%, Exceeds = above the expected value. TX_CURR is compared with the full fiscal-year target. Bars stop at 150% of the target. State columns: each state's share of its own target, coloured by its own pace.");
+}
+
+/* ---------- 2nd 95: continuity, with a small waterfall per state ---------- */
 function brfContinuity(ctx){
   const v = agg(), W = WF();
   const s = bSlide(ctx, "2nd 95", "Continuity of treatment", STOCK ? `${ctx.scope} · ${W.label} · from TX_CURR at the end of last quarter to TX_CURR now` : `${ctx.scope} · ${P.label}`);
   if(!STOCK){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `The continuity waterfall, IIT and returns are built from the current NDR line list only (as on the dashboard): choose ${CURQ.label} to see them.`); return; }
   if(!(v[W.curr] || v[W.prev])){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "No waterfall for this period: it is built from the current line list."); return; }
   const steps = NDRT() ? stepsEMR(v) : stepsNDR(v);
-  s.addText(`Gains and losses · IIT rate ${bP(W.rate(v),2)}`, {x:0.5, y:1.75, w:7.8, h:0.3, fontFace:BF, fontSize:12, bold:true, color:BC.ink2, margin:0, isTextBox:true});
+  s.addText(`${F.state||"All states"} · IIT rate ${bP(W.rate(v),2)}`, {x:0.5, y:1.75, w:7.8, h:0.3, fontFace:BF, fontSize:12, bold:true, color:BC.ink2, margin:0, isTextBox:true});
   bWaterfall(ctx, s, 0.5, 2.1, 7.9, 3.95, steps.map(([l,val,k],i)=>[i===steps.length-1?"TX_CURR now":l==="TX_CURR end Q4"?"TX_CURR end of Q4":l, val, k]));
-  const rateSt = x => { const r = W.rate(x); return r==null ? null : r<=.01 ? "good" : r<=.02 ? "warning" : "critical"; };
-  brfMini(ctx, s, 8.7, 1.75, 4.15, "IIT and returns", {has:x=>x[W.curr]||x[W.prev], size:x=>x[W.curr],
-    cols:[{h:"IIT", f:x=>bN(x[W.iit])}, {h:"IIT rate", f:x=>bP(W.rate(x),2), st:rateSt}, {h:"RTT", f:x=>bN(x[W.rtt])}, {h:"Net", f:x=>{ const d=(x[W.curr]||0)-(x[W.prev]||0); return (d>0?"+":"")+n(d); }}]});
+  // per state (or the 3 largest LGAs): previous → gains → losses → now
+  const U = units().map(u=>({...u, x:agg(u.f)})).filter(u=>u.x[W.prev]||u.x[W.curr]).sort((a,b)=>F.state?(b.x[W.curr]||0)-(a.x[W.curr]||0):0).slice(0,3);
+  const ph = 4.5/Math.max(U.length,1);
+  U.forEach((u,i)=>{ const x = u.x, st = NDRT() ? stepsEMR(x) : stepsNDR(x), prev = st[0][1], now = st.at(-1)[1], pot = st.find(r=>r[0]==="Potential")[1];
+    const y = 1.75 + i*ph, net = now-prev, rate = W.rate(x);
+    s.addText([{text:u.l+"  ", options:{bold:true, color:BC.ink}}, {text:`IIT ${bN(x[W.iit])} · rate ${bP(rate,2)} · net ${(net>0?"+":"")+n(net)}`, options:{color:rate>.02?BC.st.critical:BC.ink3}}],
+      {x:8.75, y, w:4.1, h:0.26, fontFace:BF, fontSize:10.5, margin:0, isTextBox:true});
+    bWaterfall(ctx, s, 8.75, y+0.25, 4.1, ph-0.32, [["Previous", prev, "total"], ["Gains", pot-prev], ["Losses", now-pot], ["Now", now, "total"]], {small:true}); });
   const net = (v[W.curr]||0)-(v[W.prev]||0);
   bTake(ctx, s, v[W.prev] ? `Net ${net>=0?"gain":"loss"} of ${n(Math.abs(net))} this quarter; ${bN(v[W.iit])} interrupted treatment (IIT rate ${bP(W.rate(v),2)}) while ${bN(v[W.rtt])} returned.` : "");
-  s.addNotes("IIT = counted at the end of last quarter and inactive now; transfers out and deaths count only when dated on or after the last pick-up. IIT rate = IIT ÷ (previous TX_CURR + TX_NEW); colour up to 1% green, up to 2% amber, above 2% red, as on the dashboard. Net = TX_CURR now − TX_CURR at the end of last quarter.");
+  s.addNotes("Per state: Gains = RTT + TX_NEW + transfers in (+ prints captured); Losses = transfers out + IIT + deaths + stopped, and the small unexplained gain/loss. IIT rate = IIT ÷ (previous TX_CURR + TX_NEW); red above 2%, as on the dashboard. A state's deck shows its 3 largest LGAs.");
 }
 
-/* ---------- 2nd 95: the weekly trend ---------- */
+/* ---------- 2nd 95: the weekly trend, with a small line per state ---------- */
 function brfArtTrend(ctx){
-  const trk = NDRT()||D.meta.tx_curr_source==="NDR" ? "tx_curr" : EMRK(), T = TS.rows.length ? trendAgg(F) : {}, m = T[trk] || new Map();
+  const trk = NDRT()||D.meta.tx_curr_source==="NDR" ? "tx_curr" : EMRK(), has = TS.rows.length, T = has ? trendAgg(F) : {}, m = T[trk] || new Map();
   const end = P.end < D.meta.as_of ? P.end : D.meta.as_of, ds = brfWeeks([...m.keys()], end, 12);
   const s = bSlide(ctx, "2nd 95", `${TXL()} week by week`, `${ctx.scope} · snapshot saved by each dashboard update${ds.length ? ` · ${fmtDate(ds[0])} – ${fmtDate(ds.at(-1))}` : ""}`);
   if(ds.length < 2){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "No weekly snapshots for this period."); return; }
-  const lo = Math.min(...ds.map(d=>m.get(d))), hi = Math.max(...ds.map(d=>m.get(d)));
-  s.addChart(ctx.pres.charts.LINE, [{name:TXL(), labels:ds.map(wkTick), values:ds.map(d=>m.get(d))}], bChartBase({x:0.5, y:1.75, w:8.6, h:4.45, chartColors:[BC.s1], lineSize:3,
+  const rng = vals => ({valAxisMinVal:Math.floor(Math.min(...vals)*0.995/10)*10, valAxisMaxVal:Math.ceil(Math.max(...vals)*1.005/10)*10});
+  const vals = ds.map(d=>m.get(d)), w4 = brfWk4(ds), a = m.get(w4), b = vals.at(-1);
+  s.addText([{text:`${F.state||"All states"}  `, options:{bold:true, color:BC.ink}}, {text:`${bN(b)} · ${b>=a?"▲ +":"▼ "}${n(b-a)} in 4 weeks`, options:{bold:true, color:b>=a?BC.st.good:BC.st.critical}}],
+    {x:0.5, y:1.75, w:8.3, h:0.3, fontFace:BF, fontSize:12, margin:0, isTextBox:true});
+  s.addChart(ctx.pres.charts.LINE, [{name:TXL(), labels:ds.map(wkTick), values:vals}], bChartBase({x:0.5, y:2.05, w:8.3, h:4.15, chartColors:[BC.s1], lineSize:3,
     lineDataSymbol:"circle", lineDataSymbolSize:8, showValue:true, dataLabelPosition:"t", dataLabelFormatCode:"#,##0", dataLabelFontSize:9, valAxisLabelFormatCode:"#,##0", showLegend:false,
-    showTitle:false, catAxisLabelFontSize:10.5, valAxisMinVal:Math.floor(lo*0.995/100)*100, valAxisMaxVal:Math.ceil(hi*1.005/100)*100}));
-  const w4 = brfWk4(ds), a = m.get(w4), b = m.get(ds.at(-1)), f0 = m.get(ds[0]), sg = d => (d>=0?"+":"")+n(d);
-  bCard(ctx, s, 9.4, 1.75, 3.45, 1.35, bN(b), `Now · week of ${wkTick(ds.at(-1))}`, "");
-  const pk = ds.reduce((x,d)=>m.get(d)>m.get(x)?d:x, ds[0]);
-  bCard(ctx, s, 9.4, 3.3, 3.45, 1.35, sg(b-a), "Change in the last 4 weeks", `from ${bN(a)} in the week of ${wkTick(w4)}`);
-  bCard(ctx, s, 9.4, 4.85, 3.45, 1.35, bN(m.get(pk)), "Highest week", `week of ${wkTick(pk)}`);
+    showTitle:false, catAxisLabelFontSize:10.5, ...rng(vals)}));
+  // one small line per state (or the 3 largest LGAs), each on its own scale
+  const U = units().map(u=>({...u, m:(trendAgg(u.f)[trk])||new Map()})).filter(u=>ds.some(d=>u.m.get(d)!=null))
+    .sort((p,q)=>F.state?(q.m.get(ds.at(-1))||0)-(p.m.get(ds.at(-1))||0):0).slice(0,3);
+  const ph = 4.45/Math.max(U.length,1), cs = [BC.s1, BC.s2, BC.s3];
+  U.forEach((u,i)=>{ const y = 1.75 + i*ph, uv = ds.map(d=>u.m.get(d)??null), ok = uv.filter(x=>x!=null), ua = u.m.get(w4), ub = ok.at(-1);
+    s.addText([{text:u.l+"  ", options:{bold:true, color:BC.ink}}, {text:`${bN(ub)} · ${ub>=ua?"+":""}${n(ub-ua)} in 4 wks`, options:{bold:true, color:ub>=ua?BC.st.good:BC.st.critical}}],
+      {x:9.1, y, w:3.75, h:0.26, fontFace:BF, fontSize:10.5, margin:0, isTextBox:true});
+    s.addChart(ctx.pres.charts.LINE, [{name:u.l, labels:ds.map(wkTick), values:uv}], bChartBase({x:9.0, y:y+0.24, w:3.85, h:ph-0.3, chartColors:[cs[i]], lineSize:2.25, lineDataSymbol:"none",
+      showValue:false, valAxisLabelFormatCode:"#,##0", valAxisLabelFontSize:7.5, catAxisLabelFontSize:7.5, showLegend:false, showTitle:false, catAxisLabelFrequency:3, ...rng(ok)})); });
   if(ds[0] < "2026-08-31" && ds.at(-1) >= "2026-08-31") s.addText("The NDR fingerprint rule change of 31 Aug 2026 lowered the count that week; weeks either side are not like for like.",
-    {x:0.5, y:6.2, w:8.6, h:0.2, fontFace:BF, fontSize:9, italic:true, color:BC.ink3, margin:0, isTextBox:true});
+    {x:0.5, y:6.2, w:8.3, h:0.2, fontFace:BF, fontSize:9, italic:true, color:BC.ink3, margin:0, isTextBox:true});
   const rule = w4 < "2026-08-31" && ds.at(-1) >= "2026-08-31";
   bTake(ctx, s, `${TXL()} ${b>=a?"rose":"fell"} by ${n(Math.abs(b-a))} in the last 4 weeks, to ${bN(b)}${rule?" — mostly the NDR fingerprint rule change of 31 Aug 2026, not clients lost":""}.`);
-  s.addNotes("One point per week: the latest snapshot saved in that week, at most 12 weeks. The line starts at the week of the NDR fingerprint rule change (31 Aug 2026) when the period reaches past it, so the weeks are like for like.");
+  s.addNotes("One point per week: the latest snapshot saved in that week, at most 12 weeks. Each small chart has its own scale. The line starts at the week of the NDR fingerprint rule change (31 Aug 2026) when the period reaches past it, so the weeks are like for like.");
 }
 
-/* ---------- biometrics: the trend ---------- */
+/* ---------- biometrics: the trend, programme and each state ---------- */
 function brfBioTrend(ctx){
   const T = TS.rows.length ? trendAgg(F) : {}, get = k => T[k] || new Map(), end = P.end < D.meta.as_of ? P.end : D.meta.as_of;
   const ds = brfWeeks([...get("pbs_active").keys()], end, 12);
   const s = bSlide(ctx, "Biometrics", "Is the gap closing?", `${ctx.scope} · weekly NDR files${ds.length ? ` · ${fmtDate(ds[0])} – ${fmtDate(ds.at(-1))}` : ""}`);
   if(ds.length < 2){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "Not enough weekly NDR files for a trend in this period."); return; }
+  const share = (g, d) => div(g("tx_curr").get(d), g("pbs_active").get(d));
+  const U = units().map(u=>{ const t = trendAgg(u.f); return {...u, g:k=>t[k]||new Map()}; }).filter(u=>ds.some(d=>u.g("pbs_active").get(d)))
+    .sort((p,q)=>F.state?(q.g("pbs_active").get(ds.at(-1))||0)-(p.g("pbs_active").get(ds.at(-1))||0):0).slice(0,3);
+  const ser = [{name:F.state||"All states", labels:ds.map(wkTick), values:ds.map(d=>share(get,d))}, ...U.map(u=>({name:u.l, labels:ds.map(wkTick), values:ds.map(d=>share(u.g,d))}))];
+  s.addChart(ctx.pres.charts.LINE, ser, bChartBase({x:0.5, y:1.7, w:12.33, h:2.35, chartColors:[BC.cloth, BC.s1, BC.s2, BC.s3], lineSize:2.5, lineDataSymbol:"circle", lineDataSymbolSize:5,
+    showValue:false, valAxisLabelFormatCode:"0%", valAxisMinVal:Math.max(0, Math.floor(Math.min(...ser.flatMap(x=>x.values).filter(v=>v!=null))*20)/20-0.05), valAxisMaxVal:1,
+    showLegend:true, legendPos:"r", showTitle:true, title:"Unique share (TX_CURR_Unique ÷ all on treatment)", catAxisLabelFontSize:10}));
   const nocap = d => (get("pbs_active").get(d)||0)-(get("pbs_baseline").get(d)||0), val = (k,d) => k==="pbs_nocap" ? nocap(d) : get(k).get(d);
-  s.addChart(ctx.pres.charts.LINE, [{name:"Unique share", labels:ds.map(wkTick), values:ds.map(d=>div(get("tx_curr").get(d), get("pbs_active").get(d)))}],
-    bChartBase({x:0.5, y:1.7, w:12.33, h:2.25, chartColors:[BC.s1], lineSize:3, lineDataSymbol:"circle", lineDataSymbolSize:7, showValue:true, dataLabelPosition:"t", dataLabelFormatCode:"0.0%",
-      dataLabelFontSize:9, valAxisLabelFormatCode:"0%", showLegend:false, showTitle:true, title:"TX_CURR_Unique ÷ all on treatment", catAxisLabelFontSize:10}));
-  const ser = BIOX.filter(([k])=>k==="pbs_nocap"||get(k).size).map(([k,l])=>({name:l, labels:ds.map(wkTick), values:ds.map(d=>val(k,d)??null)}));
-  s.addChart(ctx.pres.charts.LINE, ser, bChartBase({x:0.5, y:4.05, w:12.33, h:2.3, chartColors:[BC.st.critical, BC.s2, "8A5FB8", BC.s3], lineSize:2.25, lineDataSymbol:"circle", lineDataSymbolSize:5,
-    showValue:false, valAxisLabelFormatCode:"#,##0", showLegend:true, legendPos:"r", showTitle:true, title:"Not counted, by reason", catAxisLabelFontSize:10}));
-  const a = brfWk4(ds), b = ds.at(-1), sa = div(get("tx_curr").get(a), get("pbs_active").get(a)), sb = div(get("tx_curr").get(b), get("pbs_active").get(b));
+  const rs = BIOX.filter(([k])=>k==="pbs_nocap"||get(k).size).map(([k,l])=>({name:l, labels:ds.map(wkTick), values:ds.map(d=>val(k,d)??null)}));
+  s.addChart(ctx.pres.charts.LINE, rs, bChartBase({x:0.5, y:4.1, w:12.33, h:2.25, chartColors:[BC.st.critical, BC.s2, "8A5FB8", BC.s3], lineSize:2.25, lineDataSymbol:"circle", lineDataSymbolSize:5,
+    showValue:false, valAxisLabelFormatCode:"#,##0", showLegend:true, legendPos:"r", showTitle:true, title:`Not counted, by reason · ${F.state||"all states"}`, catAxisLabelFontSize:10}));
+  const a = brfWk4(ds), b = ds.at(-1), sa = share(get,a), sb = share(get,b);
   const ch = k => (val(k,b)||0)-(val(k,a)||0), cs = k => `${ch(k)<=0?"down":"up"} ${n(Math.abs(ch(k)))}`;
-  bTake(ctx, s, `In the last 4 weeks the unique share went ${sb>=sa?"up":"down"} from ${bP(sa)} to ${bP(sb)}; adjudication waiting ${cs("pbs_adjudication")}, yet to capture ${cs("pbs_nocap")}.`);
-  s.addNotes("At most 12 weeks. The trend starts at the week of the NDR rule change when the period reaches past it. The NDR tightened 'Fingerprint Valid' at the end of August 2026 (about 19,000 more prints marked not valid on 31 August), so weeks either side of that date are not like-for-like.");
+  const lo = U.map(u=>({l:u.l, v:share(u.g,b)})).filter(o=>o.v!=null).sort((p,q)=>p.v-q.v)[0];
+  bTake(ctx, s, `In the last 4 weeks the unique share went ${sb>=sa?"up":"down"} from ${bP(sa)} to ${bP(sb)}; adjudication waiting ${cs("pbs_adjudication")}, yet to capture ${cs("pbs_nocap")}${lo?` · lowest now: ${lo.l} (${bP(lo.v)})`:""}.`);
+  s.addNotes("At most 12 weeks; a state's deck shows its 3 largest LGAs. The trend starts at the week of the NDR rule change when the period reaches past it. The NDR tightened 'Fingerprint Valid' at the end of August 2026 (about 19,000 more prints marked not valid on 31 August), so weeks either side of that date are not like-for-like.");
 }
 
-/* ---------- AHD and PMTCT side by side, by state ---------- */
-function brfAhdPmtctState(ctx){
-  const s = bSlide(ctx, "AHD · PMTCT", `AHD and PMTCT by ${unitWord()}`, `${ctx.scope} · ${P.label} · DHIS2 · coloured: below the reference`);
-  const A = (x,k) => x[`ahd_${k}_n`]||0, R = (x,a,b) => div(A(x,a), A(x,b));
-  const ya = brfMini(ctx, s, 0.5, 1.75, 6.0, "AHD among new clients", {has:x=>A(x,"enrolled"), size:x=>A(x,"enrolled"), max:8,
-    cols:[{h:"Enrolled", f:x=>bN(A(x,"enrolled"))}, {h:"CD4 uptake", f:x=>bP(R(x,"cd4","enrolled")), st:x=>rateStatus(R(x,"cd4","enrolled"),.95)}, {h:"AHD", f:x=>bN(A(x,"confirmed"))},
-      {h:"LF-LAM", f:x=>bP(R(x,"lam_test","confirmed")), st:x=>rateStatus(R(x,"lam_test","confirmed"),.95)}, {h:"CrAg", f:x=>bP(R(x,"crag_test","confirmed")), st:x=>rateStatus(R(x,"crag_test","confirmed"),.95)}]});
-  const UAs = brfMini.last;
-  const yp = brfMini(ctx, s, 6.85, 1.75, 6.0, "PMTCT", {has:x=>x.pmtct_stat_den, size:x=>x.pmtct_stat_num, max:8,
-    cols:[{h:"STAT_N", f:x=>bN(x.pmtct_stat_num)}, {h:"Uptake", f:x=>bP(div(x.pmtct_stat_num, x.pmtct_stat_den)), st:miniSt("pmtct_stat_num","pmtct_stat_den",.95)},
-      {h:"POS", f:x=>bN(x.pmtct_stat_pos)}, {h:"ART cov.", f:x=>bP(div(x.pmtct_art, x.pmtct_stat_pos)), st:miniSt("pmtct_art","pmtct_stat_pos",.98)},
-      {h:"EID ≤2 mo", f:x=>bP(div(x.pmtct_eid_lt2, x.pmtct_eid)), st:miniSt("pmtct_eid_lt2","pmtct_eid",.95)}]});
-  const UPs = brfMini.last;
-  if(ya===1.75 && yp===1.75){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `No AHD or PMTCT reports for ${P.label}.`); return; }
-  // one small picture under each table: the screening and testing rates side by side
-  const U = units().map(u=>({...u, x:agg(u.f)})), y0 = Math.max(ya, yp) + 0.25, h = 6.3 - y0;
-  if(h > 1.3 && !F.state){
-    const UA = U.filter(u=>A(u.x,"enrolled")), UP = U.filter(u=>u.x.pmtct_stat_den);
-    const ch = (x, UU, ser, title) => s.addChart(ctx.pres.charts.BAR, ser.map(se=>({name:se.name, labels:UU.map(u=>u.l), values:UU.map(u=>se.v(u.x)||0)})), bChartBase({x, y:y0, w:6.0, h,
-      barDir:"col", chartColors:ser.map(se=>se.c), showValue:true, dataLabelPosition:"outEnd", dataLabelFormatCode:"0%", valAxisLabelFormatCode:"0%", valAxisMinVal:0,
-      valAxisMaxVal:Math.max(1, ...UU.flatMap(u=>ser.map(se=>se.v(u.x)||0)))*1.12, showLegend:true, legendPos:"t", barGapWidthPct:60, showTitle:false, dataLabelFontSize:9}));
-    if(UA.length) ch(0.5, UA, [{name:"LF-LAM uptake", c:BC.s2, v:x=>R(x,"lam_test","confirmed")}, {name:"CrAg uptake", c:BC.s3, v:x=>R(x,"crag_test","confirmed")}]);
-    if(UP.length) ch(6.85, UP, [{name:"ART coverage", c:BC.s1, v:x=>div(x.pmtct_art, x.pmtct_stat_pos)}, {name:"EID by 2 months", c:BC.s2, v:x=>div(x.pmtct_eid_lt2, x.pmtct_eid)}]);
-  }
-  const low = (UU, fn) => (UU||[]).map(u=>({l:u.l, v:fn(u.x)})).filter(o=>o.v!=null).sort((a,b)=>a.v-b.v)[0];
-  const lam = low(UAs, x=>A(x,"confirmed")?R(x,"lam_test","confirmed"):null), eid = low(UPs, x=>x.pmtct_eid?div(x.pmtct_eid_lt2, x.pmtct_eid):null);
-  bTake(ctx, s, [lam&&`Lowest LF-LAM uptake: ${lam.l} (${bP(lam.v)})`, eid&&`earliest infant testing weakest in ${eid.l} (${bP(eid.v)} by 2 months)`].filter(Boolean).join(" · ") + ".");
-  s.addNotes("AHD: new clients only. CD4 uptake = CD4 tests ÷ newly enrolled; LF-LAM and CrAg = tests ÷ AHD diagnosed; references 95%. PMTCT: facility + community. Uptake = STAT_N ÷ STAT_D (95%); ART coverage = PMTCT_ART ÷ PMTCT_STAT_POS (98%); EID ≤2 mo = first tests before 2 months ÷ all first tests (95%).");
-}
-
-/* ---------- AHD ---------- */
+/* ---------- AHD: the state table on top, the three cascades under it ---------- */
 function brfAhd(ctx){
-  const v = agg(), A = k => gv(v, `ahd_${k}_n`);
+  const v = agg(), A = k => gv(v, `ahd_${k}_n`), Ax = (x,k) => x[`ahd_${k}_n`]||0, R = (x,a,b) => div(Ax(x,a), Ax(x,b));
   const s = bSlide(ctx, "AHD", "Advanced HIV disease among new clients", `${ctx.scope} · ${P.label} · DHIS2 AHD_MSF elements, newly initiated`);
   if(!A("enrolled")){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "No AHD reports for this period."); return; }
-  bCards(ctx, s, 1.75, 1.3, [[bP(div(A("cd4"), A("enrolled"))), "CD4 uptake", `${bN(A("cd4"))} of ${bN(A("enrolled"))} newly enrolled`], [bN(A("confirmed")), "AHD confirmed", `${bP(div(A("confirmed"),A("enrolled")))} of newly enrolled`],
-    [bP(div(A("lam_test"), A("confirmed"))), "LF-LAM uptake", "LF-LAM tests ÷ AHD diagnosed"], [bP(div(A("crag_test"), A("confirmed"))), "CrAg uptake", "serum CrAg tests ÷ AHD diagnosed"]]);
-  const bar = (rows, x, w, title, c) => bBars(ctx, s, x, 3.3, w, rows.map(([l,val])=>({l, v:val, c, txt:bN(val)})), {labelW:2.35, valW:0.75, rowH:0.44, title});
-  bar([["HTS_TST_POS", v.hts_tst_pos], ["Newly enrolled", A("enrolled")], ["CD4 test done", A("cd4")], ["CD4 <200", A("cd4lt200")], ["WHO 3/4, CD4 ≥200 or none", A("who34")], ["AHD confirmed", A("confirmed")]], 0.5, 4.15, "Screening cascade", BC.s1);
-  bar([["AHD diagnosed", A("confirmed")], ["LF-LAM test", A("lam_test")], ["LF-LAM positive", A("lam_pos")], ["On TB treatment", A("tb_tx")], ["GeneXpert test", A("xpert_test")], ["GeneXpert positive", A("xpert_pos")]], 4.75, 4.0, "TB in AHD", BC.s2);
-  bar([["AHD diagnosed", A("confirmed")], ["Serum CrAg test", A("crag_test")], ["Serum CrAg positive", A("crag_pos")], ["Pre-emptive therapy", A("preempt")], ["CSF test", A("csf_test")], ["Cryptococcal meningitis", A("cm")]], 8.85, 4.0, "Cryptococcal disease in AHD", BC.s3);
+  const y = brfMini(ctx, s, 0.5, 1.7, 12.33, "Screening and diagnosis", {has:x=>Ax(x,"enrolled"), size:x=>Ax(x,"enrolled"), max:4, rowH:0.31,
+    cols:[{h:"Newly enrolled", f:x=>bN(Ax(x,"enrolled"))}, {h:"CD4 tested", f:x=>bN(Ax(x,"cd4"))}, {h:"CD4 uptake", f:x=>bP(R(x,"cd4","enrolled")), st:x=>rateStatus(R(x,"cd4","enrolled"),.95)},
+      {h:"CD4 <200", f:x=>bN(Ax(x,"cd4lt200"))}, {h:"AHD confirmed", f:x=>bN(Ax(x,"confirmed"))}, {h:"AHD %", f:x=>bP(R(x,"confirmed","enrolled"))},
+      {h:"LF-LAM uptake", f:x=>bP(R(x,"lam_test","confirmed")), st:x=>rateStatus(R(x,"lam_test","confirmed"),.95)}, {h:"LF-LAM pos", f:x=>bN(Ax(x,"lam_pos"))},
+      {h:"CrAg uptake", f:x=>bP(R(x,"crag_test","confirmed")), st:x=>rateStatus(R(x,"crag_test","confirmed"),.95)}, {h:"CrAg pos", f:x=>bN(Ax(x,"crag_pos"))}]});
+  const y0 = y + 0.18, rh = Math.min(0.36, (6.32 - y0 - 0.38)/6);
+  const bar = (rows, x, w, title, c) => bBars(ctx, s, x, y0, w, rows.map(([l,val])=>({l, v:val, c, txt:bN(val)})), {labelW:2.3, valW:0.7, rowH:rh, title});
+  bar([["HTS_TST_POS", v.hts_tst_pos], ["Newly enrolled", A("enrolled")], ["CD4 test done", A("cd4")], ["CD4 <200", A("cd4lt200")], ["WHO 3/4, CD4 ≥200 or none", A("who34")], ["AHD confirmed", A("confirmed")]], 0.5, 4.1, "Screening cascade", BC.s1);
+  bar([["AHD diagnosed", A("confirmed")], ["LF-LAM test", A("lam_test")], ["LF-LAM positive", A("lam_pos")], ["On TB treatment", A("tb_tx")], ["GeneXpert test", A("xpert_test")], ["GeneXpert positive", A("xpert_pos")]], 4.7, 4.0, "TB in AHD", BC.s2);
+  bar([["AHD diagnosed", A("confirmed")], ["Serum CrAg test", A("crag_test")], ["Serum CrAg positive", A("crag_pos")], ["Pre-emptive therapy", A("preempt")], ["CSF test", A("csf_test")], ["Cryptococcal meningitis", A("cm")]], 8.85, 4.0, "Cryptococcal disease", BC.s3);
   bTake(ctx, s, `${bP(div(A("cd4"), A("enrolled")))} of new clients had a CD4 test; ${bN(A("confirmed"))} AHD cases were confirmed, ${bP(div(A("lam_test"), A("confirmed")))} screened with LF-LAM and ${bP(div(A("crag_test"), A("confirmed")))} with CrAg.`);
-  s.addNotes("New clients only (DHIS2 AHD_MSF, newly initiated). Clients already on ART are left out until the AHD-on-ART method is agreed.");
+  s.addNotes("New clients only (DHIS2 AHD_MSF, newly initiated); clients already on ART are left out until the AHD-on-ART method is agreed. CD4 uptake = CD4 tests ÷ newly enrolled; LF-LAM and CrAg uptake = tests ÷ AHD diagnosed; coloured against 95%. A state's deck shows its 4 largest LGAs.");
 }
 
-/* ---------- 13. PMTCT ---------- */
+/* ---------- TB: screening, prevention and TB/HIV ---------- */
+function brfTb(ctx){
+  const v = agg(), tt = ev("TX_TB", v), tp = ev("TB_PREV", v), ta = ev("TB_ART", v), emr = MEAS.includes("tbs_screened");
+  const s = bSlide(ctx, "TB", "TB screening, prevention and treatment", `${ctx.scope} · ${P.label} · DHIS2${emr?" · screening from the EMR line list":""}`);
+  const tg = code => (x, f) => { const r = ev(code, x, f); return r.pctQ==null ? "—" : pct(r.pctQ,0); };
+  const ts = code => (x, f) => ev(code, x, f).status;
+  const y = brfMini(ctx, s, 0.5, 1.7, 12.33, "By indicator", {has:x=>x.tb_stat_den||x.tpt_eligible||x.tbs_screened, size:x=>x.tx_curr_emr||x.tb_stat_den, max:4, rowH:0.31,
+    cols:[...(emr?[{h:"Screened", f:x=>bN(x.tbs_screened)}, {h:"Screening cov.", f:x=>bP(div(x.tbs_screened, x.tx_curr_emr)), st:miniSt("tbs_screened","tx_curr_emr",.95)}, {h:"TB diagnosed", f:x=>bN(x.tbs_diagnosed)}]:[]),
+      {h:"TX_TB (N)", f:x=>bN(x.tx_tb_num)}, ...(F.state?[]:[{h:"% of target", f:tg("TX_TB"), st:ts("TX_TB")}]),
+      {h:"TPT initiation", f:x=>bP(div(x.tpt_started, x.tpt_eligible)), st:miniSt("tpt_started","tpt_eligible",.95)}, {h:"TB_PREV (N)", f:x=>bN(x.tb_prev_num)},
+      ...(F.state?[]:[{h:"% of target", f:tg("TB_PREV"), st:ts("TB_PREV")}]), {h:"TB_STAT_POS", f:x=>bN(x.tb_stat_pos)}, {h:"TB_ART", f:x=>bN(x.tb_art)}]});
+  const y0 = y + 0.18, rh = Math.min(0.36, (6.32 - y0 - 0.38)/6);
+  const bar = (rows, x, w, title, c) => bBars(ctx, s, x, y0, w, rows.map(([l,val,r])=>({l, v:val, c, txt:bN(val)+(r?`  ·  ${r}`:"")})), {labelW:2.15, valW:1.15, rowH:rh, title});
+  if(emr) bar([[TXE(), v.tx_curr_emr], ["Screened for TB", v.tbs_screened, bP(div(v.tbs_screened, v.tx_curr_emr))], ["Presumptive", v.tbs_presumptive, bP(div(v.tbs_presumptive, v.tbs_screened))],
+      ["Tested", v.tbs_tested], ["TB diagnosed", v.tbs_diagnosed], ["On treatment (TX_TB)", v.tx_tb_num]], 0.5, 4.1, "Screening among PLHIV on ART", BC.s1);
+  else bNoData(s, 0.5, y0, 4.1, 6.3-y0, "TB screening needs the EMR line list.");
+  bar([["TPT eligible", v.tpt_eligible], ["TPT started", v.tpt_started, bP(div(v.tpt_started, v.tpt_eligible))], ["TB_PREV (D)", v.tb_prev_den], ["TB_PREV (N)", v.tb_prev_num, bP(div(v.tb_prev_num, v.tb_prev_den))]], 4.7, 4.0, "TB prevention (TPT)", BC.s2);
+  bar([["TB_STAT_D", v.tb_stat_den], ["TB_STAT_N", v.tb_stat_num, bP(div(v.tb_stat_num, v.tb_stat_den))], ["TB_STAT_POS", v.tb_stat_pos], ["TB_ART", v.tb_art, bP(div(v.tb_art, v.tb_stat_pos))]], 8.85, 4.0, "TB/HIV", BC.s3);
+  const st = [["TX_TB", tt], ["TB_PREV", tp], ["TB_ART", ta]].filter(([,r])=>r.status==="critical"||r.status==="warning").map(([l])=>l);
+  bTake(ctx, s, `${emr?`${bP(div(v.tbs_screened, v.tx_curr_emr))} of clients on ART were screened; `:""}${bN(v.tx_tb_num)} started TB treatment and ${bN(v.tb_prev_num)} completed TPT${st.length?` — behind the pace: ${st.join(", ")}`:""}.`);
+  s.addNotes("Screening (EMR): TB status recorded in the period ÷ TX_CURR. TX_TB (N), TB_PREV and TB/HIV from DHIS2. TPT initiation = TPT started ÷ eligible; TB_PREV completion = N ÷ D; TB_ART linkage = TB_ART ÷ TB_STAT_POS. % of target = share of the period target, coloured by pace.");
+}
+
+/* ---------- PMTCT: the state table on top, the two cascades under it ---------- */
 function brfPmtct(ctx){
-  const v = agg(), ps = ev("PMTCT_STAT", v), pa = ev("IPI_PMTCT_ART_COV", v), part = ev("PMTCT_ART", v);
+  const v = agg(), pa = ev("IPI_PMTCT_ART_COV", v);
   const s = bSlide(ctx, "PMTCT", "Mothers and HIV-exposed infants", `${ctx.scope} · ${P.label} · DHIS2, facility PMTCT + community PMTCT`);
-  bCards(ctx, s, 1.75, 1.3, [[bN(v.pmtct_stat_num), "PMTCT_STAT_N", tgtTxt("PMTCT_STAT", ps), ps.status], [bP(div(v.pmtct_stat_num, v.pmtct_stat_den)), "Testing uptake", "STAT_N ÷ STAT_D"],
-    [bN(v.pmtct_stat_pos), "PMTCT_STAT_POS", `yield ${bP(div(v.pmtct_stat_pos, v.pmtct_stat_num),2)}`], [bP(pa.value), "ART coverage (IPI)", tgtTxt("IPI_PMTCT_ART_COV", pa), pa.status]]);
-  bBars(ctx, s, 0.5, 3.3, 6.0, [["New ANC clients (STAT_D)", v.pmtct_stat_den], ["Known HIV status (STAT_N)", v.pmtct_stat_num], ["HIV positive", v.pmtct_stat_pos], ["On ART (PMTCT_ART)", v.pmtct_art]]
-    .map(([l,x],i)=>({l, v:x, c:i<2?BC.s3:BC.s1, txt:bN(x)})), {labelW:2.4, valW:0.95, rowH:0.6, title:"Mothers' cascade"});
+  if(!v.pmtct_stat_den){ bNoData(s, 0.5, 1.75, 12.33, 4.4, "No PMTCT reports for this period."); return; }
+  const y = brfMini(ctx, s, 0.5, 1.7, 12.33, "Mothers and infants", {has:x=>x.pmtct_stat_den, size:x=>x.pmtct_stat_num, max:4, rowH:0.31,
+    cols:[{h:"STAT_N", f:x=>bN(x.pmtct_stat_num)}, ...(F.state?[]:[{h:"% of target", f:(x,f)=>{ const r=ev("PMTCT_STAT",x,f); return r.pctQ==null?"—":pct(r.pctQ,0); }, st:(x,f)=>ev("PMTCT_STAT",x,f).status}]),
+      {h:"Uptake", f:x=>bP(div(x.pmtct_stat_num, x.pmtct_stat_den)), st:miniSt("pmtct_stat_num","pmtct_stat_den",.95)}, {h:"POS", f:x=>bN(x.pmtct_stat_pos)},
+      {h:"Yield", f:x=>bP(div(x.pmtct_stat_pos, x.pmtct_stat_num),2)}, {h:"PMTCT_ART", f:x=>bN(x.pmtct_art)},
+      {h:"ART coverage", f:x=>bP(div(x.pmtct_art, x.pmtct_stat_pos)), st:miniSt("pmtct_art","pmtct_stat_pos",.98)}, {h:"EID", f:x=>bN(x.pmtct_eid)},
+      {h:"EID ≤2 months", f:x=>bP(div(x.pmtct_eid_lt2, x.pmtct_eid)), st:miniSt("pmtct_eid_lt2","pmtct_eid",.95)}, {h:"HEI positive", f:x=>bN(x.pmtct_eid_pos)}]});
+  const y0 = y + 0.18, rh = Math.min(0.36, (6.32 - y0 - 0.38)/6);
+  bBars(ctx, s, 0.5, y0, 6.0, [["New ANC clients (STAT_D)", v.pmtct_stat_den], ["Known HIV status (STAT_N)", v.pmtct_stat_num], ["HIV positive", v.pmtct_stat_pos], ["On ART (PMTCT_ART)", v.pmtct_art]]
+    .map(([l,x],i)=>({l, v:x, c:i<2?BC.s3:BC.s1, txt:bN(x)})), {labelW:2.4, valW:0.95, rowH:rh*1.5, title:"Mothers' cascade"});
   const hei = [["HEI delivered alive", v.hei_delivered], ["NVP prophylaxis", v.hei_nvp], ["EID (first test)", v.pmtct_eid], ["Tested by 2 months", v.pmtct_eid_lt2], ["HEI positive", v.pmtct_eid_pos], ["HEI on ART", v.hei_art]];
-  bBars(ctx, s, 6.85, 3.3, 6.0, hei.map(([l,x])=>({l, v:x, c:BC.s2, txt:bN(x)})), {labelW:2.1, valW:0.85, rowH:0.44, title:"HIV-exposed infants"});
+  bBars(ctx, s, 6.85, y0, 6.0, hei.map(([l,x])=>({l, v:x, c:BC.s2, txt:bN(x)})), {labelW:2.1, valW:0.85, rowH:rh, title:"HIV-exposed infants"});
   bTake(ctx, s, `${bP(div(v.pmtct_stat_num, v.pmtct_stat_den))} of pregnant women know their status and ${bP(pa.value)} of those positive are on ART; ${bP(div(v.pmtct_eid_lt2, v.pmtct_eid))} of infant tests were by 2 months, ${bN(v.pmtct_eid_pos)} infants positive.`);
-  s.addNotes("Headline figures = facility + Community PMTCT, as in the DAX and the deck. ART coverage above 100% means women identified positive elsewhere started ART here. EID = first virologic test.");
+  s.addNotes("Headline figures = facility + Community PMTCT, as in the DAX and the deck. ART coverage above 100% means women identified positive elsewhere started ART here (reference 98%). EID = first virologic test. A state's deck shows its 4 largest LGAs.");
 }
 
-/* ---------- 14. targets: achievement against pace ---------- */
-function brfTargets(ctx){
-  const v = agg(), inds = D.registry.filter(i=>i.group==="Conventional"&&i.kind!=="rate").map(i=>({i, r:ev(i.code, v)})).filter(o=>o.r.target);
-  const s = bSlide(ctx, "IPI review", "Results against targets", `${ctx.scope} · ${P.label} · bar = share of the period target reached · line = where we should be by ${fmtDate(D.meta.dhis_through < P.end ? D.meta.dhis_through : P.end)}`);
-  if(!inds.length){ bNoData(s, 0.5, 1.75, 12.33, 4.4, `No targets loaded for ${P.label}.`); return; }
-  const fr = o => o.i.flow==="snapshot" ? o.r.score : o.r.pctQ, ex = o => o.i.flow==="snapshot" ? 1 : o.r.elapsed;
-  const rows = inds.map(o=>({l:o.i.name, v:fr(o)==null?null:Math.min(fr(o),1.5), tick:ex(o), c:BC.st[o.r.status],
-    txt:o.r.value==null ? `No data · target ${n(o.r.target)}` : `${n(o.r.value)} of ${n(o.r.target)}  ·  ${pct(fr(o),0)}  ·  ${LABEL[o.r.status]}`}));
-  bBars(ctx, s, 0.5, 1.75, 12.33, rows, {labelW:2.2, valW:3.4, max:Math.min(1.5, Math.max(1.0, ...rows.map(r=>r.v||0))), rowH:Math.min(0.42, 4.5/rows.length)});
-  const behind = inds.filter(o=>o.r.status==="critical"||o.r.status==="warning").map(o=>o.i.name);
-  bTake(ctx, s, behind.length ? `Behind the pace: ${behind.join(", ")}.` : "Every count indicator with a target is on or ahead of the pace.");
-  s.addNotes("Count targets for the period, paced to the data date: On track = 75% of the expected value or more, Watch = 50–74%, Off track = below 50%, Exceeds = above the expected value. TX_CURR is compared with the full fiscal-year target. Bars stop at 150% of the target.");
-}
-
-/* ---------- 15. close: priorities ---------- */
+/* ---------- close: priorities ---------- */
 function brfClose(ctx){
   const v = agg(), inds = D.registry.filter(i=>i.group!=="Conventional"||i.kind!=="rate").map(i=>({i, r:ev(i.code, v)})).filter(o=>o.r.value!=null && o.r.status!=="none");
   const seen = new Set(), uniq = a => a.filter(o=>!seen.has(o.i.num) && seen.add(o.i.num));
