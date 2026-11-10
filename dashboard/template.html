@@ -819,7 +819,7 @@ function concCsv(rows){
 }
 /* ---------- DHIS2 data behind a page, as CSV: the selected period and filters, one row per facility x DHIS2
    reporting period x sex x age x modality, one column per DHIS2 figure on that page ---------- */
-const DHIS_PAGE = {overview:/./, ipi:/./, hts:/^(hts_|index_|fit_|hivst_|prep_)/, pmtct:/^(pmtct_|hei_)/, tb:/^(tb_|tpt_|tx_tb_)/, ahd:/^ahd_/};
+const DHIS_PAGE = {ipi:/./, hts:/^(hts_|index_|fit_|hivst_|prep_)/, pmtct:/^(pmtct_|hei_)/, tb:/^(tb_|tpt_|tx_tb_)/, ahd:/^ahd_/};
 let _DH = null;
 const dhisAll = () => _DH || (_DH = (()=>{ const z=new Set(); for(let r=0;r<N;r++){ const k=PM[rt[r]].kind; if(k==="W"||k==="M") z.add(rk[r]); } return z; })());
 function dhisMeas(){ const re=DHIS_PAGE[page]; return re ? [...dhisAll()].filter(i=>re.test(MEAS[i])).sort((a,b)=>MEAS[a]<MEAS[b]?-1:1) : []; }
