@@ -717,9 +717,35 @@ def cmd_discover():
     print(f"\nCatalogs written to {raw}. Map each table to its dataset UIDs in config/settings.yaml.")
 
 
+def wait_for_dhis2(cfg: dict, every_min: int = 5, max_hours: float = 5) -> None:
+    """The scheduled update starts when Windows sees a network, which can be before the internet is
+    really through (no DNS yet, a hotspot still connecting). Wait for both DHIS2 servers, checking every
+    few minutes, instead of failing and leaving the dashboard a whole slot behind."""
+    import time
+    import requests
+    urls = [cfg["dhis2"]["weekly_url"], cfg["dhis2"]["monthly_url"]]
+    deadline = time.time() + max_hours * 3600
+    while True:
+        down = []
+        for u in urls:
+            try:
+                requests.head(u, timeout=20, allow_redirects=False)
+            except requests.RequestException:
+                down.append(u)
+        if not down:
+            return
+        if time.time() >= deadline:
+            print(f"  DHIS2 still unreachable after {max_hours} hours ({', '.join(down)}); giving up", flush=True)
+            sys.exit(1)
+        print(f"  {dt.datetime.now():%H:%M} DHIS2 unreachable ({', '.join(down)}): no internet yet? checking again in {every_min} minutes", flush=True)
+        time.sleep(every_min * 60)
+
+
 def cmd_run():
     load_env()
     cfg = settings()
+    if "--cached" not in sys.argv:
+        wait_for_dhis2(cfg)
     as_of = as_of_date(cfg)
     start, end = fy_window(cfg, as_of)
     from etl.dhis2_client import extract_instance, facility_lookup
