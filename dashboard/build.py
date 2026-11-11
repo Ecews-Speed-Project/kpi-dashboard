@@ -20,6 +20,7 @@ import json
 import os
 import re
 import shutil
+import time
 import zipfile
 from pathlib import Path
 
@@ -121,7 +122,18 @@ def _write_split(data: dict, out_dir: Path) -> dict:
     if final.exists():         # the same build rebuilt: never touch the folder the current page uses - new name
         bid = f"{bid}-{dt.datetime.now():%H%M%S}"
         final = root / bid
-    os.replace(tmp, final)
+    # OneDrive (or a virus scan) can hold a just-written folder for a moment: retry the rename,
+    # then copy as a last resort, rather than failing the whole update
+    for i in range(10):
+        try:
+            os.replace(tmp, final)
+            break
+        except PermissionError:
+            if i == 9:
+                shutil.copytree(tmp, final)
+                shutil.rmtree(tmp, ignore_errors=True)
+            else:
+                time.sleep(3)
     # oldest first by time written, not by name: a rebuilt folder's name can sort before older ones with a suffix
     builds = sorted((d for d in root.iterdir() if d.is_dir() and not d.name.startswith(".") and d != final), key=lambda d: d.stat().st_mtime)
     for old in builds[:-(KEEP_BUILDS - 1) or None] + [d for d in root.iterdir() if d.name.startswith(".") and d != tmp]:
