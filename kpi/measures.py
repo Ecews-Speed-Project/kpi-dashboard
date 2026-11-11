@@ -601,6 +601,13 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     # TX_PVLS: on ART 6 months (183 days) or more; a result in the 12 months to the date (as the NDR summary)
     eligible = active & (dos >= 183)
     has_result = eligible & (vl_date > p.as_of - dt.timedelta(days=365)) & (vl_date <= p.as_of)
+    # The VL cascade (TX_PVLS) as the Power BI VL measures on 'public linelist' (docs/reference/PowerBI_measure_export.xlsx):
+    # everyone Active in the line list (no print filter), daysonart >= 180, a date in the 12 months up to the line-list
+    # date, both ends counted (Power BI types the window in; here it moves with the file). 'eligible' / 'has_result'
+    # above stay for AHD, DSD and OTZ.
+    vl_el = active_all & (dos >= 180)
+    vl_win = lambda s: (s >= p.as_of - dt.timedelta(days=365)) & (s <= p.as_of)
+    vl_res = vl_el & vl_win(vl_date)
     # TX_NEW on the unique rule too: counted when the client is in the unique TX_CURR cohort
     # (active with a valid print, or under 15), as the NDR quarter summary
     uniq = active
@@ -628,28 +635,27 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         "dead_q": prev_active & status.isin(STATUS["dead"]),
         "to_q": prev_active & status.isin(STATUS["to"]),
         "stopped_q": prev_active & status.isin(STATUS["stopped"]),
-        "vl_eligible": eligible,
-        "vl_result": has_result,
-        "vl_suppressed": has_result & (vl < 1000),
-        "vl_unsuppressed": has_result & (vl >= 1000),
-        "vl_undetectable": has_result & (vl < 50),
-        "vl_llv": has_result & (vl >= 50) & (vl < 1000),
+        "vl_tx": active_all,                                 # the VL cascade's on-treatment base (everyone Active)
+        "vl_eligible": vl_el,                                # vl Eligible
+        "vl_result": vl_res,                                 # vl Result_Received
+        "vl_suppressed": vl_res & (vl < 1000),               # vl Suppressed
+        "vl_unsuppressed": vl_res & ~(vl < 1000),            # unsupressed = Result_Received - Suppressed
+        "vl_undetectable": vl_res & (vl < 50),               # VL Undetectable
+        "vl_llv": vl_res & (vl >= 50) & (vl <= 999),         # vl LLV
         "mmd3": active & (pd.to_numeric(d[c["refill_days"]], errors="coerce") >= 90),
         "mmd_lt3": active & (pd.to_numeric(d[c["refill_days"]], errors="coerce").fillna(0) < 90),
         "mmd_3": active & pd.to_numeric(d[c["refill_days"]], errors="coerce").between(90, 119),
         "mmd_45": active & pd.to_numeric(d[c["refill_days"]], errors="coerce").between(120, 179),
         "mmd_6": active & (pd.to_numeric(d[c["refill_days"]], errors="coerce") >= 180),
     }
-    # VL flow: sample collected in the 12 months; a sample with no later result is pending
-    yr = lambda s: (s > p.as_of - dt.timedelta(days=365)) & (s <= p.as_of)
+    # VL flow: vl Sample_Collection = sample date in the 12 months; vl Pending Result = samples - results (dashboard)
     if c.get("sample_date") in d:
         sample = _dates(d[c["sample_date"]])
-        masks["vl_sample"] = eligible & yr(sample)
-        masks["vl_pending"] = eligible & yr(sample) & ~(vl_date >= sample)
+        masks["vl_sample"] = vl_el & vl_win(sample)
         # no valid result (none in the 12 months): a sample waiting for its result, or a sample still to be taken
-        gap = eligible & ~has_result
+        gap = vl_el & ~vl_res
         in_emr, pending, _, _, _ = vl_gap_split(d, c, p.as_of)
-        masks.update(vl_gap=gap, vl_gap_emr=gap & in_emr, vl_gap_pending=gap & pending, vl_gap_sample=gap & ~in_emr & ~pending)
+        masks.update(vl_gap_elig=vl_el, vl_gap=gap, vl_gap_emr=gap & in_emr, vl_gap_pending=gap & pending, vl_gap_sample=gap & ~in_emr & ~pending)
     # EMR waterfall for the quarter the linelist date falls in (deck 'Continuity on Treatment'):
     # previous-quarter status from previous_quarter_status; the starting TX_CURR comes from that
     # table itself (engine), so clients no longer in the linelist land in 'gain/loss'
@@ -749,8 +755,8 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     if c.get("dsd_type") in d:
         out.append(_long_by(d, active, d[c["dsd_type"]], "dsd_type"))
     if c.get("regimen_line") in d:
-        out.append(_long_by(d, has_result, d[c["regimen_line"]], "vlr_regline"))
-        out.append(_long_by(d, has_result & (vl < 1000), d[c["regimen_line"]], "vls_regline"))
+        out.append(_long_by(d, vl_res, d[c["regimen_line"]], "vlr_regline"))
+        out.append(_long_by(d, vl_res & (vl < 1000), d[c["regimen_line"]], "vls_regline"))
     return pd.concat(out, ignore_index=True)
 
 
@@ -789,12 +795,12 @@ VL_COLS = ["datim", "art_no", "hosp_no", "vl_value", "vl_band", "vl_date", "samp
 
 
 def vl_clients(ll: pd.DataFrame, lc: dict, ll_date: dt.date) -> pd.DataFrame:
-    """Virally unsuppressed clients, the same rule as the vl_unsuppressed measure: active, 180+ days
-    on ART, VL result in the 12 months to the linelist date, VL >= 1000 copies/mL. 'repeat' says
-    whether a sample has been collected after that result (EAC / repeat VL follow-up). No names."""
+    """Virally unsuppressed clients, the same rule as the vl_unsuppressed measure: active (Power BI rule: no
+    print filter), 180+ days on ART, VL result in the 12 months to the linelist date, VL >= 1000 copies/mL.
+    'repeat' says whether a sample has been collected after that result (EAC / repeat VL follow-up). No names."""
     if ll.empty or lc.get("vl_value") not in ll:
         return pd.DataFrame()
-    active = emr_unique(ll, lc, _norm(ll[lc["status"]]).isin(STATUS["active"]))   # same cohort as the cascade
+    active = _norm(ll[lc["status"]]).isin(STATUS["active"])   # same cohort as the cascade
     dos = pd.to_numeric(ll[lc["days_on_art"]], errors="coerce")
     vld = _dates(ll[lc["vl_date"]])
     vl = pd.to_numeric(ll[lc["vl_value"]], errors="coerce")
@@ -842,16 +848,16 @@ VL_GAP_COLS = ["datim", "art_no", "hosp_no", "gap", "vl_history", "vl_value", "v
 
 
 def vl_gap_clients(ll: pd.DataFrame, lc: dict, ll_date: dt.date) -> pd.DataFrame:
-    """Clients with no valid VL result, the same rule as the vl_gap measures: active, on ART 183+ days, no
+    """Clients with no valid VL result, the same rule as the vl_gap measures: active, on ART 180+ days, no
     result in the 12 months to the linelist date. 'gap' says what they need (see vl_gap_split): the EMR result
     sent to the NDR, their pending result, or a sample. Longest wait first, so the list reads as a priority
     order. No names."""
     if ll.empty or lc.get("vl_value") not in ll or lc.get("sample_date") not in ll:
         return pd.DataFrame()
-    active = emr_unique(ll, lc, _norm(ll[lc["status"]]).isin(STATUS["active"]))   # same cohort as the cascade
+    active = _norm(ll[lc["status"]]).isin(STATUS["active"])   # same cohort as the cascade (Power BI rule)
     dos = pd.to_numeric(ll[lc["days_on_art"]], errors="coerce")
     vld = _dates(ll[lc["vl_date"]])
-    sel = ll[active & (dos >= 183) & ~((vld > ll_date - dt.timedelta(days=365)) & (vld <= ll_date))]
+    sel = ll[active & (dos >= 180) & ~((vld >= ll_date - dt.timedelta(days=365)) & (vld <= ll_date))]
     if sel.empty:
         return pd.DataFrame()
     txt = lambda k: sel[lc[k]].fillna("").astype(str).replace({"nan": "", "None": "", "NaT": ""}) if lc.get(k) in sel else ""

@@ -33,7 +33,7 @@ ipi:
     pillar: 3rd 95
     measures: "Everyone on ART who is virally suppressed. The denominator is all of TX_CURR, so clients without a recent VL result count against it"
     num: vl_suppressed
-    den: tx_curr_emr     # VL results live in the EMR, so the denominator is the EMR TX_CURR
+    den: vl_tx           # everyone Active in the EMR line list: the VL cascade's own base (Power BI VL rules)
     kind: rate
     target: IPI_VLS_ON_ART
     source: Central repository (linelist)

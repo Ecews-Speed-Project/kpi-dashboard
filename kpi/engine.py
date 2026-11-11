@@ -395,6 +395,11 @@ def encode_cube(cube: pd.DataFrame, master: pd.DataFrame) -> dict:
     return {"dims": dims, "rows": rows}
 
 
+# The VL cascade measures taken from the EMR (CDR) line list when the NDR file is the treatment source
+VL_EMR = ["vl_tx", "vl_eligible", "vl_sample", "vl_result", "vl_suppressed", "vl_unsuppressed", "vl_undetectable", "vl_llv",
+          "vlr_regline", "vls_regline"]
+
+
 def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_stat: pd.DataFrame,
                linelist: pd.DataFrame, pbs: pd.DataFrame, manual: dict, targets: pd.DataFrame,
                master: pd.DataFrame, as_of: dt.date, weekly_raw: pd.DataFrame, naomi: pd.DataFrame,
@@ -434,12 +439,15 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
     # treatment from the NDR: the CDR line list still gives the EMR's own TX_CURR (same unique rule), so
     # EMR and NDR can be compared - tx_curr_cdr / emr_active_cdr, as of the CDR line list date
     cdr = manual.get("cdr_linelist")
+    vl_asof = ll_asof                      # the VL cascade's line-list date (the EMR's when the NDR is the treatment source)
     if cdr is not None and len(cdr):
-        cd = linelist_date(cdr, cols["linelist"], as_of)
+        cd = vl_asof = linelist_date(cdr, cols["linelist"], as_of)
         x = linelist_cube(cdr, cols["linelist"], Period(as_of=cd, fy_start=p.fy_start), None, today=cd)
-        # the case finding report's linked to ART comes from the EMR line list, not the NDR
-        parts[1] = parts[1][parts[1]["measure"] != "tx_new_all"]
-        parts.append(attach_master(x[x["measure"] == "tx_new_all"], master, "cdr_linelist", dq))
+        # the case finding report's linked to ART, and the VL cascade (as the Power BI VL measures, which read
+        # the EMR line list), come from the EMR line list, not the NDR
+        from_emr = x["measure"].isin(["tx_new_all"] + VL_EMR)
+        parts[1] = parts[1][~parts[1]["measure"].isin(["tx_new_all"] + VL_EMR)]
+        parts.append(attach_master(x[from_emr], master, "cdr_linelist", dq))
         x = x[(x["period"].fillna("") == "") & (x["mod"].fillna("") == "") & x["measure"].isin(["tx_curr_emr", "emr_active"])]
         parts.append(attach_master(x.assign(measure=x["measure"].map({"tx_curr_emr": "tx_curr_cdr", "emr_active": "emr_active_cdr"})),
                                    master, "cdr_linelist", dq))
@@ -593,7 +601,7 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
                      dhis_through=dhis_through.isoformat(), elapsed=p.elapsed(dhis_through),
                      elapsed_asof=p.elapsed(), generated_at=dt.datetime.now().isoformat(timespec="minutes"),
                      demo=demo, rag=settings["rag"], naomi_loaded=bool(len(nao)), age5=AGE5,
-                     pbs_source=pbs_source, linelist_as_of=ll_asof.isoformat(), tx_curr_source=tx_curr_source,
+                     pbs_source=pbs_source, linelist_as_of=ll_asof.isoformat(), vl_as_of=vl_asof.isoformat(), tx_curr_source=tx_curr_source,
                      treatment_source=linelist.attrs.get("source", "emr"),
                      eac_as_of=_eac_date(manual.get("eac"), cols.get("eac", {})), eac_source=manual.get("eac_source", ""),
                      linelist_note=manual.get("linelist_note", "")),
@@ -601,7 +609,7 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
         "pbs_clients": encode_clients(pbs_clients(pbs_src, pc), master, dq),
         "conc_clients": encode_conc_clients(conc_cl, master),
         "appt_clients": encode_appt_clients(appt_cl, master),
-        "vl_clients": encode_vl_clients(vl_clients(linelist, cols["linelist"], ll_asof), master),
+        "vl_clients": encode_vl_clients(vl_clients(cdr if cdr is not None and len(cdr) else linelist, cols["linelist"], vl_asof), master),
         "vl_gap_clients": encode_vl_clients(vl_gap_clients(linelist, cols["linelist"], ll_asof), master, VL_GAP_COLS,
                                             ("datim", "gap", "vl_history", "regimen_line", "regimen")),
         "geo": manual.get("geo") or [],
