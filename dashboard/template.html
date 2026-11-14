@@ -541,7 +541,7 @@ function agePass(a, want){ if(!want) return true; const b=AGE[a]; if(want==="50+
 const keyFns = {
   state:r=>FAC[rf[r]].state, lga:r=>FAC[rf[r]].lga, facility:r=>FAC[rf[r]].facility,
   sex:r=>DM.sex[rs[r]], age:r=>ageOf(AGE[ra[r]]), agegrp:r=>LT15.has(AGE[ra[r]])?"<15":AGE[ra[r]]==="Unknown"?"Unknown":"15+", paed:r=>LT20.has(AGE[ra[r]])?"<20":AGE[ra[r]]==="Unknown"?"Unknown":"20+",
-  mod:r=>DM.mod[rm[r]], month:r=>PM[rt[r]].month, agesex:r=>ageOf(AGE[ra[r]])+"|"+DM.sex[rs[r]], week:r=>PM[rt[r]].wk};
+  mod:r=>DM.mod[rm[r]], month:r=>PM[rt[r]].month, agesex:r=>ageOf(AGE[ra[r]])+"|"+DM.sex[rs[r]], week:r=>PM[rt[r]].wk, facweek:r=>rf[r]+"|"+PM[rt[r]].wk};
 /** Sum every measure for rows passing the filter. months: "q" = selected period | "all" */
 function agg(f=F, {by=null, months="q"}={}){
   const fp = new Uint8Array(FAC.length); FAC.forEach((_,i)=>fp[i]=facPass(i,f)?1:0);
@@ -1803,9 +1803,12 @@ function htsPage(){
      const lab=["Non-unique","Unique"], tip="Non-unique: new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same.";
      return kpi2("TX_NEW",[[n(v.tx_new_ti),lab[0]],[n(v.tx_new_q),lab[1]]],"",null,tip)
        +kpi2(ipiYr?"Linkage (IPI)":"Linkage",[[pct(div(v.tx_new_ti,v.hts_tst_pos)),lab[0]],[pct(div(v.tx_new_q,v.hts_tst_pos)),lab[1]]],
-             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"",ipiYr?lk.status:null,tip); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
+             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"",ipiYr?lk.status:null,tip)
+       +kpi(pct(div((v.tx_new_q||0)-(v.pmtct_gc7||0),v.hts_tst_pos)),"Linkage without GC7",`(TX_NEW unique − GC7 ${n(v.pmtct_gc7||0)}) ÷ HTS_TST_POS`,null,
+            "GC7 = pregnant women newly started on ART (PMTCT_ART, weekly DHIS2 form, reported from November 2026). Taking them out of TX_NEW shows linkage of the other positives."); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
    <section class="c3d">${secH("Testing by modality","Tests, positives and share of all positives")}
     ${hbars(modRows.map(r=>({l:r.l,v:r.t,txt:`<b>${n(r.t)}</b> · ${n(r.p)} pos · ${pct(div(r.p,v.hts_tst_pos),0)} of POS`, tip:`${r.l}: ${n(r.t)} tests · ${n(r.p)} positive · yield ${pct(div(r.p,r.t))} · ${pct(div(r.p,v.hts_tst_pos),0)} of all positives`})))}</section>
+   ${opdSection()}
    <section class="c3d">${secH("By month","HTS_TST and HTS_TST_POS · yield = POS ÷ TST · the latest month is provisional")}${testedByMonth("hts_tst","hts_tst_pos","HTS_TST","HTS_TST_POS")}</section>
    ${htsAgeSex()}
    ${lgaMap()}
@@ -1813,15 +1816,18 @@ function htsPage(){
    <section class="c3d">${secH("Testing by state against targets","HTS_TST and HTS_TST_POS achievement, yield and linkage")}${htsStateTable()}</section>
    ${htsPaedTrend()}
    <section class="c3d">${secH("Index testing","Index clients to contacts tested (facility HTS_INDEX + community CSCS index)")}
-    ${flowRow([fs("Index cases",v.index_cases),fs("Offered",v.index_offered),fr("Offer rate",v.index_offered,v.index_cases),fs("Accepted",v.index_accepted),fr("Acceptance",v.index_accepted,v.index_offered),
+    ${flowRow([fs("Index cases",v.index_cases),fs("Offered",v.index_offered),fr("Offer rate",v.index_offered,v.index_cases),
+      fs("Offered, VL unsuppressed",idxUns(v),"Index cases offered less the new positives (HTS_TST_POS): the rest are taken as clients offered index testing because they are VL unsuppressed. An estimate: the forms do not record the reason."),fs("Accepted",v.index_accepted),fr("Acceptance",v.index_accepted,v.index_offered),
       fs("Contacts elicited",v.index_elicited),{l:"Elicitation ratio",v:ratio(v.index_elicited,v.index_accepted),rate:true,tip:"Contacts elicited per index client who accepted (index : contacts)"},fs("Contacts reached",v.index_reached),fr("Reached",v.index_reached,v.index_elicited),
-      fs("Tested (new result)",v.index_tst),fs("Known positive",v.index_known_pos),fs("New positive",v.index_pos),fr("Index yield",v.index_pos,v.index_tst),fr("Share of HTS_POS",v.index_pos,v.hts_tst_pos)])}
+      fs("Tested (new result)",v.index_tst),fs("Known positive",v.index_known_pos),fs("New positive",v.index_pos),fr("Index yield",v.index_pos,v.index_tst),fr("Share of HTS_POS",v.index_pos,v.hts_tst_pos),
+      fs("Contacts on ART",v.index_on_art,"HTS_INDEX + HTS_INDEXMOD_CONTACTS ON ART"),fr("Linkage",v.index_on_art,v.index_pos,"Contacts on ART ÷ new positive contacts")])}
     ${indexBySex()}
     <div class="grid g2"><div>${monthlyPick("index",[{k:"t",l:"Contacts tested",num:"index_tst"},{k:"p",l:"New positives",num:"index_pos"},{k:"y",l:"Index yield",num:"index_pos",den:"index_tst"}])}</div>
     <div>${pyramid("index_pos",{title:"Index new positives by age and sex"})}</div></div>
     ${secH("Index testing breakdown","Every step above, by state, sex or age")}${pivot("index",[C("Index cases",V("index_cases"),0,0,"index_cases"),C("Offered",V("index_offered")),C("Offer rate",RV("index_offered","index_cases"),1),
       C("Accepted",V("index_accepted")),C("Acceptance",RV("index_accepted","index_offered"),1),C("Elicited",V("index_elicited")),C("Elicitation ratio",x=>div(x.index_elicited||0,x.index_accepted),"r"),
-      C("Reached",V("index_reached")),C("Reached %",RV("index_reached","index_elicited"),1),C("Tested",V("index_tst")),C("Known pos",V("index_known_pos")),C("New pos",V("index_pos")),C("Yield",RV("index_pos","index_tst"),1)],["org","sex","age"])}</section>
+      C("Reached",V("index_reached")),C("Reached %",RV("index_reached","index_elicited"),1),C("Tested",V("index_tst")),C("Known pos",V("index_known_pos")),C("New pos",V("index_pos")),C("Yield",RV("index_pos","index_tst"),1),
+      C("On ART",V("index_on_art")),C("Linkage",RV("index_on_art","index_pos"),1),C("Offered, VL unsuppressed",idxUns)],["org","sex","age"])}</section>
    <section class="c3d">${secH("HIV self-testing","Kits distributed to linkage")}
     ${flowRow([fs("Assisted kits",v.hivst_assisted),fs("Unassisted kits",v.hivst_unassisted),fs("Kits distributed",kits),fs("Results reported",v.hivst_results),fr("Results reported",v.hivst_results,kits),
       fs("Reactive",v.hivst_reactive),fr("Reactivity",v.hivst_reactive,v.hivst_results,"",2),fs("Referred for confirmation",v.hivst_referred),fs("Confirmed positive",v.hivst_confirmed),fs("Linked to care",v.hivst_linked),fr("Linkage",v.hivst_linked,v.hivst_confirmed)])}
@@ -1956,9 +1962,33 @@ function htsStateTable(){
 }
 /* ---------- HTS: index testing by sex, HIVST by <15 / 15+ ---------- */
 function indexBySex(){ const s=[["Male",agg({...F,sex:"M"})],["Female",agg({...F,sex:"F"})]];
-  const steps=[["Index cases","index_cases"],["Offered","index_offered"],["Accepted","index_accepted"],["Contacts elicited","index_elicited"],["Contacts tested","index_tst"],["New positive","index_pos"]];
-  return `<div class="tw" style="margin-top:12px"><table><thead><tr><th>Sex</th>${steps.map(([l])=>`<th class="n">${l}</th>`).join("")}<th class="n">Offer rate</th><th class="n">Acceptance</th><th class="n">Elicitation ratio</th><th class="n">Yield</th></tr></thead><tbody>
-   ${s.map(([l,x])=>`<tr><td>${l}</td>${steps.map(([,k])=>`<td class="n">${n(x[k])}</td>`).join("")}<td class="n">${rpct(x.index_offered,x.index_cases)}</td><td class="n">${rpct(x.index_accepted,x.index_offered)}</td><td class="n">${ratio(x.index_elicited,x.index_accepted)}</td><td class="n">${rpct(x.index_pos,x.index_tst)}</td></tr>`).join("")}</tbody></table></div>`; }
+  const steps=[["Index cases","index_cases"],["Offered","index_offered"],["Accepted","index_accepted"],["Contacts elicited","index_elicited"],["Contacts tested","index_tst"],["New positive","index_pos"],["On ART","index_on_art"]];
+  return `<div class="tw" style="margin-top:12px"><table><thead><tr><th>Sex</th><th class="n">Offered, VL unsuppressed</th>${steps.map(([l])=>`<th class="n">${l}</th>`).join("")}<th class="n">Offer rate</th><th class="n">Acceptance</th><th class="n">Elicitation ratio</th><th class="n">Yield</th><th class="n">Linkage</th></tr></thead><tbody>
+   ${s.map(([l,x])=>`<tr><td>${l}</td><td class="n">${n(idxUns(x))}</td>${steps.map(([,k])=>`<td class="n">${n(x[k])}</td>`).join("")}<td class="n">${rpct(x.index_offered,x.index_cases)}</td><td class="n">${rpct(x.index_accepted,x.index_offered)}</td><td class="n">${ratio(x.index_elicited,x.index_accepted)}</td><td class="n">${rpct(x.index_pos,x.index_tst)}</td><td class="n">${rpct(x.index_on_art,x.index_pos)}</td></tr>`).join("")}</tbody></table></div>`; }
+/* index cases offered for being VL unsuppressed, estimated as Sixtus (Ekiti) set it: offered less the new positives */
+const idxUns = x => Math.max(0,(x.index_offered||0)-(x.hts_tst_pos||0));
+/* New OPD attendance (weekly HTS Facility form, CUSTOM tab, from November 2026) against Other PITC testing.
+   Only facility-weeks with an OPD report count, so the testing rate compares the same sites and weeks. */
+let _OPDW=null;
+function opdWeeks(f){ const g=agg(f,{by:"facweek",months:"all"}), ps=dOf(P.start), pe=new Date(Math.min(dOf(P.end),dOf(D.meta.as_of))), all=_OPDW||(_OPDW=agg({},{by:"week",months:"all"})), t={opd:0,t:0,p:0,w:[]};
+  const ws=new Set();
+  for(const [k,x] of g){ const w=k.split("|")[1]; if(!w||w==="null"||!(x.opd_new>0)) continue; const a=dOf(w), e=new Date(a.getTime()+6*DAY); const A=all.get(w)||{}; if(e<ps||a>pe||!(A.opd_new>0&&A.hts_tst_opitc>0)) continue;
+    t.opd+=x.opd_new||0; t.t+=x.hts_tst_opitc||0; t.p+=x.hts_pos_opitc||0; ws.add(w); }
+  t.w=[...ws]; return t; }
+function opdSection(){
+  const v=opdWeeks(F), st=STATES.filter(s=>!F.state||s===F.state), first=[...(_OPDW||(_OPDW=agg({},{by:"week",months:"all"})))].filter(([w,x])=>w&&x.opd_new>0).map(([w])=>w).sort()[0];
+  const head=`<thead><tr><th></th><th class="n">New OPD attendance</th><th class="n">Other PITC tested</th><th class="n">Testing rate</th><th class="n">Other PITC positive</th><th class="n">Yield</th></tr></thead>`;
+  const row=(l,x,c="")=>`<tr${c}><td>${l}</td><td class="n">${n(x.opd)}</td><td class="n">${n(x.t)}</td><td class="n">${rpct(x.t,x.opd)}</td><td class="n">${n(x.p)}</td><td class="n">${rpct(x.p,x.t)}</td></tr>`;
+  const bySex=[["Female","F"],["Male","M"]].map(([l,s])=>row(l,opdWeeks({...F,sex:s}))).join("");
+  const bySt=st.map(s=>row(esc(s),opdWeeks({...F,state:s,lga:"",fac:""}))).join("")+(st.length>1?row("Total",v,' class="total"'):"");
+  return `<section class="c3d">${secH("OPD attendance and Other PITC testing","New OPD attendance (weekly DHIS2 form) · testing rate = Other PITC tested ÷ new OPD attendance")}
+   ${!v.w.length?`<div class="empty">No New OPD Attendance reports for this period. Facilities report it on the weekly HTS (Facility) form from ${first?"the week of "+fmtDate(first):"November 2026"}.</div>`:`
+   <div class="kpis">${kpi(n(v.opd),"New OPD attendance",`${v.w.length} week${v.w.length===1?"":"s"} reported`)}${kpi(n(v.t),"Other PITC tested","same sites and weeks")}${kpi(rpct(v.t,v.opd),"Testing rate","Other PITC ÷ new OPD")}${kpi(rpct(v.p,v.t),"Other PITC yield",`${n(v.p)} positive`)}</div>
+   <div class="grid g2" style="margin-top:12px"><div><h3 class="minih">By sex</h3><div class="tw"><table>${head}<tbody>${bySex}</tbody></table></div></div>
+   <div><h3 class="minih">By state</h3><div class="tw"><table>${head}<tbody>${bySt}</tbody></table></div></div></div>
+   <div style="margin-top:12px">${monthlyPick("opd",[{k:"o",l:"New OPD attendance",num:"opd_new"}],F,"week",12)}</div>`}
+   <p class="drillnote">Other PITC is counted only for the facilities and weeks that reported New OPD Attendance (reported from ${first?"the week of "+fmtDate(first):"November 2026"}), for both columns, so the rate compares like with like. Once a month's monthly reports take over (on the 13th of the next month), Other PITC for that month no longer has weekly values; the attendance stays weekly.</p></section>`;
+}
 function hivstByAge(){ const st=STATES.filter(x=>!F.state||x===F.state).map(s=>[esc(s),{...F,state:s,lga:"",fac:""}]).concat([[esc(F.state?filterText():SPEED),F,1]]);
   const cell=(f,a)=>{ const x=agg({...f,age:a}); return [x.hts_self,x.hivst_reactive,x.hivst_confirmed,x.hivst_linked,div(x.hivst_confirmed,x.hts_tst_pos)]; };
   return `<div class="tw" style="margin-top:12px"><table><thead><tr><th rowspan="2">State</th><th class="n" colspan="2">Kits (HTS_SELF)</th><th class="n" colspan="2">Reactive</th><th class="n" colspan="2">Confirmed positive</th><th class="n" colspan="2">Linked to ART</th><th class="n" colspan="2">Share of HTS_POS</th></tr>

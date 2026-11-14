@@ -24,7 +24,7 @@ from kpi.weeks import fiscal_week
 STATES = ["Delta", "Ekiti", "Osun"]
 NEED = {"hts_tst", "hts_tst_pos", "hts_tst_neg", "tx_new_q", "hivst_assisted", "hivst_unassisted", "hivst_reactive", "hivst_referred",
         "hivst_confirmed", "hivst_linked", "index_cases", "index_offered", "index_accepted", "index_elicited", "index_tst", "index_pos",
-        "index_known_pos", "prep_offered", "prep_accepted", "prep_new", "prep_new_preg", "prep_new_bf", "prep_ct", "prep_ct_preg", "prep_ct_bf",
+        "index_known_pos", "index_on_art", "opd_new", "pmtct_gc7", "prep_offered", "prep_accepted", "prep_new", "prep_new_preg", "prep_new_bf", "prep_ct", "prep_ct_preg", "prep_ct_bf",
         "iit_q", "fit_offered", "fit_accepted", "fit_elicited", "fit_tested", "fit_pos", "fit_known_pos", "fit_linked", "pmtct_stat_den", "pmtct_stat_num", "pmtct_stat_pos", "pmtct_pos_known", "pmtct_pos_new", "pmtct_art", "pmtct_eid", "pmtct_eid_lt2", "pmtct_eid_pos", "hei_neg", "hei_art", "ahd_enrolled_n", "ahd_cd4_n", "ahd_cd4lt200_n", "ahd_who34_n", "ahd_confirmed_n", "ahd_lam_test_n", "ahd_lam_pos_n", "ahd_xpert_test_n", "ahd_xpert_pos_n", "ahd_tb_tx_n", "ahd_crag_test_n", "ahd_crag_pos_n", "ahd_csf_test_n", "ahd_csf_pos_n", "ahd_preempt_n", "tbs_screened", "tbs_presumptive", "tbs_gxp", "tbs_gxp_pos", "tbs_tested", "tbs_diagnosed", "tbs_tx_started", "tbs_cxr", "tbs_cxr_pos"}
 DATED = {"tx_new_q", "iit_q", "tbs_screened", "tbs_presumptive", "tbs_gxp", "tbs_gxp_pos", "tbs_tested", "tbs_diagnosed", "tbs_tx_started", "tbs_cxr", "tbs_cxr_pos"}          # counted by date (EMR line lists), not by reporting period
 # figures as of the line list date (no reporting period): treatment, continuity and biometrics
@@ -124,7 +124,7 @@ class Figures:
             if m in wanted and fac_ok[f] and self.periods[p].get("kind") in ("M", "W", "D"):
                 k = (names[m], p, dims["sex"][s], dims["age"][a], dims["mod"][mo])
                 self.t[k] = self.t.get(k, 0) + v
-                if names[m] in ("hts_tst", "hts_tst_pos", "tx_new_q", "iit_q"):
+                if names[m] in ("hts_tst", "hts_tst_pos", "tx_new_q", "iit_q", "pmtct_gc7"):
                     s_k = (names[m], p, dims["facility"][f][2])
                     self.sites[s_k] = self.sites.get(s_k, 0) + v
         fy = str(self.meta["fy_start"])[:7]
@@ -150,7 +150,7 @@ class Figures:
         return len({f for (m, p, f), v in self.sites.items() if m == "hts_tst" and v and test(self.periods[p])})
 
     def linkage_gaps(self, top: int = 3) -> list[tuple[str, float]]:
-        """Facilities with the most positives not yet on ART in the index week."""
+        """Facilities with the most positives not yet on ART in the index week (TX_NEW less GC7, as the slide)."""
         if self.index_week is None:
             return []
         w = self.periods[self.index_week]
@@ -158,6 +158,8 @@ class Figures:
         for (m, p, f), v in self.sites.items():
             if m == "hts_tst_pos" and p == self.index_week:
                 pos[f] = pos.get(f, 0) + v
+            elif m == "pmtct_gc7" and p == self.index_week:
+                tx[f] = tx.get(f, 0) - v
             elif m == "tx_new_q" and self.periods[p]["kind"] == "D" and str(w["start"]) <= str(self.periods[p]["start"]) <= str(w["end"]):
                 tx[f] = tx.get(f, 0) + v
         gaps = sorted(((f, v - tx.get(f, 0)) for f, v in pos.items() if v - tx.get(f, 0) > 0), key=lambda x: (-x[1], x[0]))
@@ -644,7 +646,8 @@ def build_deck(data: dict, template: Path, state: str, out: Path, eac: dict | No
     stream_p = [w("hts_tst_pos", mod=m) for _, m in STREAMS]
     set_chart(d, "chart2", [s for s, _ in STREAMS], [stream_t, stream_p, list(zip(stream_p, stream_t))])
     pitc = [w("hts_tst", mod="Other PITC", sex=s) for s in ("F", "M")]
-    set_chart(d, "chart3", ["Female", "Male"], [[None, None], pitc, [None, None]])      # OPD attendance is not in the data
+    opd = [w("opd_new", sex=s) for s in ("F", "M")]                                    # New OPD Attendance (weekly form, from Nov 2026)
+    set_chart(d, "chart3", ["Female", "Male"], [[o or None for o in opd], pitc, [round(t / o, 4) if o else None for t, o in zip(pitc, opd)]])
     all_pos = sum(stream_p) or 1
     top = sorted(zip([s for s, _ in STREAMS], stream_p), key=lambda x: -x[1])[:5]
     set_chartex(d, "chartEx1", [s for s, _ in top], [round(v / all_pos, 4) for _, v in top])
@@ -654,20 +657,23 @@ def build_deck(data: dict, template: Path, state: str, out: Path, eac: dict | No
 
     # index testing, index week
     idx = [("HTS POS", "hts_tst_pos"), ("Index Cases", "index_cases"), ("Index cases offered", "index_offered"), ("Index cases that accepted", "index_accepted"),
-           ("Index Contacts Elicited", "index_elicited"), ("Index Contacts Tested", "index_tst"), ("Known Positive", "index_known_pos"), ("New Positives", "index_pos")]
+           ("Index Contacts Elicited", "index_elicited"), ("Index Contacts Tested", "index_tst"), ("Known Positive", "index_known_pos"), ("New Positives", "index_pos"),
+           ("Index Contacts on ART", "index_on_art")]
     sex_rows = {s: {m: w(m, sex=s) for _, m in idx} for s in ("F", "M")}
     def cascade(s):
         r = sex_rows[s]
-        return [None, r["hts_tst_pos"], r["index_cases"], r["index_offered"], r["index_accepted"], r["index_elicited"], r["index_tst"],
-                r["index_tst"] - r["index_pos"], r["index_known_pos"], r["index_pos"], None]      # unsuppressed and linked are not on these forms
+        # Unsuppressed = index cases offered less the new positives (the rest are offered as VL unsuppressed);
+        # Linked = index contacts on ART (HTS_INDEX / HTS_INDEXMOD_CONTACTS ON ART)
+        return [max(r["index_offered"] - r["hts_tst_pos"], 0), r["hts_tst_pos"], r["index_cases"], r["index_offered"], r["index_accepted"], r["index_elicited"], r["index_tst"],
+                r["index_tst"] - r["index_pos"], r["index_known_pos"], r["index_pos"], r["index_on_art"]]
     set_chart(d, "chart4", ["Unsuppressed", "HTS POS", "Index Cases", "Index cases offered", "Index cases that accepted", "Index Contacts Elicited",
                             "Index Contacts Tested", "Index contacts tested Negatives", "Known Positive", "New Positives", "Linked"], [cascade("F"), cascade("M")])
     i_cases, i_off, i_acc, i_eli, i_tst, i_pos = (w(m) for m in ("index_cases", "index_offered", "index_accepted", "index_elicited", "index_tst", "index_pos"))
     share_ = lambda a, b: round(a / b, 4) if b else 0
-    # six rows as in the template, so its ratio label stays on its row; linkage of contacts is not on these forms
+    # six rows as in the template, so its ratio label stays on its row; linkage = contacts on ART ÷ new positives
     ratio = f"1:{i_eli / i_acc:.1f}" if i_acc else "—"         # shown in the row's name: the template's floating label does not stay on its row
     set_chartex(d, "chartEx23", ["Offer Rate", "Acceptance Rate", f"Elicitation Ratio {ratio}", "Testing rate", "Yield", "Linkage"],
-                [share_(i_off, i_cases), share_(i_acc, i_off), share_(i_eli, i_acc), share_(i_tst, i_eli), share_(i_pos, i_tst), None])
+                [share_(i_off, i_cases), share_(i_acc, i_off), share_(i_eli, i_acc), share_(i_tst, i_eli), share_(i_pos, i_tst), share_(w("index_on_art"), i_pos)])
     d.put("ppt/charts/chart4.xml", replace_texts(d.text("ppt/charts/chart4.xml"), [("Week 1", f"Week {week_no}")]))
     kids = {m: w(m, ages=UNDER15) for m in ("index_elicited", "index_tst", "index_pos")}
     s7 = replace_texts(d.slide(7), [("100%", pct0(i_off, i_cases)), ("99%", pct0(i_acc, i_off)), ("1:1", ""),
@@ -679,8 +685,9 @@ def build_deck(data: dict, template: Path, state: str, out: Path, eac: dict | No
     d.put("ppt/slides/_rels/slide7.xml.rels", r7)
 
     # linkage gap: the reasons, GC7 and the tracker are for the team
-    wk_pos, wk_tx = w("hts_tst_pos"), w("tx_new_q")
-    s12 = replace_texts(d.slide(12), [(BLANK, num(wk_pos)), (BLANK, num(wk_tx)), (BLANK, BLANK), (BLANK, num(max(wk_pos - wk_tx, 0)))])
+    # linkage without GC7 (pregnant women new on ART, PMTCT_ART_GC7): (TX_NEW - GC7) ÷ HTS_TST_POS
+    wk_pos, wk_tx, wk_gc7 = w("hts_tst_pos"), w("tx_new_q"), w("pmtct_gc7")
+    s12 = replace_texts(d.slide(12), [(BLANK, num(wk_pos)), (BLANK, num(wk_tx)), (BLANK, num(wk_gc7)), (BLANK, num(max(wk_pos - (wk_tx - wk_gc7), 0)))])
     gaps = f.linkage_gaps()
     rows = [[name, num(gap), ""] for name, gap in gaps] + [["—", "—", ""]] * (3 - len(gaps))
     d.set_slide(12, fill_tables(s12, [rows], header_rows=1))

@@ -26,6 +26,26 @@ WEEK_RE = re.compile(r"^(\d{4})W(\d{1,2})$")
 MONTH_RE = re.compile(r"^(\d{4})(\d{2})$")
 
 KEYS = ["table", "facility_key", "month"]
+
+# Data elements only the weekly instance has (added Nov 2026: New OPD Attendance, PHRH subset of Mobile,
+# PMTCT_ART GC7). They sit in forms whose monthly report replaces the weeks, so they move to a table of
+# their own ("<table>_WK") and are kept even after the month's monthly report lands. Only while the
+# monthly instance does not carry them: once it does, the normal rule applies.
+WEEKLY_ONLY = ["New OPD Attendance", "HTS_TST_MOBILE-Persons at higher risk of HIV(PHRH)",
+               "HTS_TST_POS_MOBILE-Persons at higher risk of HIV(PHRH)", "PMTCT_ART_GC7"]
+
+
+def split_weekly_only(weekly: pd.DataFrame, monthly: pd.DataFrame) -> pd.DataFrame:
+    if not len(weekly) or "dataname" not in weekly:
+        return weekly
+    have = set(monthly["dataname"].astype(str).str.strip()) if len(monthly) else set()
+    names = {n for n in WEEKLY_ONLY if n not in have}
+    hit = weekly["dataname"].astype(str).str.strip().isin(names)
+    if not hit.any():
+        return weekly
+    w = weekly.copy()
+    w.loc[hit, "table"] = w.loc[hit, "table"].astype(str) + "_WK"
+    return w
 DIMS = ["table", "month", "facility_key", "state", "lga", "facility", "dataname", "disagg"]
 
 
@@ -83,7 +103,7 @@ def merge_weekly_monthly(weekly: pd.DataFrame, monthly: pd.DataFrame,
         source          'monthly' | 'weekly'
         weeks           comma list of weeks used (weekly rows only)
     """
-    w = weekly.copy()
+    w = split_weekly_only(weekly, monthly).copy()
     m = monthly.copy()
     w["month"] = w["period"].map(lambda p: week_to_month(p, rule))
     m["month"] = m["period"].map(month_of)

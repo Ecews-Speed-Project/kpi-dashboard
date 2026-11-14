@@ -158,6 +158,14 @@ DHIS_MEASURES = {
     "index_elicited": [Term("INDEX", f"HTS_{x}_CONTACTS ELICITED") for x in ("INDEX", "INDEXMOD")],
     "index_reached":  [Term("INDEX", f"HTS_{x}_CONTACTS REACHED") for x in ("INDEX", "INDEXMOD")],
     "index_known_pos": [Term("INDEX", e, "Index", r"known positive") for e in _INDEX_RESULT],
+    "index_on_art":   [Term("INDEX", f"HTS_{x}_CONTACTS ON ART") for x in ("INDEX", "INDEXMOD")],
+    # weekly-instance elements added Nov 2026 (kept in "<table>_WK" while the monthly instance lacks them)
+    "opd_new":        [Term(t, "New OPD Attendance") for t in ("HTS_TST", "HTS_TST_WK")],
+    "hts_tst_opitc":  [Term("HTS_TST", "HTS_TST_OTHER PITC", "Other PITC")],
+    "hts_pos_opitc":  [Term("HTS_TST", "HTS_TST_POS_OTHER PITC", "Other PITC")],
+    "hts_tst_phrh":   [Term(t, "HTS_TST_MOBILE-Persons at higher risk of HIV(PHRH)", "Mobile") for t in ("HTS_TST", "HTS_TST_WK")],
+    "hts_pos_phrh":   [Term(t, "HTS_TST_POS_MOBILE-Persons at higher risk of HIV(PHRH)", "Mobile") for t in ("HTS_TST", "HTS_TST_WK")],
+    "pmtct_gc7":      [Term(t, "PMTCT_ART_GC7") for t in ("PMTCT", "PMTCT_WK")],
     # family index testing (FIT): HIV-positive adults offered / accepting index testing, their children
     # enumerated, tested and linked (Monthly Summary Forms, INDEX_MSF; facility or community)
     "fit_offered":   _fit("HIV Positive clients offered index testing (Newly identified positives)")
@@ -423,7 +431,7 @@ def _dhis_facts(merged: pd.DataFrame) -> pd.DataFrame:
     f["sex"] = [p[0] for p in parsed]
     f["age"] = [p[1] for p in parsed]
     # PMTCT mothers carry no sex in their disaggregation; infants (EID/HEI) do
-    mothers = f["table"].isin(["PMTCT", "PMTCT_COMM"]) & ~f["_dn"].str.contains("EID|HEI") & (f["sex"] == "U")
+    mothers = f["table"].isin(["PMTCT", "PMTCT_COMM", "PMTCT_WK"]) & ~f["_dn"].str.contains("EID|HEI") & (f["sex"] == "U")
     f.loc[mothers, "sex"] = "F"
     return f
 
