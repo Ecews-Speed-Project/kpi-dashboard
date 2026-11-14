@@ -20,7 +20,7 @@ def test_options_offer_weeks_then_months():
     o = live.options(dt.date(2026, 11, 6))
     keys = [p["key"] for p in o["periods"]]
     assert keys[0] == "2026W45" and "2026W9" not in keys and keys[live.WEEKS] == "202611" and keys[-1] == "202512"
-    assert o["periods"][0]["label"] == "Week 45 - 2026-11-02 - 2026-11-08" and o["periods"][live.WEEKS + 1]["label"] == "October 2026"
+    assert o["periods"][0]["label"] == "Week 6 (DHIS2 W45) - 2026-11-02 - 2026-11-08" and o["periods"][live.WEEKS + 1]["label"] == "October 2026"
     assert live.valid_period("202610") and not live.valid_period("1' or '1")
 
 

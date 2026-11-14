@@ -25,9 +25,9 @@ def _data():
 def test_monthly_then_weeks_after_it_for_one_state():
     f = T.Figures(_data(), "Ekiti")
     assert f.fy("hts_tst") == 1230                     # October monthly + the week after it; Osun left out
-    assert f.week("hts_tst") == 230 and f.week("tx_new_q") == 5 and f.week_label() == "Week 45 - 2026-11-02 - 2026-11-08"
+    assert f.week("hts_tst") == 230 and f.week("tx_new_q") == 5 and f.week_label() == "Week 6 - 2026-11-02 - 2026-11-08"
     assert f.week("hts_tst", not_mods={"ANC1"}) == 200
-    assert [f.label(i) for i in f.points] == ["Oct", "W45"]
+    assert [f.label(i) for i in f.points] == ["Oct", "W6"]
 
 
 def test_deck_holds_real_figures_and_no_sample_numbers(tmp_path):

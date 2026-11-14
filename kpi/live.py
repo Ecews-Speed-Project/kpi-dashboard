@@ -14,6 +14,8 @@ import statistics
 import threading
 import time
 
+from kpi.weeks import fiscal_week
+
 CACHE_SECONDS = 300
 TIMEOUT = 90
 META_SECONDS = 24 * 3600
@@ -80,10 +82,10 @@ def previous(p: str, n: int = PRIOR) -> list[str]:
 
 
 def period_label(p: str) -> str:
-    """As the DHIS2 data entry screen writes it: Week 45 - 2026-11-02 - 2026-11-08, or October 2026."""
+    """Week 6 (DHIS2 W45) - 2026-11-02 - 2026-11-08, or October 2026. Week 1 is the week of 1 October."""
     d = _period_date(p)
     if "W" in p:
-        return f"Week {d.isocalendar()[1]} - {d} - {d + dt.timedelta(days=6)}"
+        return f"Week {fiscal_week(d)} (DHIS2 W{d.isocalendar()[1]}) - {d} - {d + dt.timedelta(days=6)}"
     return f"{d:%B %Y}"
 
 

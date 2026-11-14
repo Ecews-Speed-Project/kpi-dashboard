@@ -19,6 +19,7 @@ from xml.sax.saxutils import escape
 import openpyxl
 
 from kpi.hts_report import Deck, _cells, num, rate, set_cell
+from kpi.weeks import fiscal_week
 
 STATES = ["Delta", "Ekiti", "Osun"]
 NEED = {"hts_tst", "hts_tst_pos", "hts_tst_neg", "tx_new_q", "hivst_assisted", "hivst_unassisted", "hivst_reactive", "hivst_referred",
@@ -202,13 +203,13 @@ class Figures:
         p = self.periods[i]
         if p["kind"] == "M":
             return dt.date.fromisoformat(str(p["start"])).strftime("%b")
-        return "W" + p["key"].split("W")[1]
+        return f"W{fiscal_week(p['start'])}"          # fiscal week: the week of 1 October is W1
 
     def week_label(self) -> str:
         if self.index_week is None:
             return "no weekly reports yet"
         p = self.periods[self.index_week]
-        return f"Week {p['key'].split('W')[1]} - {p['start']} - {p['end']}"
+        return f"Week {fiscal_week(p['start'])} - {p['start']} - {p['end']}"
 
 
 def pct0(a, b) -> str:
