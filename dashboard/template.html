@@ -2596,9 +2596,11 @@ function pmtctPage(){
    <section class="c3d">${secH("By month","PMTCT_STAT_N and PMTCT_STAT_POS · yield = POS ÷ STAT_N · the latest month is provisional")}${pmtctByMonth()}</section>
    <div class="grid g2"><section class="c3d">${secH("Facility and community")}<div class="tw"><table><thead><tr><th>Setting</th><th class="n">STAT_D</th><th class="n">STAT_N</th><th class="n">Uptake</th><th class="n">POS</th><th class="n">ART</th><th class="n">Linkage</th></tr></thead><tbody>
      ${[["Facility (PMTCT)",fac],["Community PMTCT",com]].filter(([,x])=>x.d).map(([k,x])=>`<tr><td>${k}</td><td class="n">${n(x.d)}</td><td class="n">${n(x.nn)}</td><td class="n">${rpct(x.nn,x.d)}</td><td class="n">${n(x.p)}</td><td class="n">${n(x.a)}</td><td class="n">${rpct(x.a,x.p)}</td></tr>`).join("")}
-     </tbody></table></div><p class="drillnote">Headline figures = facility + Community PMTCT, as in the DAX and the deck. Linkage above 100% means women identified positive elsewhere started ART here.</p></section>
+     ${v.pmtct_gc7?`<tr><td>GC7 (CBOs, community)</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">${n(v.pmtct_gc7)}</td><td class="n">—</td></tr>`:""}
+     </tbody></table></div><p class="drillnote">Headline figures = facility + Community PMTCT, as in the DAX and the deck. Linkage above 100% means women identified positive elsewhere started ART here${v.pmtct_gc7?`; GC7 women (Global Fund Grant Cycle 7, found by NEPHAWN and other CBOs) are one such group: ${n(v.pmtct_gc7)} new on ART, tested outside our sites, so they have no POS here (see the GC7 panel below)`:""}.</p></section>
    <section class="c3d">${secH("Yield by age band","PMTCT_STAT_N and PMTCT_STAT_POS · yield = POS ÷ STAT_N")}${groupBars(bands,[{l:"PMTCT_STAT_N",c:"var(--s1)",v:bands.map(b=>ga.get(b).pmtct_stat_num)},{l:"PMTCT_STAT_POS",c:"var(--s2)",v:bands.map(b=>ga.get(b).pmtct_stat_pos)}],
      {sep:true, lines:[{l:"Yield",c:"var(--bar-critical)",v:bands.map(b=>div(ga.get(b).pmtct_stat_pos||0,ga.get(b).pmtct_stat_num))}]})}</section></div>
+   ${gc7Section()}
    ${fitSection()}
    ${indexU15Section()}
    ${pmtctTargets()}
@@ -2624,6 +2626,28 @@ function pmtctPage(){
 }
 
 /* ---------- TB: prevention, TB/HIV, TX_TB flows ---------- */
+/* GC7 = Global Fund Grant Cycle 7: NEPHAWN and other CBOs finding HIV-positive pregnant women in the community.
+   They start ART at our facilities (TX_NEW, and the weekly PMTCT_ART "New on ART (GC7)" element) but were tested in the
+   community, so they are not in our HTS_TST_POS: they are the excess of TX_NEW over the positives. */
+function gc7Section(){
+  const st=STATES.filter(s=>!F.state||s===F.state).map(s=>({l:s, x:agg({...F,state:s,lga:"",fac:""})})), v=agg();
+  if(st.length>1) st.push({l:F.state?filterText():SPEED, x:v, tot:1});
+  const g=x=>x.pmtct_gc7||0, tx=x=>x.tx_new_q||0, pos=x=>x.hts_tst_pos||0;
+  const mx=Math.max(1,...st.map(r=>Math.max(pos(r.x),tx(r.x))));
+  const bar=(lab,parts,tip)=>`<div class="hb" data-tip="${esc(tip)}"><span class="lab">${lab}</span><span class="track">${(()=>{ let left=0; return parts.map(([v,c])=>{ const w=Math.min(100,v/mx*100), h=`<span class="fill" style="left:${left}%;width:${w}%;background:${c}"></span>`; left+=w; return h; }).join(""); })()}</span>`;
+  const rows=st.map(r=>{ const o=tx(r.x)-g(r.x);
+    return `<div style="margin:${r.tot?"14px 0 0":"8px 0 0"}"><div class="minih" style="margin:0 0 4px">${esc(r.l)}</div><div class="hbars">
+      ${bar("HTS_TST_POS",[[pos(r.x),"var(--s3)"]],`${r.l}: ${n(pos(r.x))} newly identified positive`)}<span class="val"><b>${n(pos(r.x))}</b></span></div>
+      ${bar("TX_NEW",[[o,"var(--s1)"],[g(r.x),"var(--s2)"]],`${r.l}: TX_NEW ${n(tx(r.x))} = ${n(o)} others + ${n(g(r.x))} GC7`)}<span class="val"><b>${n(tx(r.x))}</b>${g(r.x)?` · ${n(g(r.x))} GC7`:""}</span></div></div></div>`; }).join("");
+  const tab=`<div class="tw" style="margin-top:12px"><table><thead><tr><th></th><th class="n">HTS_TST_POS</th><th class="n">TX_NEW</th><th class="n">of which GC7</th><th class="n">GC7 share of TX_NEW</th><th class="n">Linkage</th><th class="n">Linkage without GC7</th></tr></thead><tbody>
+    ${st.map(r=>`<tr${r.tot?' class="total"':""}><td>${esc(r.l)}</td><td class="n">${n(pos(r.x))}</td><td class="n">${n(tx(r.x))}</td><td class="n">${n(g(r.x))}</td><td class="n">${rpct(g(r.x),tx(r.x))}</td><td class="n">${rpct(tx(r.x),pos(r.x))}</td><td class="n">${rpct(tx(r.x)-g(r.x),pos(r.x))}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<section class="c3d">${secH("GC7 contribution to new on ART","Global Fund Grant Cycle 7 · pregnant women found by NEPHAWN and other CBOs in the community and started on ART at our sites")}
+   <div class="kpis">${kpi(n(g(v)),"GC7 new on ART","PMTCT_ART · New on ART (GC7)")}${kpi(rpct(g(v),tx(v)),"Share of TX_NEW",`${n(g(v))} of ${n(tx(v))}`)}${kpi(rpct(tx(v),pos(v)),"Linkage","TX_NEW ÷ HTS_TST_POS")}${kpi(rpct(tx(v)-g(v),pos(v)),"Linkage without GC7","(TX_NEW − GC7) ÷ HTS_TST_POS")}</div>
+   <div style="margin-top:8px">${rows}</div>
+   <div class="legend" style="margin-top:8px"><span><span class="sw" style="background:var(--s3)"></span>HTS_TST_POS (our testing)</span><span><span class="sw" style="background:var(--s1)"></span>TX_NEW, others</span><span><span class="sw" style="background:var(--s2)"></span>TX_NEW, GC7</span></div>
+   ${tab}
+   <p class="drillnote">GC7 women were tested in the community by the CBOs, so they are not in our HTS_TST_POS; when they start ART at our facilities they add to TX_NEW. That is part of why linkage can pass 100%. GC7 is reported on the weekly PMTCT form from November 2026 (the element is not on the monthly form yet), so earlier periods show none. TX_NEW = unique, from the line list.</p></section>`;
+}
 function pairBars(m1,l1,m2,l2){ const st=STATES.filter(s=>!F.state||s===F.state).map(s=>({s,x:agg({...F,state:s,lga:"",fac:""})}));
   const mx=Math.max(...st.flatMap(r=>[r.x[m1]||0,r.x[m2]||0]),1);
   return `<div class="legend"><span><span class="sw" style="background:var(--s1)"></span>${esc(l1)}</span><span><span class="sw" style="background:var(--s2)"></span>${esc(l2)}</span></div>
