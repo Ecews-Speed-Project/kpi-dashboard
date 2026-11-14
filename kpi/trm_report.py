@@ -662,9 +662,9 @@ def build_deck(data: dict, template: Path, state: str, out: Path, eac: dict | No
     sex_rows = {s: {m: w(m, sex=s) for _, m in idx} for s in ("F", "M")}
     def cascade(s):
         r = sex_rows[s]
-        # Unsuppressed = all index cases less the new positives (the rest are offered as VL unsuppressed);
+        # Unsuppressed = index cases offered less the new positives (the rest are offered as VL unsuppressed);
         # Linked = index contacts on ART (HTS_INDEX / HTS_INDEXMOD_CONTACTS ON ART)
-        return [max(r["index_cases"] - r["hts_tst_pos"], 0), r["hts_tst_pos"], r["index_cases"], r["index_offered"], r["index_accepted"], r["index_elicited"], r["index_tst"],
+        return [max(r["index_offered"] - r["hts_tst_pos"], 0), r["hts_tst_pos"], r["index_cases"], r["index_offered"], r["index_accepted"], r["index_elicited"], r["index_tst"],
                 r["index_tst"] - r["index_pos"], r["index_known_pos"], r["index_pos"], r["index_on_art"]]
     set_chart(d, "chart4", ["Unsuppressed", "HTS POS", "Index Cases", "Index cases offered", "Index cases that accepted", "Index Contacts Elicited",
                             "Index Contacts Tested", "Index contacts tested Negatives", "Known Positive", "New Positives", "Linked"], [cascade("F"), cascade("M")])
