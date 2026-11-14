@@ -1817,7 +1817,7 @@ function htsPage(){
    ${htsPaedTrend()}
    <section class="c3d">${secH("Index testing","Index clients to contacts tested (facility HTS_INDEX + community CSCS index)")}
     ${flowRow([fs("Index cases",v.index_cases),fs("Offered",v.index_offered),fr("Offer rate",v.index_offered,v.index_cases),
-      fs("Offered, VL unsuppressed",idxUns(v),"Index cases offered less the new positives (HTS_TST_POS): the rest are taken as clients offered index testing because they are VL unsuppressed. An estimate: the forms do not record the reason."),fs("Accepted",v.index_accepted),fr("Acceptance",v.index_accepted,v.index_offered),
+      fs("Offered, VL unsuppressed",idxUns(v),"All index cases less the new positives (HTS_TST_POS): the rest are taken as clients offered index testing because they are VL unsuppressed. An estimate: the forms do not record the reason."),fs("Accepted",v.index_accepted),fr("Acceptance",v.index_accepted,v.index_offered),
       fs("Contacts elicited",v.index_elicited),{l:"Elicitation ratio",v:ratio(v.index_elicited,v.index_accepted),rate:true,tip:"Contacts elicited per index client who accepted (index : contacts)"},fs("Contacts reached",v.index_reached),fr("Reached",v.index_reached,v.index_elicited),
       fs("Tested (new result)",v.index_tst),fs("Known positive",v.index_known_pos),fs("New positive",v.index_pos),fr("Index yield",v.index_pos,v.index_tst),fr("Share of HTS_POS",v.index_pos,v.hts_tst_pos),
       fs("Contacts on ART",v.index_on_art,"HTS_INDEX + HTS_INDEXMOD_CONTACTS ON ART"),fr("Linkage",v.index_on_art,v.index_pos,"Contacts on ART ÷ new positive contacts")])}
@@ -1965,8 +1965,8 @@ function indexBySex(){ const s=[["Male",agg({...F,sex:"M"})],["Female",agg({...F
   const steps=[["Index cases","index_cases"],["Offered","index_offered"],["Accepted","index_accepted"],["Contacts elicited","index_elicited"],["Contacts tested","index_tst"],["New positive","index_pos"],["On ART","index_on_art"]];
   return `<div class="tw" style="margin-top:12px"><table><thead><tr><th>Sex</th><th class="n">Offered, VL unsuppressed</th>${steps.map(([l])=>`<th class="n">${l}</th>`).join("")}<th class="n">Offer rate</th><th class="n">Acceptance</th><th class="n">Elicitation ratio</th><th class="n">Yield</th><th class="n">Linkage</th></tr></thead><tbody>
    ${s.map(([l,x])=>`<tr><td>${l}</td><td class="n">${n(idxUns(x))}</td>${steps.map(([,k])=>`<td class="n">${n(x[k])}</td>`).join("")}<td class="n">${rpct(x.index_offered,x.index_cases)}</td><td class="n">${rpct(x.index_accepted,x.index_offered)}</td><td class="n">${ratio(x.index_elicited,x.index_accepted)}</td><td class="n">${rpct(x.index_pos,x.index_tst)}</td><td class="n">${rpct(x.index_on_art,x.index_pos)}</td></tr>`).join("")}</tbody></table></div>`; }
-/* index cases offered for being VL unsuppressed, estimated as Sixtus (Ekiti) set it: offered less the new positives */
-const idxUns = x => Math.max(0,(x.index_offered||0)-(x.hts_tst_pos||0));
+/* index cases offered for being VL unsuppressed, as Sixtus (Ekiti) set it: all index cases less the new positives */
+const idxUns = x => Math.max(0,(x.index_cases||0)-(x.hts_tst_pos||0));
 /* New OPD attendance (weekly HTS Facility form, CUSTOM tab, from November 2026) against Other PITC testing.
    Only facility-weeks with an OPD report count, so the testing rate compares the same sites and weeks. */
 let _OPDW=null;
