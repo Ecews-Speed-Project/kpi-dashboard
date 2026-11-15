@@ -683,6 +683,11 @@ function filterText(){
   const p=[F.fac||F.lga||F.state||SPEED]; if(F.sex) p.push(SEXL[F.sex]); if(F.age) p.push(["<15","15+","<20","20+"].includes(F.age)?F.age:F.age+" yrs");
   return p.join(" · ");
 }
+// which report each month of the quarter is read from: "Oct monthly · Nov weekly (2 weeks, until its monthly reports)"
+function srcByMonth(){ const w=[...(WIN||(WIN=windowSet()))].map(i=>PM[i]), mon=[...new Set(w.filter(p=>p.kind==="M"||p.kind==="W").map(p=>p.month))].sort();
+  if(!mon.length) return "no DHIS2 reports yet";
+  return "DHIS2: "+mon.map(m=>{ const k=w.filter(p=>p.month===m&&p.kind==="W").length, lab=new Date(m+"-01T00:00:00").toLocaleDateString("en-GB",{month:"short"});
+    return w.some(p=>p.month===m&&p.kind==="M") ? `${lab} monthly reports` : `${lab} weekly reports (${k} week${k===1?"":"s"}, until its monthly reports are in)`; }).join(" · "); }
 function context(){
   const m = D.meta, total = Math.round((dOf(P.end)-dOf(P.start))/DAY+1), el = covered(m.dhis_through), day = Math.round(el*total);
   const lastWk = (D.dataflow.at(-1)||{}).weeks?.split(",").at(-1) || "";
@@ -691,7 +696,7 @@ function context(){
   return `${m.demo?`<div class="demo"><b>Demo data.</b> Programme figures on this page are synthetic, generated to test the pipeline; facility names are invented. The FY27 targets and the Naomi PLHIV estimates are real.</div>`:""}
   <div class="ctx"><span><b>${esc(P.label)}</b> · ${P.mode==="range"?`${total} days`:`day ${day} of ${total}`}</span>
   <span class="qbar" data-tip="Share of the selected period covered by DHIS2 data"><i style="width:${(el*100).toFixed(1)}%"></i></span>
-  <span data-tip="${P.mode==="quarter"?"Quarters use the monthly reports only; weekly reports count only for a month that has no monthly reports yet":"DHIS2 reports are counted by reporting period: a week when its Thursday is in range, a month when at least half of it is"}">${nM} monthly + ${nW} weekly DHIS2 periods${P.mode==="quarter"?" · monthly reports only":""}</span>
+  <span data-tip="${P.mode==="quarter"?"Quarters use the monthly reports only; weekly reports count only for a month that has no monthly reports yet":"DHIS2 reports are counted by reporting period: a week when its Thursday is in range, a month when at least half of it is"}">${P.mode==="quarter"?srcByMonth():`${nM} monthly + ${nW} weekly DHIS2 periods`}</span>
   <span>DHIS2 through <b>${fmtDate(m.dhis_through)}</b>${lastWk?` (${lastWk})`:""}</span><span${(m.linelist_as_of||m.as_of)<m.as_of?` data-tip="The central-repository linelist was last generated on this date; TX_CURR, VL and IIT are measured as of it"`:""}>${NDRT()?"NDR line list":"Linelist"} as of <b>${fmtDate(m.linelist_as_of||m.as_of)}</b>${(dOf(m.as_of)-dOf(m.linelist_as_of||m.as_of))/DAY>7?` <span class="pill openm">${Math.round((dOf(m.as_of)-dOf(m.linelist_as_of))/DAY)} days old</span>`:""}</span>
   ${drilled?`<span class="drillnote">Count targets apply at programme and state level; rate targets apply everywhere.</span>`:""}
   ${m.linelist_note?`<span class="pill openm" data-tip="${esc(m.linelist_note)}">⚠ ${esc(m.linelist_note)}</span>`:""}</div>
