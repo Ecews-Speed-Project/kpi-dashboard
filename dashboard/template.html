@@ -186,7 +186,7 @@ select.orgsel.on{border-color:var(--s1);color:var(--ink);font-weight:600}
 
 /* KPI strip */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;align-items:stretch}
-.kpi{padding:12px 14px;display:flex;flex-direction:column;justify-content:flex-start;min-height:104px}
+.kpi{padding:12px 14px;display:flex;flex-direction:column;justify-content:flex-start;min-height:104px;min-width:0;overflow-wrap:anywhere}
 .kpi .k-s{margin-top:auto !important;padding-top:4px}
 .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:4px;margin:6px 0 12px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.18))}
 .flow .st{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:3px;min-height:76px;padding:10px 20px 10px 24px;
@@ -2814,7 +2814,7 @@ const BIOX = [["pbs_adjudication","Adjudication waiting","var(--bar-critical)"],
 const bx = (x,k) => k==="pbs_nocap" ? (x.pbs_active||0)-(x.pbs_baseline||0) : k==="bio_u15back" ? (x.tx_curr||0)-BIOX.reduce((a,[q])=>a-bx(x,q),x.pbs_active||0) : (x[k]||0);
 function bioCards(v){ const g=k=>bx(v,k), act=g("pbs_active"), uq=g("tx_curr");
   return `${kpi(n(act),"All on treatment (NDR)","active clients")}${kpi(n(uq),"TX_CURR_Unique","counted by the NDR",rateStatus(div(uq,act),.95))}${kpi(pct(div(uq,act)),"Unique share","ref. 95%",rateStatus(div(uq,act),.95))}
-   ${kpi(n(act-uq),"Gap to close","on treatment but not counted")}${kpi(n(g("pbs_adjudication")),"Adjudication waiting","ADJUDICATIONWAITING · cause not yet known")}${kpi(n(g("pbs_nocap")),"Yet to capture","no baseline print · capture needed")}
+   ${kpi(n(act-uq),"Gap to close","on treatment but not counted")}${kpi(n(g("pbs_adjudication")),"Adjudication waiting","NDR status: adjudication waiting · cause not yet known")}${kpi(n(g("pbs_nocap")),"Yet to capture","no baseline print · capture needed")}
    ${kpi(n(g("pbs_invalid")),"Invalid prints","NO_VALID_DATA · recapture")}${kpi(n(g("pbs_duplicate")),"Duplicate","duplicate type · ABIS match")}${kpi(n(g("bio_u15back")),"Under 15, counted anyway","in the groups above, but every under-15 counts")}`; }
 function bioWaterfall(v){ const g=k=>bx(v,k);
   return waterfallFrom([["All on treatment (NDR)",g("pbs_active"),"total"],...BIOX.map(([k,l])=>[l,-g(k)]),["Under 15 added back",g("bio_u15back")],["TX_CURR Unique",g("tx_curr"),"total"]],
