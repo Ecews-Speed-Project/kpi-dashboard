@@ -213,6 +213,28 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .track .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
 .hb .val{text-align:right;font-variant-numeric:lining-nums tabular-nums;color:var(--ink-2)}
 .hb .val b{color:var(--ink)}
+#mbody{display:contents}
+.msearch{display:grid;gap:8px;margin:12px 0;min-width:0}
+.msearch label{display:flex;gap:8px;align-items:center;font-family:var(--caps);font-size:12px;letter-spacing:.9px;text-transform:uppercase;color:var(--ink-2)}
+.msearch input{font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--edge);border-radius:6px;background:var(--card);color:var(--ink);width:100%;box-sizing:border-box}
+.msearch input:focus{outline:2px solid var(--gold);outline-offset:1px}
+.mjump{display:flex;flex-wrap:wrap;gap:6px}
+.mjump a{font-size:13px;padding:3px 9px;border:1px solid var(--rule-soft);border-radius:999px;color:var(--ink-2);text-decoration:none}
+.mjump a:hover{border-color:var(--gold);color:var(--ink)}
+.opdst{display:grid;gap:10px}
+.opdst .row{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:15px}
+.opdst .bars{display:grid;gap:3px}
+.opdst .bars span{display:block;height:10px;border-radius:2px}
+.opdst .num{text-align:right;font-variant-numeric:lining-nums tabular-nums;color:var(--ink-2);white-space:nowrap}
+.opdst .num b{color:var(--ink);font-size:17px}
+.gc7r{display:grid;grid-template-columns:110px minmax(0,1fr) minmax(150px,max-content);gap:10px;align-items:center;font-size:15px;padding:6px 0;border-bottom:1px solid var(--rule-soft)}
+.gc7r.tot{border-bottom:0;border-top:2px solid var(--rule);margin-top:4px;padding-top:10px;font-weight:600}
+.gc7r .trk{position:relative;height:16px;background:var(--track);border-radius:2px;box-shadow:inset 0 1px 2px var(--bevel-lo)}
+.gc7r .trk i{position:absolute;top:0;bottom:0;border-radius:2px}
+.gc7r .trk em{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--ink)}
+.gc7r .num{text-align:right;font-variant-numeric:lining-nums tabular-nums;color:var(--ink-2);white-space:nowrap}
+.gc7r .num b{color:var(--ink)}
+@media (max-width:640px){.opdst .row,.gc7r{grid-template-columns:84px minmax(0,1fr)}.opdst .num,.gc7r .num{grid-column:2;text-align:left;margin-top:-4px;font-size:13px}}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--ink-2);align-items:center}
 .legend span{display:inline-flex;gap:6px;align-items:center}
 .sw{width:12px;height:12px;border-radius:2px;display:inline-block}
@@ -1970,24 +1992,38 @@ const idxUns = x => Math.max(0,(x.index_offered||0)-(x.hts_tst_pos||0));
 /* New OPD attendance (weekly HTS Facility form, CUSTOM tab, from November 2026) against Other PITC testing.
    Only facility-weeks with an OPD report count, so the testing rate compares the same sites and weeks. */
 let _OPDW=null;
-function opdWeeks(f){ const g=agg(f,{by:"facweek",months:"all"}), ps=dOf(P.start), pe=new Date(Math.min(dOf(P.end),dOf(D.meta.as_of))), all=_OPDW||(_OPDW=agg({},{by:"week",months:"all"})), t={opd:0,t:0,p:0,w:[]};
-  const ws=new Set();
+function opdWeeks(f){ const g=agg(f,{by:"facweek",months:"all"}), ps=dOf(P.start), pe=new Date(Math.min(dOf(P.end),dOf(D.meta.as_of))), all=_OPDW||(_OPDW=agg({},{by:"week",months:"all"})), t={opd:0,t:0,p:0,w:[],by:{}};
   for(const [k,x] of g){ const w=k.split("|")[1]; if(!w||w==="null"||!(x.opd_new>0)) continue; const a=dOf(w), e=new Date(a.getTime()+6*DAY); const A=all.get(w)||{}; if(e<ps||a>pe||!(A.opd_new>0&&A.hts_tst_opitc>0)) continue;
-    t.opd+=x.opd_new||0; t.t+=x.hts_tst_opitc||0; t.p+=x.hts_pos_opitc||0; ws.add(w); }
-  t.w=[...ws]; return t; }
+    const b=t.by[w]||(t.by[w]={opd:0,t:0,p:0});
+    for(const o of [t,b]){ o.opd+=x.opd_new||0; o.t+=x.hts_tst_opitc||0; o.p+=x.hts_pos_opitc||0; } }
+  t.w=Object.keys(t.by).sort(); return t; }
+// programme week number: the week (Monday to Sunday) holding 1 October is Week 1
+function fyWeek(mon){ const d=dOf(mon); for(const y of [d.getFullYear()+1,d.getFullYear(),d.getFullYear()-1]){ const o=new Date(y,9,1), st=new Date(o); st.setDate(o.getDate()-((o.getDay()+6)%7)); if(d>=st) return Math.round((d-st)/DAY/7)+1; } return null; }
 function opdSection(){
   const v=opdWeeks(F), st=STATES.filter(s=>!F.state||s===F.state), first=[...(_OPDW||(_OPDW=agg({},{by:"week",months:"all"})))].filter(([w,x])=>w&&x.opd_new>0).map(([w])=>w).sort()[0];
-  const head=`<thead><tr><th></th><th class="n">New OPD attendance</th><th class="n">Other PITC tested</th><th class="n">Testing rate</th><th class="n">Other PITC positive</th><th class="n">Yield</th></tr></thead>`;
-  const row=(l,x,c="")=>`<tr${c}><td>${l}</td><td class="n">${n(x.opd)}</td><td class="n">${n(x.t)}</td><td class="n">${rpct(x.t,x.opd)}</td><td class="n">${n(x.p)}</td><td class="n">${rpct(x.p,x.t)}</td></tr>`;
-  const bySex=[["Female","F"],["Male","M"]].map(([l,s])=>row(l,opdWeeks({...F,sex:s}))).join("");
-  const bySt=st.map(s=>row(esc(s),opdWeeks({...F,state:s,lga:"",fac:""}))).join("")+(st.length>1?row("Total",v,' class="total"'):"");
-  return `<section class="c3d">${secH("OPD attendance and Other PITC testing","New OPD attendance (weekly DHIS2 form) · testing rate = Other PITC tested ÷ new OPD attendance")}
-   ${!v.w.length?`<div class="empty">No New OPD Attendance reports for this period. Facilities report it on the weekly HTS (Facility) form from ${first?"the week of "+fmtDate(first):"November 2026"}.</div>`:`
-   <div class="kpis">${kpi(n(v.opd),"New OPD attendance",`${v.w.length} week${v.w.length===1?"":"s"} reported`)}${kpi(n(v.t),"Other PITC tested","same sites and weeks")}${kpi(rpct(v.t,v.opd),"Testing rate","Other PITC ÷ new OPD")}${kpi(rpct(v.p,v.t),"Other PITC yield",`${n(v.p)} positive`)}</div>
-   <div class="grid g2" style="margin-top:12px"><div><h3 class="minih">By sex</h3><div class="tw"><table>${head}<tbody>${bySex}</tbody></table></div></div>
-   <div><h3 class="minih">By state</h3><div class="tw"><table>${head}<tbody>${bySt}</tbody></table></div></div></div>
-   <div style="margin-top:12px">${monthlyPick("opd",[{k:"o",l:"New OPD attendance",num:"opd_new"}],F,"week",12)}</div>`}
-   <p class="drillnote">Other PITC is counted only for the facilities and weeks that reported New OPD Attendance (reported from ${first?"the week of "+fmtDate(first):"November 2026"}), for both columns, so the rate compares like with like. Once a month's monthly reports take over (on the 13th of the next month), Other PITC for that month no longer has weekly values; the attendance stays weekly.</p></section>`;
+  const from = first?"the week of "+fmtDate(first):"November 2026";
+  const secT = secH("OPD attendance and Other PITC testing","New OPD attendance (weekly DHIS2 form) · testing rate = Other PITC tested ÷ new OPD attendance, same sites and weeks");
+  if(!v.w.length) return `<section class="c3d">${secT}<div class="empty">No New OPD Attendance reports for this period. Facilities report it on the weekly HTS (Facility) form from ${from}.</div></section>`;
+  const sx=[["Female","F"],["Male","M"]].map(([l,s])=>[l,opdWeeks({...F,sex:s})]);
+  const rows=st.map(s=>[s,opdWeeks({...F,state:s,lga:"",fac:""})]);
+  const mx=Math.max(1,...rows.map(([,x])=>x.opd));
+  // states: attendance bar with the tested bar under it, both on one scale; the rate is the headline number
+  const stBars = `<div class="opdst">${rows.map(([s,x])=>`<div class="row" data-tip="${esc(s)}: ${n(x.t)} tested of ${n(x.opd)} new OPD attendees · ${n(x.p)} positive">
+     <span>${esc(s)}</span>${x.opd?`<span class="bars"><span style="width:${x.opd/mx*100}%;background:var(--bar-none)"></span><span style="width:${x.t/mx*100}%;background:var(--s1)"></span></span>
+     <span class="num"><b>${rpct(x.t,x.opd)}</b> tested · ${n(x.t)} of ${n(x.opd)}</span>`:`<span class="drillnote">no OPD attendance reported</span><span></span>`}</div>`).join("")}</div>`;
+  const wk=v.w.slice(-12), cats=wk.map(w=>`Wk ${fyWeek(w)}`);
+  const weekly = groupBars(cats,[{l:"New OPD attendance",c:"var(--bar-none)",v:wk.map(w=>v.by[w].opd)},{l:"Other PITC tested",c:"var(--s1)",v:wk.map(w=>v.by[w].t)}],
+     {lines:[{l:"Testing rate",c:"var(--s2)",v:wk.map(w=>div(v.by[w].t,v.by[w].opd))}],H:190});
+  const head=`<thead><tr><th></th><th class="n">New OPD attendance</th><th class="n">Other PITC tested</th><th class="n">Testing rate</th><th class="n">Positive</th><th class="n">Yield</th></tr></thead>`;
+  const row=(l,x,c="")=>`<tr${c}><td>${l}</td><td class="n">${n(x.opd)}</td><td class="n">${n(x.t)}</td><td class="n"><b>${rpct(x.t,x.opd)}</b></td><td class="n">${n(x.p)}</td><td class="n">${rpct(x.p,x.t)}</td></tr>`;
+  return `<section class="c3d">${secT}
+   <div class="kpis">${kpi(n(v.opd),"New OPD attendance",`${v.w.length} week${v.w.length===1?"":"s"} reported`)}${kpi(n(v.t),"Other PITC tested","same sites and weeks")}${kpi(rpct(v.t,v.opd),"Testing rate","tested ÷ new OPD attendance")}${kpi(rpct(v.p,v.t),"Other PITC yield",`${n(v.p)} positive`)}</div>
+   <div class="grid g2" style="margin-top:16px;align-items:start">
+    <div><h3 class="minih">By state</h3><div class="legend" style="margin-bottom:8px"><span><span class="sw" style="background:var(--bar-none)"></span>New OPD attendance</span><span><span class="sw" style="background:var(--s1)"></span>Other PITC tested</span></div>${stBars}</div>
+    <div><h3 class="minih">By week (programme week, Week 1 = week of 1 October)</h3>${weekly}</div></div>
+   <div class="tw" style="margin-top:14px"><table>${head}<tbody>${rows.map(([s,x])=>row(esc(s),x)).join("")}${st.length>1?row("Total",v,' class="total"'):""}
+    <tr><td colspan="6" class="minih" style="padding-top:12px">By sex</td></tr>${sx.map(([l,x])=>row(l,x)).join("")}</tbody></table></div>
+   <p class="drillnote">Other PITC is counted only for the facilities and weeks that reported New OPD Attendance (reported from ${from}), so the rate compares like with like. Once a month's monthly reports take over (on the 13th of the next month), Other PITC for that month no longer has weekly values; the attendance stays weekly.</p></section>`;
 }
 function hivstByAge(){ const st=STATES.filter(x=>!F.state||x===F.state).map(s=>[esc(s),{...F,state:s,lga:"",fac:""}]).concat([[esc(F.state?filterText():SPEED),F,1]]);
   const cell=(f,a)=>{ const x=agg({...f,age:a}); return [x.hts_self,x.hivst_reactive,x.hivst_confirmed,x.hivst_linked,div(x.hivst_confirmed,x.hts_tst_pos)]; };
@@ -2008,14 +2044,16 @@ function csccSection(){
    ${rows.map(r=>tr(esc(r.f.facility),r.x)).join("")}${tr("All CSCC sites",tot,1)}</tbody></table></div></section>`;
 }
 
+// a difference between two percentages, in percentage points: +15 points = 15 percentage points higher
+const gapPts = d => d==null||!isFinite(d) ? "—" : `${d>0.0005?"+":d<-0.0005?"−":""}${Math.abs(Math.round(d*100))} point${Math.abs(Math.round(d*100))===1?"":"s"}`;
 /* ---------- Saturation: coarse age and sex by state (deck slide "Treatment Saturation by Coarse Age Band and State") ---------- */
 function satBySexAge(){
   const st=STATES.filter(x=>!F.state||x===F.state);
   const one=(s,a)=>{ const f={...F,state:s,lga:"",fac:"",age:a,sex:""}, x=agg(f), m=agg({...f,sex:"M"}), w=agg({...f,sex:"F"});
     const c=div(x.tx_curr,x.plhiv_est), cm=div(m.tx_curr,m.plhiv_est), cw=div(w.tx_curr,w.plhiv_est);
-    return `<td class="n">${n(x.plhiv_est)}</td><td class="n">${n(x.tx_curr)}</td><td class="n"><b>${pct(c,0)}</b></td><td class="n">${pct(cm,0)}</td><td class="n">${pct(cw,0)}</td><td class="n">${cm!=null&&cw!=null?Math.round(Math.abs(cw-cm)*100)+" pp":"—"}</td>`; };
-  return `<section class="c3d">${secH("Saturation by coarse age and sex","Naomi PLHIV vs NDR TX_CURR · gap = female minus male coverage")}
-   <div class="tw"><table><thead><tr><th>State</th><th>Age</th><th class="n">PLHIV est.</th><th class="n">TX_CURR</th><th class="n">ART cov.</th><th class="n">Male</th><th class="n">Female</th><th class="n">Gap</th></tr></thead><tbody>
+    return `<td class="n">${n(x.plhiv_est)}</td><td class="n">${n(x.tx_curr)}</td><td class="n"><b>${pct(c,0)}</b></td><td class="n">${pct(cm,0)}</td><td class="n">${pct(cw,0)}</td><td class="n">${cm!=null&&cw!=null?gapPts(cw-cm):"—"}</td>`; };
+  return `<section class="c3d">${secH("Saturation by coarse age and sex","Naomi PLHIV vs NDR TX_CURR · gap = female coverage minus male coverage, in percentage points (female 80% and male 65% = +15 points)")}
+   <div class="tw"><table><thead><tr><th>State</th><th>Age</th><th class="n">PLHIV est.</th><th class="n">TX_CURR</th><th class="n">ART cov.</th><th class="n">Male</th><th class="n">Female</th><th class="n" title="Female coverage minus male coverage, in percentage points">Gap (F − M)</th></tr></thead><tbody>
    ${st.map(s=>[["Total",""],["15 and above","15+"],["Less than 15","<15"]].map(([l,a],i)=>`<tr${i===0?' class="total"':""}><td>${i===0?esc(s):""}</td><td>${l}</td>${one(s,a)}</tr>`).join("")).join("")}</tbody></table></div></section>`;
 }
 
@@ -2632,21 +2670,22 @@ function pmtctPage(){
 function gc7Section(){
   const st=STATES.filter(s=>!F.state||s===F.state).map(s=>({l:s, x:agg({...F,state:s,lga:"",fac:""})})), v=agg();
   if(st.length>1) st.push({l:F.state?filterText():SPEED, x:v, tot:1});
-  const g=x=>x.pmtct_gc7||0, tx=x=>x.tx_new_q||0, pos=x=>x.hts_tst_pos||0;
-  const mx=Math.max(1,...st.map(r=>Math.max(pos(r.x),tx(r.x))));
-  const bar=(lab,parts,tip)=>`<div class="hb" data-tip="${esc(tip)}"><span class="lab">${lab}</span><span class="track">${(()=>{ let left=0; return parts.map(([v,c])=>{ const w=Math.min(100,v/mx*100), h=`<span class="fill" style="left:${left}%;width:${w}%;background:${c}"></span>`; left+=w; return h; }).join(""); })()}</span>`;
-  const rows=st.map(r=>{ const o=tx(r.x)-g(r.x);
-    return `<div style="margin:${r.tot?"14px 0 0":"8px 0 0"}"><div class="minih" style="margin:0 0 4px">${esc(r.l)}</div><div class="hbars">
-      ${bar("HTS_TST_POS",[[pos(r.x),"var(--s3)"]],`${r.l}: ${n(pos(r.x))} newly identified positive`)}<span class="val"><b>${n(pos(r.x))}</b></span></div>
-      ${bar("TX_NEW",[[o,"var(--s1)"],[g(r.x),"var(--s2)"]],`${r.l}: TX_NEW ${n(tx(r.x))} = ${n(o)} others + ${n(g(r.x))} GC7`)}<span class="val"><b>${n(tx(r.x))}</b>${g(r.x)?` · ${n(g(r.x))} GC7`:""}</span></div></div></div>`; }).join("");
-  const tab=`<div class="tw" style="margin-top:12px"><table><thead><tr><th></th><th class="n">HTS_TST_POS</th><th class="n">TX_NEW</th><th class="n">of which GC7</th><th class="n">GC7 share of TX_NEW</th><th class="n">Linkage</th><th class="n">Linkage without GC7</th></tr></thead><tbody>
-    ${st.map(r=>`<tr${r.tot?' class="total"':""}><td>${esc(r.l)}</td><td class="n">${n(pos(r.x))}</td><td class="n">${n(tx(r.x))}</td><td class="n">${n(g(r.x))}</td><td class="n">${rpct(g(r.x),tx(r.x))}</td><td class="n">${rpct(tx(r.x),pos(r.x))}</td><td class="n">${rpct(tx(r.x)-g(r.x),pos(r.x))}</td></tr>`).join("")}</tbody></table></div>`;
+  const g=x=>x.pmtct_gc7||0, tx=x=>x.tx_new_q||0, pos=x=>x.hts_tst_pos||0, ex=x=>Math.max(0,tx(x)-pos(x));
+  const mx=Math.max(1,...st.filter(r=>!r.tot).map(r=>Math.max(pos(r.x),tx(r.x))));
+  const row=r=>{ const m=r.tot?Math.max(1,pos(r.x),tx(r.x)):mx, o=tx(r.x)-g(r.x), w=x=>Math.min(100,x/m*100);
+    return `<div class="gc7r${r.tot?" tot":""}" data-tip="${esc(r.l)}: TX_NEW ${n(tx(r.x))} = ${n(o)} others + ${n(g(r.x))} GC7 · HTS_TST_POS ${n(pos(r.x))}">
+     <span>${esc(r.l)}</span><span class="trk"><i style="left:0;width:${w(o)}%;background:var(--s1)"></i>${g(r.x)?`<i style="left:${w(o)}%;width:max(4px,${w(g(r.x))}%);background:var(--s2)"></i>`:""}<em style="left:calc(${w(pos(r.x))}% - 1px)"></em></span>
+     <span class="num"><b>${n(tx(r.x))}</b> TX_NEW${g(r.x)?` · <b style="color:var(--s2)">${n(g(r.x))}</b> GC7`:""} · ${n(pos(r.x))} POS</span></div>`; };
+  const tab=`<div class="tw" style="margin-top:14px"><table><thead><tr><th></th><th class="n">HTS_TST_POS</th><th class="n">TX_NEW</th><th class="n">of which GC7</th><th class="n">TX_NEW above POS</th><th class="n">GC7 share of TX_NEW</th><th class="n">Linkage</th><th class="n">Linkage without GC7</th></tr></thead><tbody>
+    ${st.map(r=>`<tr${r.tot?' class="total"':""}><td>${esc(r.l)}</td><td class="n">${n(pos(r.x))}</td><td class="n">${n(tx(r.x))}</td><td class="n">${n(g(r.x))}</td><td class="n">${ex(r.x)?n(ex(r.x)):"—"}</td><td class="n">${rpct(g(r.x),tx(r.x))}</td><td class="n">${rpct(tx(r.x),pos(r.x))}</td><td class="n">${rpct(tx(r.x)-g(r.x),pos(r.x))}</td></tr>`).join("")}</tbody></table></div>`;
+  const e=ex(v);
   return `<section class="c3d">${secH("GC7 contribution to new on ART","Global Fund Grant Cycle 7 · pregnant women found by NEPHAWN and other CBOs in the community and started on ART at our sites")}
-   <div class="kpis">${kpi(n(g(v)),"GC7 new on ART","PMTCT_ART · New on ART (GC7)")}${kpi(rpct(g(v),tx(v)),"Share of TX_NEW",`${n(g(v))} of ${n(tx(v))}`)}${kpi(rpct(tx(v),pos(v)),"Linkage","TX_NEW ÷ HTS_TST_POS")}${kpi(rpct(tx(v)-g(v),pos(v)),"Linkage without GC7","(TX_NEW − GC7) ÷ HTS_TST_POS")}</div>
-   <div style="margin-top:8px">${rows}</div>
-   <div class="legend" style="margin-top:8px"><span><span class="sw" style="background:var(--s3)"></span>HTS_TST_POS (our testing)</span><span><span class="sw" style="background:var(--s1)"></span>TX_NEW, others</span><span><span class="sw" style="background:var(--s2)"></span>TX_NEW, GC7</span></div>
+   <div class="kpis">${kpi(n(g(v)),"GC7 new on ART","PMTCT_ART · New on ART (GC7)")}${kpi(rpct(g(v),tx(v)),"GC7 share of TX_NEW",`${n(g(v))} of ${n(tx(v))}`)}${kpi(rpct(tx(v),pos(v)),"Linkage","TX_NEW ÷ HTS_TST_POS")}${kpi(rpct(tx(v)-g(v),pos(v)),"Linkage without GC7","(TX_NEW − GC7) ÷ HTS_TST_POS")}</div>
+   <p style="margin:14px 0 6px">${e?`TX_NEW is <b>${n(e)}</b> above HTS_TST_POS; GC7 accounts for <b>${n(Math.min(g(v),e))}</b> of that (${rpct(Math.min(g(v),e),e,0)}).`:`TX_NEW (${n(tx(v))}) is not above HTS_TST_POS (${n(pos(v))}); GC7 adds <b>${n(g(v))}</b> to TX_NEW.`}</p>
+   <div class="legend" style="margin:4px 0 6px"><span><span class="sw" style="background:var(--s1)"></span>TX_NEW, others</span><span><span class="sw" style="background:var(--s2)"></span>TX_NEW, GC7</span><span><span class="sw" style="background:var(--ink);width:3px"></span>HTS_TST_POS (our testing)</span></div>
+   <div>${st.map(row).join("")}</div>
    ${tab}
-   <p class="drillnote">GC7 women were tested in the community by the CBOs, so they are not in our HTS_TST_POS; when they start ART at our facilities they add to TX_NEW. That is part of why linkage can pass 100%. GC7 is reported on the weekly PMTCT form from November 2026 (the element is not on the monthly form yet), so earlier periods show none. TX_NEW = unique, from the line list.</p></section>`;
+   <p class="drillnote">GC7 women were tested in the community by the CBOs, so they are not in our HTS_TST_POS; when they start ART at our facilities they add to TX_NEW. That is part of why linkage can pass 100%. GC7 is reported on the weekly PMTCT form from November 2026 (the element is not on the monthly form yet), so earlier periods show none. TX_NEW = unique, from the line list. The total row has its own scale.</p></section>`;
 }
 function pairBars(m1,l1,m2,l2){ const st=STATES.filter(s=>!F.state||s===F.state).map(s=>({s,x:agg({...F,state:s,lga:"",fac:""})}));
   const mx=Math.max(...st.flatMap(r=>[r.x[m1]||0,r.x[m2]||0]),1);
@@ -2887,7 +2926,9 @@ function methodQuarters(){
 }
 function termValues(f=F){
   const qs=new Set(methodQuarters().map(q=>ME.quarters.indexOf(q))), out={};
-  for(const [fi,qi,mi,ti,v] of ME.rows){ if(!qs.has(qi)||!facPass(fi,f)) continue;
+  // a quarter reads the monthly reports only (as windowSet): weeks of a month with monthly data are skipped
+  const qm=P.mode==="quarter";
+  for(const [fi,qi,mi,ti,v,wm] of ME.rows){ if(!qs.has(qi)||!facPass(fi,f)||(qm&&wm)) continue;
     const m=ME.measures[mi]; (out[m]||(out[m]={}))[ti]=(out[m][ti]||0)+v; }
   return out;
 }
@@ -2896,15 +2937,15 @@ function termTable(measure, title, v, TV, note=""){
   const dsl = arr => arr.length ? arr.map(([id,nm])=>`${esc(nm)} <code>${esc(id)}</code>`).join(" + ") : "<i>not on this instance</i>";
   const same = JSON.stringify(terms.map(t=>t.weekly))===JSON.stringify(terms.map(t=>t.monthly));
   const match = Math.abs(total-dash)<0.5 || F.sex || F.age || P.mode==="range" || P.mode==="month";
-  return `<h3 style="margin:18px 0 4px">${esc(title)} <span class="num" style="font-weight:400">= ${n(total)}</span> ${match?(F.sex||F.age||P.mode==="range"||P.mode==="month"?"":`<span class="pill closed" title="Equals the figure on the dashboard pages">✓ matches dashboard</span>`):`<span class="pill openm">dashboard ${n(dash)}</span>`}</h3>
+  return `<div class="mblk"><h3 style="margin:18px 0 4px">${esc(title)} <span class="num" style="font-weight:400">= ${n(total)}</span> ${match?(F.sex||F.age||P.mode==="range"||P.mode==="month"?"":`<span class="pill closed" title="Equals the figure on the dashboard pages">✓ matches dashboard</span>`):`<span class="pill openm" title="The dashboard pages show ${n(dash)}">dashboard shows ${n(dash)}</span>`}</h3>
    ${note?`<p class="drillnote" style="margin:0 0 6px">${note}</p>`:""}
    <div class="tw"><table><thead><tr><th></th><th>DHIS2 data element</th><th>Disaggregation kept</th><th>Modality / setting</th><th>Dataset (UID)</th><th class="n">Value</th></tr></thead><tbody>
    ${terms.map((t,i)=>`<tr><td>${t.sign<0?"−":"+"}</td><td>${esc(t.dataname)}</td><td>${t.coc?esc(t.coc.replace(/\\b/g,"").replace("s?","(s)")):"all"}</td><td>${esc(t.mod||"—")}</td>
      <td style="white-space:normal">${same?dsl(t.weekly):`weekly: ${dsl(t.weekly)}<br>monthly: ${dsl(t.monthly)}`}</td><td class="n">${tv[i]?n(tv[i]*t.sign):"—"}</td></tr>`).join("")}
-   <tr class="total"><td></td><td colspan="4">${esc(title)}</td><td class="n">${n(total)}</td></tr></tbody></table></div>`;
+   <tr class="total"><td></td><td colspan="4">${esc(title)}</td><td class="n">${n(total)}</td></tr></tbody></table></div></div>`;
 }
 function ruleTable(rows){
-  return `<div class="tw"><table><thead><tr><th>Figure</th><th>Rule (source columns)</th><th class="n">Value</th></tr></thead><tbody>
+  return `<div class="tw"><table class="rtab"><thead><tr><th>Figure</th><th>Rule (source columns)</th><th class="n">Value</th></tr></thead><tbody>
    ${rows.map(([l,r,x,b])=>`<tr${b?' class="total"':""}><td>${l}</td><td style="white-space:normal">${r}</td><td class="n">${x}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function methodsPage(){
@@ -2913,17 +2954,19 @@ function methodsPage(){
   const ll=fmtDate(m.linelist_as_of||m.as_of);
   const dh = `DHIS2 figures below are for <b>${esc(qs.join(", ")||"—")}</b>${P.mode==="range"||P.mode==="month"?" (element tables are kept by quarter: this shows the quarter(s) your selection falls in)":""}, ${esc(filterText().split(" · ")[0])}. Weekly reports count in the quarter their Thursday falls in; a facility's monthly report replaces its weeks for that month, table by table.${F.sex||F.age?" Sex/age filters do not apply to these element tables.":""}`;
   const sec = (title, sub, body) => `<section class="c3d">${secH(title, sub)}${body}</section>`;
-  return context()+`<p class="drillnote" style="margin:0">Every figure on the dashboard, traced to the data elements and columns it comes from. Values follow the period and state / LGA / facility filters above.</p>`
-  + sec("Sources","Where each kind of number comes from", ruleTable([
+  const shown=new Set(), tt=(m,t,note)=>{ shown.add(m); return termTable(m,t,v,TV,note); };
+  const rest=()=>Object.keys(ME.catalog).filter(m=>!shown.has(m)&&(ME.catalog[m]||[]).length).sort((a,b)=>mlab(a).localeCompare(mlab(b)));
+  const body = sec("Sources","Where each kind of number comes from", ruleTable([
+
       ["DHIS2 (weekly + monthly instances)", `Pulled with <code>/api/dataValueSets</code> per dataset. Merge: per facility × month × table, the monthly report wins; otherwise that month's weeks are summed. Data through ${fmtDate(m.dhis_through)}.`, ""],
       ["EMR linelist (central repository)", `Postgres <code>public.linelist</code>, one row per client, as of ${ll} (its <code>date_generated</code>). Stocks (TX_CURR, VL, IIT) are measured as of that date.`, ""],
       ["NDR PBS line list", `The newest <code>inbox\\pbs_all*.xlsx</code>; clients with ${cb("status28")} = Active or Inactive.`, ""],
       ["Targets", `FY27: <code>FY27 Targets.xlsx</code> (Q1–Q4 milestones where given, else annual ÷ 4). FY26: <code>FY26_Target_Achievement.csv</code> (annual only: a quarter = ¼).`, ""]]))
   + sec("HIV testing services", dh,
-      termTable("hts_tst","HTS_TST",v,TV,"Mirrors Power BI <i>TOTAL HTS_TST</i>: facility + community modalities, KP, TB (TB_STAT_NUM − previously known positives), ANC (facility newly tested + Community PMTCT new neg/pos) and index contacts with a new result.")
-    + termTable("hts_tst_pos","HTS_TST_POS",v,TV,"Mirrors <i>TOTAL HTS_TST_POS</i>.")
-    + termTable("index_tst","Index contacts tested",v,TV) + termTable("index_pos","Index contacts positive",v,TV)
-    + termTable("hts_self","HIVST distributed",v,TV) + termTable("prep_new","PrEP_NEW",v,TV)
+      tt("hts_tst","HTS_TST","Mirrors Power BI <i>TOTAL HTS_TST</i>: facility + community modalities, KP, TB (TB_STAT_NUM − previously known positives), ANC (facility newly tested + Community PMTCT new neg/pos) and index contacts with a new result.")
+    + tt("hts_tst_pos","HTS_TST_POS","Mirrors <i>TOTAL HTS_TST_POS</i>.")
+    + tt("index_tst","Index contacts tested") + tt("index_pos","Index contacts positive")
+    + tt("hts_self","HIVST distributed") + tt("prep_new","PrEP_NEW")
     + ruleTable([["Testing yield","HTS_TST_POS ÷ HTS_TST",pct(div(g("hts_tst_pos"),g("hts_tst")),2)],
                  ["Linkage to ART (IPI)",`TX_NEW (EMR, see Treatment) ÷ HTS_TST_POS`,pct(div(g("tx_new_q"),g("hts_tst_pos")))]]))
   + sec("Current on treatment", `NDR figures as of the PBS file; EMR figures as of ${ll}`, ruleTable([
@@ -2964,24 +3007,24 @@ function methodsPage(){
       ["VLS among results", "suppressed ÷ results", pct(div(g("vl_suppressed"),g("vl_result")))],
       ["VLS on ART (IPI)", "suppressed ÷ everyone Active in the EMR line list", pct(div(g("vl_suppressed"),g("vl_tx")))]]))
   + sec("PMTCT", dh,
-      termTable("pmtct_stat_den","PMTCT_STAT_D",v,TV,"Facility PMTCT + Community PMTCT, as in the DAX and the deck's PMTCT slide.")
-    + termTable("pmtct_stat_num","PMTCT_STAT_N",v,TV) + termTable("pmtct_stat_pos","PMTCT_STAT_POS",v,TV)
-    + termTable("pmtct_art","PMTCT_ART",v,TV) + termTable("pmtct_eid","PMTCT_EID",v,TV,"First virologic test: PMTCT_EID on the weekly instance, PMTCT_EID_First Test on the monthly one (second tests are not counted, as in the deck).")
-    + termTable("pmtct_eid_lt2","EID <2 months",v,TV) + termTable("pmtct_eid_2_12","EID 2–12 months",v,TV) + termTable("pmtct_eid_repeat","Repeat infant tests (not in EID)",v,TV)
-    + termTable("pmtct_eid_pos","HEI positive",v,TV) + termTable("hei_art","HEI on ART",v,TV) + termTable("hei_delivered","HEI delivered alive",v,TV) + termTable("hei_nvp","HEI on NVP",v,TV)
-    + termTable("pmtct_stat_den_comm","of which Community PMTCT_STAT_D",v,TV) + termTable("pmtct_stat_num_comm","of which Community PMTCT_STAT_N",v,TV))
+      tt("pmtct_stat_den","PMTCT_STAT_D","Facility PMTCT + Community PMTCT, as in the DAX and the deck's PMTCT slide.")
+    + tt("pmtct_stat_num","PMTCT_STAT_N") + tt("pmtct_stat_pos","PMTCT_STAT_POS")
+    + tt("pmtct_art","PMTCT_ART") + tt("pmtct_eid","PMTCT_EID","First virologic test: PMTCT_EID on the weekly instance, PMTCT_EID_First Test on the monthly one (second tests are not counted, as in the deck).")
+    + tt("pmtct_eid_lt2","EID <2 months") + tt("pmtct_eid_2_12","EID 2–12 months") + tt("pmtct_eid_repeat","Repeat infant tests (not in EID)")
+    + tt("pmtct_eid_pos","HEI positive") + tt("hei_art","HEI on ART") + tt("hei_delivered","HEI delivered alive") + tt("hei_nvp","HEI on NVP")
+    + tt("pmtct_stat_den_comm","of which Community PMTCT_STAT_D") + tt("pmtct_stat_num_comm","of which Community PMTCT_STAT_N"))
   + sec("TB / HIV", dh,
-      termTable("tx_tb_den","TX_TB_D (screened)",v,TV) + termTable("tb_presumptive","TB presumptive",v,TV,"Power BI <i>nTB Presumptive</i>: screened positive, new + previously on ART.")
-    + termTable("tb_specimen","Specimen sent",v,TV) + termTable("tb_pos_result","Positive results",v,TV)
-    + termTable("tx_tb_num","TX_TB (N) — treatment started",v,TV) + termTable("tb_prev_num","TB_PREV (N)",v,TV) + termTable("tb_prev_den","TB_PREV (D)",v,TV)
-    + termTable("tb_art","TB_ART",v,TV) + termTable("tpt_eligible","TPT eligible",v,TV) + termTable("tpt_started","TPT started",v,TV)
-    + termTable("tb_stat_den","TB_STAT_D",v,TV) + termTable("tb_stat_num","TB_STAT_N",v,TV) + termTable("tb_stat_pos","TB_STAT_POS",v,TV)
+      tt("tx_tb_den","TX_TB_D (screened)") + tt("tb_presumptive","TB presumptive","Power BI <i>nTB Presumptive</i>: screened positive, new + previously on ART.")
+    + tt("tb_specimen","Specimen sent") + tt("tb_pos_result","Positive results")
+    + tt("tx_tb_num","TX_TB (N) — treatment started") + tt("tb_prev_num","TB_PREV (N)") + tt("tb_prev_den","TB_PREV (D)")
+    + tt("tb_art","TB_ART") + tt("tpt_eligible","TPT eligible") + tt("tpt_started","TPT started")
+    + tt("tb_stat_den","TB_STAT_D") + tt("tb_stat_num","TB_STAT_N") + tt("tb_stat_pos","TB_STAT_POS")
     + `<p class="drillnote">On the monthly instance the TX_TB elements exist twice: "X (Monthly)" holds the month and plain "X" a half-year total in March and September. The monthly version is used. DATIM reports TX_TB half-yearly (Apr–Sep).</p>`)
   + sec("Advanced HIV disease", dh + " AHD_MSF elements are read from HIV Care and Treatment (the AHD_MSF dataset itself is not readable with this account).",
-      termTable("ahd_enrolled_n","Newly enrolled in care",v,TV,"CARE_NEW.") + termTable("ahd_cd4_n","CD4 tested (new)",v,TV) + termTable("ahd_cd4_a","CD4 tested (already on ART)",v,TV)
-    + termTable("ahd_cd4lt200_n","CD4 &lt;200 (new)",v,TV) + termTable("ahd_confirmed_n","AHD confirmed (new)",v,TV) + termTable("ahd_confirmed_a","AHD confirmed (already on ART)",v,TV)
-    + termTable("ahd_lam_test_n","LF-LAM test (new)",v,TV) + termTable("ahd_lam_pos_n","LF-LAM positive (new)",v,TV) + termTable("ahd_xpert_test_n","GeneXpert test (new)",v,TV)
-    + termTable("ahd_xpert_pos_n","GeneXpert positive (new)",v,TV) + termTable("ahd_crag_test_n","Serum CrAg test (new)",v,TV) + termTable("ahd_crag_pos_n","Serum CrAg positive (new)",v,TV)
+      tt("ahd_enrolled_n","Newly enrolled in care","CARE_NEW.") + tt("ahd_cd4_n","CD4 tested (new)") + tt("ahd_cd4_a","CD4 tested (already on ART)")
+    + tt("ahd_cd4lt200_n","CD4 &lt;200 (new)") + tt("ahd_confirmed_n","AHD confirmed (new)") + tt("ahd_confirmed_a","AHD confirmed (already on ART)")
+    + tt("ahd_lam_test_n","LF-LAM test (new)") + tt("ahd_lam_pos_n","LF-LAM positive (new)") + tt("ahd_xpert_test_n","GeneXpert test (new)")
+    + tt("ahd_xpert_pos_n","GeneXpert positive (new)") + tt("ahd_crag_test_n","Serum CrAg test (new)") + tt("ahd_crag_pos_n","Serum CrAg positive (new)")
     + `<p class="drillnote">Every step also exists for clients already on ART (…_Already on ART); the AHD page switches between them.</p>`)
   + sec("Biometrics", D.meta.pbs_source==="ndr"?"NDR PBS line list, active clients — the NDR portal's card definitions":"EMR linelist fallback", ruleTable([
       ["Active in programme", `${cb("status28")} = Active — not yet checked for unique prints (TX_CURR is the NDR TX_CURR above)`, n(v.pbs_active)],
@@ -3004,6 +3047,32 @@ function methodsPage(){
       ${D.registry.map(i=>{const r=evaluate(i.code,v); return `<tr><td>${esc(i.name)} <span class="tag">${esc(i.group)}</span></td><td style="white-space:normal"><code>${esc(i.num)}</code> ${n(r.num)}${i.den?` ÷ <code>${esc(i.den)}</code> ${n(r.den)}`:""}</td>
         <td class="n">${r.value==null?"—":fmtInd(i.code,r)}</td><td class="n">${r.target==null?esc(r.note||"—"):i.kind==="rate"?pct(r.target,0):n(r.target)}</td><td>${dot(r.status)} ${LABEL[r.status]}</td></tr>`;}).join("")}
       </tbody></table></div><p class="drillnote">Saturation = TX_CURR ÷ Naomi PLHIV estimate (reference 90.25% = 95 × 95). Population VLS = suppressed ÷ PLHIV.</p>`);
+  const more = sec("All other DHIS2 figures", dh+" Every other DHIS2 measure the dashboard uses, A to Z (OPD, index cascade, GC7, PHRH, HIVST, PrEP steps …).",
+    rest().map(m=>{ const t=ME.catalog[m]; return termTable(m, MLAB[m]?mlab(m):t[0].dataname+(t.length>1?` + ${t.length-1} more`:""), v, TV, `<code>${esc(m)}</code>`); }).join(""));
+  const secs=[...(body+more).matchAll(/<h2[^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]+)<\/h2>/g)].map(x=>x[1]);
+  return context()+`<p class="drillnote" style="margin:0">Every figure on the dashboard, traced to the data elements and columns it comes from. Values follow the period and state / LGA / facility filters above.</p>
+   <div class="msearch c3d"><label for="m-search">${ico("methods",18)} <span>Find a figure</span></label>
+     <input type="search" id="m-search" placeholder="Type an indicator or data element: TX_NEW, OPD, GC7, index, VLS …" autocomplete="off" value="${esc(MSQ)}">
+     <span id="m-count" class="drillnote"></span>
+     <div class="mjump">${secs.map((t,i)=>`<a href="#methods" data-msec="${i}">${esc(t)}</a>`).join("")}</div></div>
+   <div id="mbody">${body}${more}</div>`;
+}
+/* search on How it's calculated: hides the element tables and rule rows that do not mention the words typed */
+let MSQ = "";
+function methodsSearch(jump){
+  const root=document.getElementById("mbody"); if(!root) return;
+  const words=MSQ.toLowerCase().split(/\s+/).filter(Boolean), hit=t=>words.every(w=>t.toLowerCase().includes(w));
+  let k=0, first=null;
+  for(const sec of root.querySelectorAll(":scope > section")){
+    const head=sec.querySelector(".sec-h h2"), whole=words.length&&hit(head?head.textContent:"");
+    let any=false;
+    for(const b of sec.querySelectorAll(".mblk, table.rtab tbody tr, .icards-row, :scope > .tw > table:not(.rtab) tbody tr")){
+      const ok=!words.length||whole||hit(b.textContent); b.hidden=!ok; if(ok){ any=true; if(words.length){ k++; first=first||b; } } }
+    sec.hidden=!!words.length&&!any&&!whole;
+  }
+  const c=document.getElementById("m-count");
+  if(c) c.textContent = !words.length ? "" : k ? `${k} match${k===1?"":"es"} · Enter to jump to the first` : "No match: try another word (e.g. the DHIS2 element name)";
+  if(jump&&first) first.scrollIntoView({behavior:"smooth",block:"center"});
 }
 
 /* ---------- trends: saved run snapshots (exact) + month-end backfill (estimated) ---------- */
@@ -3090,6 +3159,12 @@ function icard(i){
 /* ---------- after each render: searchable dropdowns, month scrollers opened at the latest month ---------- */
 function afterRender(){
   enhanceSelects(document);
+  const ms=document.getElementById("m-search");
+  if(ms){ methodsSearch(false);
+    ms.addEventListener("input",()=>{ MSQ=ms.value; methodsSearch(false); });
+    ms.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); methodsSearch(true); } else if(e.key==="Escape"){ ms.value=MSQ=""; methodsSearch(false); } });
+    document.querySelectorAll("[data-msec]").forEach(a=>a.addEventListener("click",e=>{ e.preventDefault(); ms.value=MSQ=""; methodsSearch(false);
+      document.querySelectorAll("#mbody > section")[+a.dataset.msec]?.scrollIntoView({behavior:"smooth",block:"start"}); })); }
   requestAnimationFrame(()=>document.querySelectorAll(".hscroll").forEach(el=>{ el.scrollLeft = el.scrollWidth; }));   // after layout
   document.querySelectorAll(".hscroll").forEach(el=>{
     el.scrollLeft = el.scrollWidth;
@@ -3153,7 +3228,10 @@ const MLAB = {pmtct_art:"Pregnant women living with HIV on ART (PMTCT_ART)", pmt
   hts_tst_neg:"Tested HIV negative", vl_suppressed:"Virally suppressed, VL < 1,000 (TX_PVLS N)", vl_result:"With a VL result in the last 12 months (TX_PVLS D)",
   tx_curr_emr:"Current on treatment, unique (TX_CURR)", tx_curr:"Current on treatment (TX_CURR)", joint_ssv:"Joint supportive supervision visits",
   prep_new:"Newly enrolled on PrEP (PrEP_NEW)", plhiv_diagnosed:"PLHIV who know their status", plhiv_est:"PLHIV estimate (Naomi)",
-  pmtct_eid_pos:"Infants diagnosed HIV positive (EID)", dqa_sites:"Sites with a DQA", sites_total:"Sites supported", vl_eligible:"Eligible for VL (TX_PVLS E)"};
+  pmtct_eid_pos:"Infants diagnosed HIV positive (EID)", opd_new:"New OPD attendance", pmtct_gc7:"PMTCT_ART New on ART (GC7)",
+  hts_tst_opitc:"Other PITC tested", hts_pos_opitc:"Other PITC positive", hts_tst_phrh:"Mobile PHRH tested", hts_pos_phrh:"Mobile PHRH positive",
+  index_on_art:"Index contacts on ART", index_cases:"Index cases", index_offered:"Index cases offered index testing", index_accepted:"Index cases accepting index testing",
+  index_elicited:"Index contacts elicited", index_reached:"Index contacts reached", dqa_sites:"Sites with a DQA", sites_total:"Sites supported", vl_eligible:"Eligible for VL (TX_PVLS E)"};
 const mlab = m => MLAB[m] || m.toUpperCase();
 // treatment numbers follow reporting.treatment_source: the NDR line list, or the CDR (central repository) line list
 const NDRT = () => D.meta.treatment_source==="ndr";

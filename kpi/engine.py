@@ -355,20 +355,24 @@ def encode_methods(merged: pd.DataFrame, master: pd.DataFrame, qs: list[dict], t
     tr = dhis_terms(merged)
     if tr.empty:
         return {"catalog": catalog, "quarters": [], "measures": [], "rows": []}
-    qlab = {}
+    qlab, wkm = {}, {}
+    # the dashboard reads a quarter from the monthly reports only: a week whose month has monthly data
+    # anywhere is dropped there (kept for the fiscal year and date ranges), so such rows are flagged
+    mmonths = {str(k) for k in merged["period"].unique() if len(str(k)) == 7}
     for k in tr["period"].unique():
         meta = period_meta(k, rule)
         qlab[k] = next((q["label"] for q in qs if meta["kind"] and
                         in_window(meta, dt.date.fromisoformat(q["start"]), dt.date.fromisoformat(q["end"]))), None)
-    tr = tr.assign(q=tr["period"].map(qlab)).dropna(subset=["q"])
+        wkm[k] = int(meta["kind"] == "W" and meta["month"] in mmonths)
+    tr = tr.assign(q=tr["period"].map(qlab), wm=tr["period"].map(wkm)).dropna(subset=["q"])
     tr = attach_master(tr, master, "methods", {})
-    tr = tr.groupby(["facility", "q", "measure", "term"])["value"].sum().reset_index()
+    tr = tr.groupby(["facility", "q", "measure", "term", "wm"])["value"].sum().reset_index()
     fac_idx = {f: i for i, f in enumerate(facility_order(master)["facility"])}
     ql = [q["label"] for q in qs]
     ms = sorted(tr["measure"].unique())
     qi, mi = {q: i for i, q in enumerate(ql)}, {m: i for i, m in enumerate(ms)}
-    rows = [[int(fac_idx[f]), qi[q], mi[m], int(t), (float(v) if v % 1 else int(v))]
-            for f, q, m, t, v in tr.itertuples(index=False) if v]
+    rows = [[int(fac_idx[f]), qi[q], mi[m], int(t), (float(v) if v % 1 else int(v))] + ([1] if w else [])
+            for f, q, m, t, w, v in tr.itertuples(index=False) if v]
     return {"catalog": catalog, "quarters": ql, "measures": ms, "rows": rows}
 
 
