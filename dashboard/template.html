@@ -622,6 +622,18 @@ const REG = Object.fromEntries(D.registry.map(i=>[i.code,i]));
 const DQA_VISITS = {FY27Q1:{Delta:[7,6], Ekiti:[4,2], Osun:[4,3]}};
 if(REG.NIPI_DQA_COVERAGE) Object.assign(REG.NIPI_DQA_COVERAGE, {kind:"count", flow:"cumulative", den:null, paced:false, num:"dqa_sites",
   measures:"Sites visited for DQA against the planned base for the period (about 10% of sites)"});
+/* Joint supportive supervision visits with GoN (agreed 2026-11-16): each state is to do 2 a year; visits entered per state and quarter. */
+const JSSV = {per_state:2, visits:{FY27Q1:{Delta:0, Ekiti:8, Osun:0}}};
+if(REG.IPI_JOINT_SSV) Object.assign(REG.IPI_JOINT_SSV, {flow:"snapshot", milestone_scope:null});
+function jssvEval(f){
+  const ind = REG.IPI_JOINT_SSV, none = note => ({value:null, num:null, den:null, status:"none", target:null, note});
+  if(f.lga||f.fac||f.sex||f.age||f.grp) return none("Visits are entered by state");
+  const qs = D.quarters.filter(q=>dOf(q.start)<=dOf(P.end) && dOf(q.end)>=dOf(P.start) && JSSV.visits[q.label]);
+  if(!qs.length) return none("Visits not entered for this period");
+  const sts = f.state ? [f.state] : STATES, v = qs.reduce((a,q)=>a+sts.reduce((b,st)=>b+(JSSV.visits[q.label][st]||0),0),0), t = JSSV.per_state*sts.length;
+  const r = {value:v, num:v, den:null, target:t, annual:t, score:v/t, perState:JSSV.per_state};
+  r.status = scoreStatus(r.score, ind); return r;
+}
 function dqaEval(f){
   const ind = REG.NIPI_DQA_COVERAGE, none = note => ({value:null, num:null, den:null, status:"none", target:null, note});
   if(f.lga||f.fac||f.sex||f.age||f.grp) return none("DQA visits are entered by state");
@@ -645,6 +657,7 @@ const TL = () => P.mode==="quarter" ? "Q" : "period";
 function evaluate(code, v, f=F){
   const ind = REG[code];
   if(code==="NIPI_DQA_COVERAGE") return dqaEval(f);
+  if(code==="IPI_JOINT_SSV") return jssvEval(f);
   if(WIN||(WIN=windowSet()), stockMissing(ind.num) || stockMissing(ind.den)) return {value:null, num:null, den:null, status:"none", target:null, note:"No data for this period"};
   const num = v[ind.num]??null, den = ind.den ? (v[ind.den]??null) : null;
   const value = ind.kind==="rate" ? (num!=null&&den ? (num||0)/den : null) : (num ?? (MEAS.includes(ind.num)?0:null));
@@ -1282,7 +1295,7 @@ function brfScorecard(ctx, state=""){
     const tg = r.target;
     const tLab = tg==null ? "Target" : rate ? "Target" : snap ? "Target · annual" : `Target · ${P.mode==="quarter"?"this quarter":"this period"}`;
     const dqa = i.code==="NIPI_DQA_COVERAGE";
-    const tSub = dqa && tg!=null ? "planned sites (≈10% base)" : tg==null ? (r.note||"no target loaded") : rate ? (r.den ? `${n(tg*r.den)} of ${n(r.den)}` : "") : !snap && r.annual ? `annual ${n(r.annual)}` : "";
+    const tSub = dqa && tg!=null ? "planned sites (≈10% base)" : r.perState ? `${r.perState} visits per state` : tg==null ? (r.note||"no target loaded") : rate ? (r.den ? `${n(tg*r.den)} of ${n(r.den)}` : "") : !snap && r.annual ? `annual ${n(r.annual)}` : "";
     const lw = w*0.44;
     T(tLab, {x:x+0.15, y:y+0.84, w:lw, h:0.18, fontSize:8, color:BC.ink3});
     T(tg==null ? "Not set" : rate ? pct(tg,0) : n(tg), {x:x+0.15, y:y+1.0, w:lw, h:0.34, fontFace:HF, fontSize:20, bold:true, color:tg==null?"A79B83":BC.cloth, fit:"shrink"});

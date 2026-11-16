@@ -45,6 +45,7 @@ ipi:
     kind: count
     flow: cumulative
     milestone_scope: programme   # Q2: 4, Q3: 2 visits across the three states
+    # dashboard (since 2026-11-16): 2 visits per state per year; visits entered per state and quarter in JSSV in dashboard/template.html
     target: IPI_JOINT_SSV
     source: Manual (trip reports)
 
