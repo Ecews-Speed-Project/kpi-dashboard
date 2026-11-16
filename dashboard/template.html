@@ -1236,27 +1236,57 @@ function brfGlance(ctx){
   s.addNotes(`Diagnose: HTS_TST_POS, DHIS2. Treat: ${TXL()}; saturation = TX_CURR ÷ Naomi PLHIV estimate (95% × 95% = 90.25%). Suppress: suppressed ÷ all on ART (IPI definition). IIT rate = IIT ÷ (previous TX_CURR + TX_NEW).`);
 }
 
-/* ---------- 3. IPI scorecard ---------- */
+/* ---------- 3. IPI scorecard: one card per IPI / Non-IPI indicator (the format the user supplied, Nov 2026) ---------- */
 function brfScorecard(ctx){
   const order = ["1st 95","2nd 95","3rd 95","PMTCT","Prevention","TB","Systems"];
   const inds = D.registry.filter(i=>i.group==="IPI"||i.group==="Non-IPI").sort((a,b)=>(a.group===b.group?0:a.group==="IPI"?-1:1)||order.indexOf(a.pillar)-order.indexOf(b.pillar));
-  const v = agg(), st = F.state ? [] : STATES, per = st.map(x=>({x, f:{...F,state:x}, v:agg({...F,state:x})}));
-  const s = bSlide(ctx, "IPI review", "IPI and Non-IPI scorecard", `${ctx.scope} · ${P.label} · rates against targets, counts against the period target paced to the data date`);
-  const H = (t,o={}) => ({text:t, options:Object.assign({bold:true, color:"FFFFFF", fill:{color:BC.cloth}, fontSize:11, align:"center", valign:"middle"}, o)});
-  const head = [H("Group"), H("Pillar"), H("Indicator",{align:"left"}), H("Result"), H("Target"), H("Status"), ...st.map(x=>H(x))];
-  const cnt = {};
-  const rows = inds.map(i=>{ const r = ev(i.code, v), sv = r.value==null ? "—" : fmtInd(i.code, r); cnt[r.status]=(cnt[r.status]||0)+1;
-    const tg = r.target==null ? "—" : i.kind==="rate" ? pct(r.target,0) : n(r.target);
-    const lab = r.value==null ? "Needs data" : i.neutral ? "Monitored" : r.note && r.status==="none" ? "Not due" : LABEL[r.status];
-    const c = (t,o={}) => ({text:t, options:Object.assign({fontSize:10.5, color:BC.ink, valign:"middle", align:"center"}, o)});
-    return [c(i.group,{color:i.group==="IPI"?BC.goldInk:BC.ink3, bold:i.group==="IPI"}), c(i.pillar,{color:BC.ink2}), c(i.name,{align:"left"}), c(sv,{bold:true}), c(tg,{color:BC.ink2}),
-      c(lab,{bold:true, color:BC.st[r.status], fill:{color:BC.stBg[r.status]}}),
-      ...per.map(p=>{ const x = ev(i.code, p.v, p.f); return c(x.value==null?"—":fmtInd(i.code,x), {color:BC.st[x.status]==BC.st.none?BC.ink:BC.st[x.status], bold:x.status!=="none"}); })]; });
-  const cw = st.length ? [0.85, 1.0, 4.55, 1.05, 1.0, 1.15, 0.9, 0.9, 0.9] : [0.95, 1.15, 6.2, 1.3, 1.25, 1.45];
-  s.addTable([head, ...rows], {x:0.5, y:1.72, w:cw.reduce((a,b)=>a+b,0), colW:cw, rowH:0.335, fontFace:BF, border:{type:"solid", pt:0.5, color:BC.edge}, fill:{color:BC.card}, margin:[0.02,0.06,0.02,0.06]});
-  const off = inds.filter(i=>{ const r=ev(i.code,v); return r.status==="critical"; }).map(i=>i.name);
-  bTake(ctx, s, `${cnt.exceeds||0} exceeding, ${cnt.good||0} on track, ${cnt.warning||0} to watch, ${cnt.critical||0} off track` + (off.length ? ` — off track: ${off.slice(0,3).join("; ")}${off.length>3?"…":""}.` : "."));
-  s.addNotes("Status rules as on the dashboard: rates are met when they reach the target (within 5 points = Watch); counts are compared with the period target paced to the data date (75% of the expected value or more = On track, 50–74% = Watch). State columns are coloured by their own status.");
+  const v = agg(), pres = ctx.pres, R = pres.shapes.ROUNDED_RECTANGLE, cnt = {};
+  const ev0 = inds.map(i=>{ const r = ev(i.code, v); cnt[r.status]=(cnt[r.status]||0)+1; return [i, r]; });
+  const nI = inds.filter(i=>i.group==="IPI").length;
+  const s = bSlide(ctx, "IPI review", "Targets and achievement by indicator",
+    `${ctx.scope} · ${P.label} · ${nI} IPI and ${inds.length-nI} Non-IPI · ${cnt.exceeds||0} exceeding, ${cnt.good||0} on track, ${cnt.warning||0} to watch, ${cnt.critical||0} off track`);
+  const cols = 4, gx = 0.2, gy = 0.16, x0 = 0.5, y0 = 1.72, w = (BW-1-gx*(cols-1))/cols, h = 1.56;
+  const T = (t, o) => s.addText(t, Object.assign({fontFace:BF, margin:0, isTextBox:true, valign:"middle"}, o));
+  ev0.forEach(([i, r], k)=>{
+    const x = x0+(k%cols)*(w+gx), y = y0+Math.floor(k/cols)*(h+gy), ipi = i.group==="IPI";
+    const rate = i.kind==="rate", snap = i.flow==="snapshot", st = r.value==null ? "none" : r.status;
+    s.addShape(R, {x, y, w, h, rectRadius:0.1, fill:{color:"F1ECDF"}, line:{color:BC.edge, width:0.75}});
+    // group pill and number
+    s.addShape(R, {x:x+0.15, y:y+0.12, w:0.62, h:0.22, rectRadius:0.11, fill:{color:ipi?BC.cloth:"E6D3AC"}, line:{color:ipi?BC.cloth:"E6D3AC"}});
+    T(ipi?"IPI":"Non-IPI", {x:x+0.15, y:y+0.12, w:0.62, h:0.22, fontSize:8.5, bold:true, color:ipi?"FFFFFF":BC.cloth, align:"center"});
+    s.addShape(R, {x:x+w-0.53, y:y+0.12, w:0.38, h:0.22, rectRadius:0.11, fill:{color:"E2DCCB"}, line:{color:"E2DCCB"}});
+    T(String(k+1).padStart(2,"0"), {x:x+w-0.53, y:y+0.12, w:0.38, h:0.22, fontSize:8.5, bold:true, color:BC.cloth, align:"center"});
+    T(i.name, {x:x+0.15, y:y+0.38, w:w-0.3, h:0.42, fontSize:11, bold:true, color:BC.cloth, valign:"top", fit:"shrink"});
+    // target (left)
+    const tg = r.target;
+    const tLab = tg==null ? "Target" : rate ? "Target" : snap ? "Target · annual" : `Target · ${P.mode==="quarter"?"this quarter":"this period"}`;
+    const tSub = tg==null ? (r.note||"no target loaded") : rate ? (r.den ? `${n(tg*r.den)} of ${n(r.den)}` : "") : !snap && r.annual ? `annual ${n(r.annual)}` : "";
+    const lw = w*0.44;
+    T(tLab, {x:x+0.15, y:y+0.84, w:lw, h:0.18, fontSize:8, color:BC.ink3});
+    T(tg==null ? "Not set" : rate ? pct(tg,0) : n(tg), {x:x+0.15, y:y+1.0, w:lw, h:0.34, fontFace:HF, fontSize:20, bold:true, color:tg==null?"A79B83":BC.cloth, fit:"shrink"});
+    T(tSub, {x:x+0.15, y:y+1.33, w:lw, h:0.17, fontSize:8, bold:true, color:BC.ink2, fit:"shrink"});
+    // achievement (right), coloured by the dashboard's status for the indicator
+    const bx = x+0.15+lw+0.05, bw = x+w-0.15-bx, by = y+0.83, bh = 0.66;
+    s.addShape(R, {x:bx, y:by, w:bw, h:bh, rectRadius:0.08, fill:{color:BC.stBg[st]}, line:{color:BC.stBg[st]}});
+    const of = r.value==null||tg==null ? null : rate ? (tg ? r.value/tg : null) : snap ? r.score : r.pctQ;
+    T("Achievement", {x:bx+0.1, y:by+0.05, w:bw-0.2, h:0.17, fontSize:8, bold:true, color:BC.st[st]});
+    T(of==null ? "n/a" : pct(of,0), {x:bx+0.1, y:by+0.05, w:bw-0.2, h:0.17, fontSize:8, bold:true, color:BC.st[st], align:"right"});
+    T(r.value==null ? "—" : fmtInd(i.code, r), {x:bx+0.1, y:by+0.21, w:bw-0.2, h:0.28, fontFace:HF, fontSize:17, bold:true, color:st==="none"?BC.ink2:BC.st[st], fit:"shrink"});
+    const d = !rate && r.value!=null && tg!=null ? r.value-tg : null;
+    const aSub = r.value==null ? "needs data" : rate ? (r.den ? `${n(r.num)} / ${n(r.den)}` : "")
+      : d==null ? "" : (!snap && r.score!=null ? (d>=0 ? `+${n(d)} above` : `${n(-d)} short`)+` · ${pct(r.score,0)} of pace` : d>=0 ? `+${n(d)} above target` : `${n(-d)} short of target`);
+    T(aSub, {x:bx+0.1, y:by+0.48, w:bw-0.2, h:0.15, fontSize:7.5, color:BC.ink2, fit:"shrink"});
+  });
+  // legend and source line
+  const ly = y0+3*h+2*gy+0.08;
+  [["critical","Off track"],["warning","Watch"],["good","On track"],["exceeds","Exceeds"],["none","No target / not rated"]].forEach(([k,l],j)=>{
+    const lx = x0+j*2.3;
+    s.addShape(R, {x:lx, y:ly+0.04, w:0.18, h:0.16, rectRadius:0.03, fill:{color:BC.stBg[k]}, line:{color:BC.st[k], width:0.5}});
+    T(l, {x:lx+0.25, y:ly, w:1.6, h:0.24, fontSize:9, bold:true, color:BC.st[k]}); });
+  T("Targets: dashboard FY27 targets", {x:BW-0.5-2.2, y:ly, w:2.2, h:0.24, fontSize:8, italic:true, color:BC.ink3, align:"right"});
+  const per = F.state ? [] : STATES.map(x=>({x, f:{...F,state:x}, v:agg({...F,state:x})}));
+  s.addNotes("Status colours follow the dashboard: rates are met when they reach the target (within 5 points = Watch); counts are compared with the period target paced to the data date (75% of the expected value or more = On track, 50–74% = Watch). Achievement % = result ÷ target (for counts in a period, ÷ the whole period target; 'of pace' = ÷ what is expected by the data date)."
+    + (per.length ? "\n\nBy state:\n" + ev0.map(([i])=>`${i.name}: ` + per.map(p=>{ const x = ev(i.code, p.v, p.f); return `${p.x} ${x.value==null?"—":fmtInd(i.code,x)}${x.status!=="none"?" ("+LABEL[x.status]+")":""}`; }).join(", ")).join("\n") : ""));
 }
 
 /* ---------- 5. 1st 95: where the positives come from ---------- */
