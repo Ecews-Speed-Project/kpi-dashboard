@@ -877,13 +877,14 @@ function concCsv(rows){
 }
 /* ---------- DHIS2 data behind a page, as CSV: the selected period and filters, one row per facility x DHIS2
    reporting period x sex x age x modality, one column per DHIS2 figure on that page ---------- */
-const DHIS_PAGE = {ipi:/./, hts:/^(hts_|index_|fit_|hivst_|prep_)/, pmtct:/^(pmtct_|hei_)/, tb:/^(tb_|tpt_|tx_tb_)/, ahd:/^ahd_/};
+const DHIS_PAGE = {ipi:/./, hts:/^(hts_|index_|fit_|hivst_|prep_)/, phrh:/^(hts_|index_|fit_|hivst_|prep_)/, pmtct:/^(pmtct_|hei_)/, tb:/^(tb_|tpt_|tx_tb_)/, ahd:/^ahd_/};
 let _DH = null;
 const dhisAll = () => _DH || (_DH = (()=>{ const z=new Set(); for(let r=0;r<N;r++){ const k=PM[rt[r]].kind; if(k==="W"||k==="M") z.add(rk[r]); } return z; })());
 function dhisMeas(){ const re=DHIS_PAGE[page]; return re ? [...dhisAll()].filter(i=>re.test(MEAS[i])).sort((a,b)=>MEAS[a]<MEAS[b]?-1:1) : []; }
 function dhisCsv(){
   const ms=dhisMeas(), col=new Map(ms.map((m,j)=>[m,j])), win=WIN||(WIN=windowSet());
-  const fp=FAC.map((_,i)=>facPass(i,F)), sexI=F.sex?DM.sex.indexOf(F.sex):-1, ageOk=AGE.map((_,a)=>agePass(a,F.age));
+  const FF = page==="phrh" ? {...F, grp:"cscc"} : F;          // the PHRH page is the CSCC sites only
+  const fp=FAC.map((_,i)=>facPass(i,FF)), sexI=F.sex?DM.sex.indexOf(F.sex):-1, ageOk=AGE.map((_,a)=>agePass(a,F.age));
   const g=new Map(), tot=new Float64Array(ms.length);
   for(let r=0;r<N;r++){
     const t=rt[r], k=PM[t].kind; if(k!=="W"&&k!=="M") continue;
@@ -899,7 +900,7 @@ function dhisCsv(){
   const head=["State","LGA","Facility","DHIS2 period","Report","Month","Sex","Age","Modality",...keep.map(j=>MEAS[ms[j]].toUpperCase())];
   const lines=[head,...rows].map(r=>r.map(q).join(","));
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"}));
-  a.download=`dhis2_${page}_${(F.fac||F.lga||F.state||"SPEED").replace(/[^\w-]+/g,"_")}_${P.start}_to_${P.end}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  a.download=`dhis2_${page}_${(F.fac||F.lga||F.state||(page==="phrh"?"CSCC":"SPEED")).replace(/[^\w-]+/g,"_")}_${P.start}_to_${P.end}.csv`; a.click(); URL.revokeObjectURL(a.href);
 }
 function concurrenceSection(v){
   if(!STOCK) return "";
