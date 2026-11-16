@@ -472,7 +472,7 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
             qs = quarter_start(d, p.fy_start.month).isoformat()
             stock = pd.concat([stock[~stock["measure"].str.startswith("appt_")],
                                stock[stock["measure"] == "prev_tx_curr"].assign(measure="wf_prev")], ignore_index=True)
-            flows = ("tx_new_q", "tx_new_ti", "iit_q")
+            flows = ("tx_new_q", "tx_new_unique", "tx_new_ti", "iit_q")
             inq = lambda y: y["measure"].isin(flows) & (y["period"].fillna("") >= qs) & (y["period"].fillna("") <= d.isoformat())
             parts[1] = parts[1][~inq(parts[1])]
             parts.append(attach_master(x[inq(x)], master, "quarter_linelist", {}))

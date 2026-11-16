@@ -1353,7 +1353,7 @@ function brfHtsDetail(ctx){
     {labelW:1.45, valW:1.5, max:1.2, rowH:0.36, title:"HTS_TST_POS against the period target · line = expected by the data date"});
   const top = mr[0];
   bTake(ctx, s, top ? `${top.l} gives the most positives: ${n(top.v)} (${bP(div(top.v, v.hts_tst_pos),0)} of all), at a ${bP(div(top.v, top.t))} yield.` : "");
-  s.addNotes("Targets are for the period chosen, at programme and state level (LGAs have no targets). % of target uses the whole period target; the colour follows the pace to the data date. Linkage = TX_NEW (unique) ÷ HTS_TST_POS.");
+  s.addNotes("Targets are for the period chosen, at programme and state level (LGAs have no targets). % of target uses the whole period target; the colour follows the pace to the data date. Linkage = TX_NEW ÷ HTS_TST_POS (TX_NEW = new ART starts, transfer-ins removed).");
 }
 
 /* ---------- 6. 2nd 95: on treatment ---------- */
@@ -1440,8 +1440,8 @@ function brfHts(ctx){
   const v = agg(), ht = ev("HTS_TST", v), cf = ev("HTS_TST_POS", v), lk = ev("IPI_ART_COV", v);
   const s = bSlide(ctx, "1st 95", "Testing and linkage", `${ctx.scope} · ${P.label} · DHIS2${P.mode==="quarter"?" monthly reports":""} · TX_NEW from the line list`);
   bCards(ctx, s, 1.75, 1.3, [[bN(v.hts_tst), "HTS_TST", tgtTxt("HTS_TST", ht), ht.status], [bN(v.hts_tst_pos), "HTS_TST_POS", tgtTxt("HTS_TST_POS", cf), cf.status],
-    [bP(div(v.hts_tst_pos, v.hts_tst)), "Testing yield", "POS ÷ TST"], [`${bN(v.tx_new_ti)} | ${bN(v.tx_new_q)}`, "TX_NEW", "non-unique | unique"],
-    [`${bP(div(v.tx_new_ti, v.hts_tst_pos))} | ${bP(div(v.tx_new_q, v.hts_tst_pos))}`, "Linkage", "non-unique | unique", periodFY()===TFY ? lk.status : null]]);
+    [bP(div(v.hts_tst_pos, v.hts_tst)), "Testing yield", "POS ÷ TST"], [bN(v.tx_new_q), "TX_NEW", "new ART starts, transfer-ins removed"],
+    [bP(div(v.tx_new_q, v.hts_tst_pos)), "Linkage", "TX_NEW ÷ HTS_TST_POS", periodFY()===TFY ? lk.status : null]]);
   const ms = lastMonths(12), g = agg(F, {by:"month", months:"all"}), x = mo => g.get(mo) || {};
   if(ms.length){
     s.addChart(ctx.pres.charts.BAR, [{name:"HTS_TST_POS", labels:ms.map(monthTick), values:ms.map(mo=>x(mo).hts_tst_pos||0)}], bChartBase({x:0.5, y:3.3, w:7.5, h:3.0,
@@ -1451,8 +1451,8 @@ function brfHts(ctx){
       chartColors:[BC.st.critical], lineSize:2.5, lineDataSymbol:"circle", lineDataSymbolSize:6, showValue:false, valAxisLabelFormatCode:"0.0%", valAxisMinVal:0,
       showLegend:false, showTitle:true, title:"Testing yield by month", catAxisLabelFontSize:10}));
   } else bNoData(s, 0.5, 3.3, 12.33, 3.0, "No monthly testing data for this period.");
-  bTake(ctx, s, `${bN(v.hts_tst_pos)} new diagnoses from ${bN(v.hts_tst)} tests (yield ${bP(div(v.hts_tst_pos,v.hts_tst))}); ${bP(div(v.tx_new_q, v.hts_tst_pos))} linked to ART (unique)${lk.target!=null&&periodFY()===TFY?` against a ${pct(lk.target,0)} target`:""}.`);
-  s.addNotes("The latest month is provisional while facilities submit. TX_NEW non-unique = new ART starts with transfer-ins removed. Unique = also counted in the NDR unique TX_CURR (CDC pillar rules, from FY26 Q3); before that both are the same. Linkage = TX_NEW ÷ HTS_TST_POS.");
+  bTake(ctx, s, `${bN(v.hts_tst_pos)} new diagnoses from ${bN(v.hts_tst)} tests (yield ${bP(div(v.hts_tst_pos,v.hts_tst))}); ${bP(div(v.tx_new_q, v.hts_tst_pos))} linked to ART${lk.target!=null&&periodFY()===TFY?` against a ${pct(lk.target,0)} target`:""}.`);
+  s.addNotes("The latest month is provisional while facilities submit. TX_NEW = every new ART start in the period with transfer-ins removed (plain count, no unique-print filter). Linkage = TX_NEW ÷ HTS_TST_POS.");
 }
 
 /* ---------- a small by-state (or by-LGA) table that sits beside a slide's main visual ---------- */
@@ -1886,12 +1886,11 @@ function htsPage(){
   return context()+`<div class="kpis">${kpi(n(v.hts_tst),"HTS_TST",ht.target!=null?`${TL()} target ${n(ht.target)}`:"",ht.status)}
    ${kpi(n(v.hts_tst_pos),"HTS_TST_POS",cf.target!=null?`${TL()} target ${n(cf.target)}`:"",cf.status)}
    ${kpi(pct(div(v.hts_tst_pos,v.hts_tst)),"Testing yield","HTS_TST_POS ÷ HTS_TST")}
-   ${(()=>{ const ipiYr=periodFY()===TFY, pf=D.meta.tx_new_pillars_from||"";
-     const lab=["Non-unique","Unique"], tip="Non-unique: new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same.";
-     return kpi2("TX_NEW",[[n(v.tx_new_ti),lab[0]],[n(v.tx_new_q),lab[1]]],"",null,tip)
-       +kpi2(ipiYr?"Linkage (IPI)":"Linkage",[[pct(div(v.tx_new_ti,v.hts_tst_pos)),lab[0]],[pct(div(v.tx_new_q,v.hts_tst_pos)),lab[1]]],
-             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"",ipiYr?lk.status:null,tip)
-       +kpi(pct(div((v.tx_new_q||0)-(v.pmtct_gc7||0),v.hts_tst_pos)),"Linkage without GC7",`(TX_NEW unique − GC7 ${n(v.pmtct_gc7||0)}) ÷ HTS_TST_POS`,null,
+   ${(()=>{ const ipiYr=periodFY()===TFY, tip="TX_NEW = every new ART start in the period, transfer-ins removed (plain count, no unique-print filter).";
+     return kpi(n(v.tx_new_q),"TX_NEW","new ART starts, transfer-ins removed",null,tip)
+       +kpi(pct(div(v.tx_new_q,v.hts_tst_pos)),ipiYr?"Linkage (IPI)":"Linkage",
+             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"TX_NEW ÷ HTS_TST_POS",ipiYr?lk.status:null,tip)
+       +kpi(pct(div((v.tx_new_q||0)-(v.pmtct_gc7||0),v.hts_tst_pos)),"Linkage without GC7",`(TX_NEW − GC7 ${n(v.pmtct_gc7||0)}) ÷ HTS_TST_POS`,null,
             "GC7 = pregnant women newly started on ART (PMTCT_ART, weekly DHIS2 form, reported from November 2026). Taking them out of TX_NEW shows linkage of the other positives."); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
    <section class="c3d">${secH("Testing by modality","Tests, positives and share of all positives")}
     ${hbars(modRows.map(r=>({l:r.l,v:r.t,txt:`<b>${n(r.t)}</b> · ${n(r.p)} pos · ${pct(div(r.p,v.hts_tst_pos),0)} of POS`, tip:`${r.l}: ${n(r.t)} tests · ${n(r.p)} positive · yield ${pct(div(r.p,r.t))} · ${pct(div(r.p,v.hts_tst_pos),0)} of all positives`})))}</section>
@@ -2750,7 +2749,7 @@ function gc7Section(){
    <div class="legend" style="margin:4px 0 6px"><span><span class="sw" style="background:var(--s1)"></span>TX_NEW, others</span><span><span class="sw" style="background:var(--s2)"></span>TX_NEW, GC7</span><span><span class="sw" style="background:var(--ink);width:3px"></span>HTS_TST_POS (our testing)</span></div>
    <div>${st.map(row).join("")}</div>
    ${tab}
-   <p class="drillnote">GC7 women were tested in the community by the CBOs, so they are not in our HTS_TST_POS; when they start ART at our facilities they add to TX_NEW. That is part of why linkage can pass 100%. GC7 is reported on the weekly PMTCT form from November 2026 (the element is not on the monthly form yet), so earlier periods show none. TX_NEW = unique, from the line list. The total row has its own scale.</p></section>`;
+   <p class="drillnote">GC7 women were tested in the community by the CBOs, so they are not in our HTS_TST_POS; when they start ART at our facilities they add to TX_NEW. That is part of why linkage can pass 100%. GC7 is reported on the weekly PMTCT form from November 2026 (the element is not on the monthly form yet), so earlier periods show none. TX_NEW = new ART starts with transfer-ins removed, from the line list. The total row has its own scale.</p></section>`;
 }
 function pairBars(m1,l1,m2,l2){ const st=STATES.filter(s=>!F.state||s===F.state).map(s=>({s,x:agg({...F,state:s,lga:"",fac:""})}));
   const mx=Math.max(...st.flatMap(r=>[r.x[m1]||0,r.x[m2]||0]),1);
@@ -3042,7 +3041,7 @@ function methodsPage(){
       [`<b>${D.meta.tx_curr_source==="NDR"?"TX_CURR_Unique (NDR) — headline":"TX_CURR"}</b>`, "Scored against the TX_CURR target; used for saturation", n(v.tx_curr), 1],
       ["TX_CURR (EMR)", `${c("status")} = Active or Actives (a variant label in some EMR extracts, counted as Active)`, n(v.tx_curr_emr)],
       ["Previous-quarter TX_CURR (EMR)", `${c("prev_status")} = Active`, n(v.prev_tx_curr)],
-      ["TX_NEW (EMR)", `${c("art_start")} inside the selected dates, ${c("ti")} ≠ Yes, and in unique TX_CURR (active with a valid print, or under 15)`, n(v.tx_new_q)],
+      ["TX_NEW (EMR)", `${c("art_start")} inside the selected dates, ${c("ti")} ≠ Yes (plain count: no print or status filter)`, n(v.tx_new_q)],
       ["IIT (EMR)", `${c("status")} = LTFU and ${c("last_pickup")} + ${c("refill_days")} + 28 days falls inside the selected dates`, n(v.iit_q)],
       ["Returned to treatment", `${c("status")} = Active and ${c("prev_status")} = LTFU / transferred out / stopped / dead`, n(v.rtt_q)],
       ["Transferred in", `${c("status")} = Active, ${c("ti")} = Yes, not active last quarter`, n(v.ti_q)],
@@ -3289,7 +3288,7 @@ addEventListener("resize", ()=>{ if(SSOPEN && !SSOPEN.contains(document.activeEl
 
 /* ---------- IPI detail: what it is made of, how it is computed, weekly progress against the target ---------- */
 const MLAB = {pmtct_art:"Pregnant women living with HIV on ART (PMTCT_ART)", pmtct_stat_pos:"Pregnant women positive at ANC (PMTCT_STAT_POS)",
-  tx_new_q:"Newly initiated on ART (TX_NEW, unique)", hts_tst_pos:"Newly diagnosed HIV positive (HTS_TST_POS)", hts_tst:"Tested for HIV (HTS_TST)",
+  tx_new_q:"Newly initiated on ART (TX_NEW)", tx_new_unique:"TX_NEW, unique (in unique TX_CURR)", hts_tst_pos:"Newly diagnosed HIV positive (HTS_TST_POS)", hts_tst:"Tested for HIV (HTS_TST)",
   hts_tst_neg:"Tested HIV negative", vl_suppressed:"Virally suppressed, VL < 1,000 (TX_PVLS N)", vl_result:"With a VL result in the last 12 months (TX_PVLS D)",
   tx_curr_emr:"Current on treatment, unique (TX_CURR)", tx_curr:"Current on treatment (TX_CURR)", joint_ssv:"Joint supportive supervision visits",
   prep_new:"Newly enrolled on PrEP (PrEP_NEW)", plhiv_diagnosed:"PLHIV who know their status", plhiv_est:"PLHIV estimate (Naomi)",

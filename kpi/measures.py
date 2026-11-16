@@ -616,8 +616,9 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     vl_el = active_all & (dos >= 180)
     vl_win = lambda s: (s >= p.as_of - dt.timedelta(days=365)) & (s <= p.as_of)
     vl_res = vl_el & vl_win(vl_date)
-    # TX_NEW on the unique rule too: counted when the client is in the unique TX_CURR cohort
-    # (active with a valid print, or under 15), as the NDR quarter summary
+    # TX_NEW is the plain count (agreed 2026-11-16): every new ART start in the period, transfer-ins removed,
+    # no print or status filter. The unique count (also in the unique TX_CURR cohort: active with a valid
+    # print, or under 15, as the NDR quarter summary) is kept as tx_new_unique, and the waterfall uses it
     uniq = active
     if c.get("new_unique") in d:      # a quarter file: the NDR's own unique flag (q<N>_algo 1-4)
         uniq = _norm(d[c["new_unique"]]).eq("yes")
@@ -634,7 +635,8 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         "iit_now": status.isin(STATUS["iit"]) & (pickup > pd.Timestamp(p.as_of - dt.timedelta(days=365))),
         "prev_tx_curr": prev_active,
         # dated events: the dashboard picks them up for any date range
-        "tx_new_q": in_hist(start) & (ti != "yes") & uniq,
+        "tx_new_q": in_hist(start) & (ti != "yes"),
+        "tx_new_unique": in_hist(start) & (ti != "yes") & uniq,
         "tx_new_ti": in_hist(start) & (ti != "yes"),    # TX_NEW before the CDC pillar rules: transfer-ins removed only
         "tx_new_all": in_hist(start) & (ti != "yes"),   # case finding report (EMR line list): everyone newly started on ART, no biometric or status filter; transfer-ins are not new
         "ti_q": active & (ti == "yes") & ~prev_active,
@@ -686,7 +688,7 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         "wf_stopped": prev_active & status.isin(STATUS["stopped"]),
     })
     # appointments are classified in the dashboard from appointment_clients() (any date range)
-    dated = {"tx_new_q": pd.Series(start, index=d.index), "tx_new_all": pd.Series(start, index=d.index), "tx_new_ti": pd.Series(start, index=d.index), "iit_q": pd.Series(iit_date, index=d.index)}
+    dated = {"tx_new_q": pd.Series(start, index=d.index), "tx_new_unique": pd.Series(start, index=d.index), "tx_new_all": pd.Series(start, index=d.index), "tx_new_ti": pd.Series(start, index=d.index), "iit_q": pd.Series(iit_date, index=d.index)}
     col = lambda k: _norm(d[c[k]]).fillna("").astype(object) if c.get(k) in d else pd.Series("", index=d.index)   # blanks -> ""
     has = lambda k: ~col(k).isin({"", "nan", "none", "<na>", "null", "nat", "n/a"})   # a value was recorded
 
