@@ -654,6 +654,18 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
         cube.to_csv(exp / "cube.csv", index=False)
         scorecard.to_csv(exp / "scorecard.csv", index=False)
     from dashboard.build import build
+    if not demo:          # DQA coverage and joint supervision visits, entered each quarter in the inbox workbook
+        hits = inbox_files(cfg, "ipi_inputs")
+        if hits:
+            from kpi.ipi_inputs import read_inputs
+            f = max(hits, key=lambda x: x.stat().st_mtime)
+            try:
+                data["ipi_inputs"], issues = read_inputs(f)
+                print(f"  using ipi_inputs: {f.name}" + (f" ({len(issues)} rows skipped)" if issues else ""))
+                for i in issues[:10]:
+                    print(f"    {i}")
+            except Exception as e:                 # a bad input file must not stop the update
+                print(f"  WARNING IPI manual inputs not read ({f.name}): {type(e).__name__}: {e}")
     # demo builds never touch live\ (the served dashboard) or archive\
     if not demo:          # HTS team's monthly case finding report (PowerPoint), one per month of the year
         try:

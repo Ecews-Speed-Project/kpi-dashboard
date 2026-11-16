@@ -10,5 +10,8 @@ Each source can have its own folder (files directly in inbox\ still work):
                                     never names or dates of birth.
 - FY*Target*.xlsx             FY targets
 - naomi*.xlsx                 Naomi PLHIV estimates
-- dqa_sites*.csv, joint_ssv*.csv
+- IPI_manual_inputs*.xlsx       DQA coverage (sites planned / visited) and joint supportive supervision
+                                visits (done, and the annual target per state), one row per state per quarter.
+                                Update it each quarter; a blank copy: python -m kpi.ipi_inputs <file>
+- dqa_sites*.csv, joint_ssv*.csv  (older per-site lists; the dashboard cards now use IPI_manual_inputs)
 The pbs_all and EAC files are client-level data: do not email them or copy them elsewhere.

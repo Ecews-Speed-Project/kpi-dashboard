@@ -617,21 +617,23 @@ const monthLab = m => new Date(m+"-01T00:00:00").toLocaleDateString("en-GB",{mon
 
 /* ---------- scoring (same rules as kpi/engine.py) ---------- */
 const REG = Object.fromEntries(D.registry.map(i=>[i.code,i]));
-/* DQA coverage (agreed 2026-11-16): sites visited for DQA against the planned base for the quarter (about 10% of sites),
-   entered per state and quarter as [visited, base]. Add each new quarter's figures here. */
-const DQA_VISITS = {FY27Q1:{Delta:[7,6], Ekiti:[4,2], Osun:[4,3]}};
+/* DQA coverage and joint supervision visits (agreed 2026-11-16) come from the inbox workbook IPI_manual_inputs.xlsx
+   (kpi/ipi_inputs.py): DQA = sites visited against the planned base for the quarter (about 10% of sites);
+   JSSV = visits done against the annual target per state. */
+const IPI_IN = Object.assign({dqa:{}, jssv:{}, jssv_target:{}}, D.ipi_inputs||{});
+const DQA_VISITS = IPI_IN.dqa;
 if(REG.NIPI_DQA_COVERAGE) Object.assign(REG.NIPI_DQA_COVERAGE, {kind:"count", flow:"cumulative", den:null, paced:false, num:"dqa_sites",
   measures:"Sites visited for DQA against the planned base for the period (about 10% of sites)"});
-/* Joint supportive supervision visits with GoN (agreed 2026-11-16): each state is to do 2 a year; visits entered per state and quarter. */
-const JSSV = {per_state:2, visits:{FY27Q1:{Delta:0, Ekiti:8, Osun:0}}};
 if(REG.IPI_JOINT_SSV) Object.assign(REG.IPI_JOINT_SSV, {flow:"snapshot", milestone_scope:null});
 function jssvEval(f){
   const ind = REG.IPI_JOINT_SSV, none = note => ({value:null, num:null, den:null, status:"none", target:null, note});
   if(f.lga||f.fac||f.sex||f.age||f.grp) return none("Visits are entered by state");
-  const qs = D.quarters.filter(q=>dOf(q.start)<=dOf(P.end) && dOf(q.end)>=dOf(P.start) && JSSV.visits[q.label]);
+  const qs = D.quarters.filter(q=>dOf(q.start)<=dOf(P.end) && dOf(q.end)>=dOf(P.start) && IPI_IN.jssv[q.label]);
   if(!qs.length) return none("Visits not entered for this period");
-  const sts = f.state ? [f.state] : STATES, v = qs.reduce((a,q)=>a+sts.reduce((b,st)=>b+(JSSV.visits[q.label][st]||0),0),0), t = JSSV.per_state*sts.length;
-  const r = {value:v, num:v, den:null, target:t, annual:t, score:v/t, perState:JSSV.per_state};
+  const sts = f.state ? [f.state] : STATES, v = qs.reduce((a,q)=>a+sts.reduce((b,st)=>b+(IPI_IN.jssv[q.label][st]||0),0),0);
+  const tg = IPI_IN.jssv_target[periodFY()]||{}, per = sts.map(st=>tg[st]).filter(x=>x!=null), t = per.reduce((a,b)=>a+b,0);
+  if(!t) return {value:v, num:v, den:null, target:null, status:"none", note:"No JSSV target entered for this year"};
+  const r = {value:v, num:v, den:null, target:t, annual:t, score:v/t, perState:new Set(per).size===1 ? per[0] : null};
   r.status = scoreStatus(r.score, ind); return r;
 }
 function dqaEval(f){
