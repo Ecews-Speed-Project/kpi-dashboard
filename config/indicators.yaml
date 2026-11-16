@@ -61,7 +61,7 @@ non_ipi:
   - code: NIPI_KNOW_STATUS
     name: Knowledge of HIV status among PLHIV
     pillar: 1st 95
-    measures: "PLHIV who know their status = TX_CURR + HTS_TST_POS not linked to treatment in the period (HTS_TST_POS − TX_NEW, not below 0), against the Naomi 2025 PLHIV estimate"
+    measures: "PLHIV who know their status = TX_CURR + HTS_TST_POS not linked to treatment in the period (HTS_TST_POS − (TX_NEW − GC7), not below 0), against the Naomi 2025 PLHIV estimate"
     num: plhiv_diagnosed      # computed in the dashboard (withExtras)
     den: plhiv_est
     kind: rate

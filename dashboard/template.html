@@ -592,8 +592,9 @@ function plhiv(f){
 }
 function withExtras(v, f){
   v.plhiv_est = plhiv(f);
-  // PLHIV who know their status = TX_CURR + positives of the period not yet linked (HTS_TST_POS − TX_NEW, never below 0)
-  if(v.tx_curr!=null) v.plhiv_diagnosed = v.tx_curr + Math.max(0, (v.hts_tst_pos||0) - (v.tx_new_q||0));
+  // PLHIV who know their status = TX_CURR + positives of the period not yet linked: HTS_TST_POS − (TX_NEW − GC7), never below 0
+  // (GC7 women were tested in the community, so they are not in our HTS_TST_POS)
+  if(v.tx_curr!=null) v.plhiv_diagnosed = v.tx_curr + Math.max(0, (v.hts_tst_pos||0) - ((v.tx_new_q||0) - (v.pmtct_gc7||0)));
   const orgOnly = !f.lga && !f.fac && !f.sex && !f.age;
   const sm = D.state_measures[f.state||SPEED]||{};
   if(orgOnly && sm.post_resp!=null) v.post_resp = sm.post_resp;
