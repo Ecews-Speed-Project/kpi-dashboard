@@ -592,6 +592,8 @@ function plhiv(f){
 }
 function withExtras(v, f){
   v.plhiv_est = plhiv(f);
+  // PLHIV who know their status = TX_CURR + positives of the period not yet linked (HTS_TST_POS − TX_NEW, never below 0)
+  if(v.tx_curr!=null) v.plhiv_diagnosed = v.tx_curr + Math.max(0, (v.hts_tst_pos||0) - (v.tx_new_q||0));
   const orgOnly = !f.lga && !f.fac && !f.sex && !f.age;
   const sm = D.state_measures[f.state||SPEED]||{};
   if(orgOnly && sm.post_resp!=null) v.post_resp = sm.post_resp;
@@ -1103,7 +1105,7 @@ async function brfDeck(Lib){
     slideNumber:{x:BW-1.0, y:7.13, w:0.5, h:0.32, fontFace:BF, fontSize:9, color:BC.onCloth, align:"right"}});
   pres.defineSlideMaster({title:"BRF_DARK", background:{color:BC.cloth}, objects:[]});
   const ctx = {pres, logo, scope, dates};
-  const S = [brfCover, brfGlance, brfScorecard, brfTargets, brfHts, brfHtsDetail, brfArt, brfContinuity, brfArtTrend, brfVl, brfVlDetail, brfBio, brfBioTrend, brfAhd, brfTb, brfPmtct, brfClose];
+  const S = [brfCover, brfGlance, brfScorecards, brfTargets, brfHts, brfHtsDetail, brfArt, brfContinuity, brfArtTrend, brfVl, brfVlDetail, brfBio, brfBioTrend, brfAhd, brfTb, brfPmtct, brfClose];
   for(const f of S) f(ctx);
   return pres;
 }
@@ -1237,14 +1239,15 @@ function brfGlance(ctx){
 }
 
 /* ---------- 3. IPI scorecard: one card per IPI / Non-IPI indicator (the format the user supplied, Nov 2026) ---------- */
-function brfScorecard(ctx){
+function brfScorecards(ctx){ brfScorecard(ctx); if(!F.state) STATES.forEach(x=>brfScorecard(ctx, x)); }   // programme, then one per state
+function brfScorecard(ctx, state=""){
   const order = ["1st 95","2nd 95","3rd 95","PMTCT","Prevention","TB","Systems"];
   const inds = D.registry.filter(i=>i.group==="IPI"||i.group==="Non-IPI").sort((a,b)=>(a.group===b.group?0:a.group==="IPI"?-1:1)||order.indexOf(a.pillar)-order.indexOf(b.pillar));
-  const v = agg(), pres = ctx.pres, R = pres.shapes.ROUNDED_RECTANGLE, cnt = {};
-  const ev0 = inds.map(i=>{ const r = ev(i.code, v); cnt[r.status]=(cnt[r.status]||0)+1; return [i, r]; });
+  const f = state ? {...F, state} : F, v = agg(f), pres = ctx.pres, R = pres.shapes.ROUNDED_RECTANGLE, cnt = {};
+  const ev0 = inds.map(i=>{ const r = ev(i.code, v, f); cnt[r.status]=(cnt[r.status]||0)+1; return [i, r]; });
   const nI = inds.filter(i=>i.group==="IPI").length;
-  const s = bSlide(ctx, "IPI review", "Targets and achievement by indicator",
-    `${ctx.scope} · ${P.label} · ${nI} IPI and ${inds.length-nI} Non-IPI · ${cnt.exceeds||0} exceeding, ${cnt.good||0} on track, ${cnt.warning||0} to watch, ${cnt.critical||0} off track`);
+  const s = bSlide(ctx, "IPI review", `Targets and achievement by indicator${state?" — "+state:""}`,
+    `${state||ctx.scope} · ${P.label} · ${nI} IPI and ${inds.length-nI} Non-IPI · ${cnt.exceeds||0} exceeding, ${cnt.good||0} on track, ${cnt.warning||0} to watch, ${cnt.critical||0} off track`);
   const cols = 4, gx = 0.2, gy = 0.16, x0 = 0.5, y0 = 1.72, w = (BW-1-gx*(cols-1))/cols, h = 1.56;
   const T = (t, o) => s.addText(t, Object.assign({fontFace:BF, margin:0, isTextBox:true, valign:"middle"}, o));
   ev0.forEach(([i, r], k)=>{
@@ -1284,7 +1287,7 @@ function brfScorecard(ctx){
     s.addShape(R, {x:lx, y:ly+0.04, w:0.18, h:0.16, rectRadius:0.03, fill:{color:BC.stBg[k]}, line:{color:BC.st[k], width:0.5}});
     T(l, {x:lx+0.25, y:ly, w:1.6, h:0.24, fontSize:9, bold:true, color:BC.st[k]}); });
   T("Targets: dashboard FY27 targets", {x:BW-0.5-2.2, y:ly, w:2.2, h:0.24, fontSize:8, italic:true, color:BC.ink3, align:"right"});
-  const per = F.state ? [] : STATES.map(x=>({x, f:{...F,state:x}, v:agg({...F,state:x})}));
+  const per = F.state||state ? [] : STATES.map(x=>({x, f:{...F,state:x}, v:agg({...F,state:x})}));
   s.addNotes("Status colours follow the dashboard: rates are met when they reach the target (within 5 points = Watch); counts are compared with the period target paced to the data date (75% of the expected value or more = On track, 50–74% = Watch). Achievement % = result ÷ target (for counts in a period, ÷ the whole period target; 'of pace' = ÷ what is expected by the data date)."
     + (per.length ? "\n\nBy state:\n" + ev0.map(([i])=>`${i.name}: ` + per.map(p=>{ const x = ev(i.code, p.v, p.f); return `${p.x} ${x.value==null?"—":fmtInd(i.code,x)}${x.status!=="none"?" ("+LABEL[x.status]+")":""}`; }).join(", ")).join("\n") : ""));
 }

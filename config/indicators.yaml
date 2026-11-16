@@ -61,12 +61,12 @@ non_ipi:
   - code: NIPI_KNOW_STATUS
     name: Knowledge of HIV status among PLHIV
     pillar: 1st 95
-    measures: "PLHIV with a confirmed diagnosis, against the Naomi 2025 PLHIV estimate"
-    num: plhiv_diagnosed
+    measures: "PLHIV who know their status = TX_CURR + HTS_TST_POS not linked to treatment in the period (HTS_TST_POS − TX_NEW, not below 0), against the Naomi 2025 PLHIV estimate"
+    num: plhiv_diagnosed      # computed in the dashboard (withExtras)
     den: plhiv_est
     kind: rate
     target: NIPI_KNOW_STATUS
-    source: NDR, Naomi estimate (manual)
+    source: NDR line list (TX_CURR), DHIS2 (HTS_TST_POS), TX_NEW, Naomi estimate (manual)
   - code: NIPI_INFANT_DX
     name: New HIV diagnoses among infants (0–12 months)
     pillar: PMTCT
