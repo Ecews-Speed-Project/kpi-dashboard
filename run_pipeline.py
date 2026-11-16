@@ -666,6 +666,17 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
                     print(f"    {i}")
             except Exception as e:                 # a bad input file must not stop the update
                 print(f"  WARNING IPI manual inputs not read ({f.name}): {type(e).__name__}: {e}")
+        hits = inbox_files(cfg, "pcsvp")            # PCS/VP weekly bulletin (formerly CCMP)
+        if hits:
+            from kpi.pcsvp import read_bulletin
+            f = max(hits, key=lambda x: x.stat().st_mtime)
+            try:
+                data["pcsvp"], issues = read_bulletin(f)
+                print(f"  using pcsvp: {f.name} ({len(data['pcsvp']['rows'])} state-weeks)")
+                for i in issues[:10]:
+                    print(f"    {i}")
+            except Exception as e:
+                print(f"  WARNING PCS/VP bulletin not read ({f.name}): {type(e).__name__}: {e}")
     # demo builds never touch live\ (the served dashboard) or archive\
     if not demo:          # HTS team's monthly case finding report (PowerPoint), one per month of the year
         try:

@@ -137,6 +137,7 @@ inbox_patterns:
   dqa: ["dqa_sites*.csv"]
   joint_ssv: ["joint_ssv*.csv"]
   ipi_inputs: ["IPI_manual_inputs*.xlsx"]   # DQA coverage and JSSV, entered each quarter (kpi/ipi_inputs.py)
+  pcsvp: ["PCSVP*.xlsx", "WeeklyBulletinCCMP*.xlsx"]   # PCS/VP (formerly CCMP) weekly bulletin (kpi/pcsvp.py)
   eac: ["eac_linelist*.csv", "eac_linelist*.xlsx", "*EAC*inelist*.xlsx"]   # inbox/eac/ (password in .env EAC_FILE_PASSWORD); used when the CDR EAC table is empty
   # Quarter-end treatment line list (NDR / PHIS3 layout with _Q1.._Q4 columns), e.g. "q4 linelist_phsi3.csv".
   # The quarter comes from the file name (q1..q4); it is used for every treatment number of that quarter.

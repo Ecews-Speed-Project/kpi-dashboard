@@ -338,6 +338,38 @@ footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:
 .who a:hover{opacity:1}
 .hello{display:flex;gap:10px;align-items:center;font-size:27px;margin:0}
 .hello small{font-family:var(--body);font-weight:400;font-style:italic;font-size:15px;color:var(--ink-3)}
+/* ---------- PCS/VP page ---------- */
+.pv-hero{position:relative;overflow:hidden;border-radius:8px;padding:22px 24px 20px;color:var(--on-cloth);
+  background:radial-gradient(120% 140% at 100% 0%,rgba(184,145,58,.35),transparent 55%),linear-gradient(135deg,var(--cloth),var(--cloth-2));
+  border:1px solid var(--cloth-2);box-shadow:0 10px 24px -14px var(--shadow)}
+.pv-hero h2{margin:0;font-family:var(--display);font-size:30px;color:#fff;letter-spacing:.3px}
+.pv-hero .pv-sub{margin:4px 0 16px;font-style:italic;color:var(--on-cloth);opacity:.9}
+.pv-hero .pv-tag{display:inline-block;margin-left:8px;padding:2px 10px;border-radius:12px;background:var(--gold);color:#fff;font-family:var(--caps);font-size:11px;letter-spacing:1px;vertical-align:middle}
+.pv-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.pv-big>div{background:rgba(255,255,255,.07);border:1px solid rgba(243,233,207,.18);border-radius:6px;padding:12px 14px}
+.pv-big b{display:block;font-family:var(--display);font-size:34px;line-height:1.05;color:#fff}
+.pv-big span{font-size:14px;color:var(--on-cloth)}
+.pv-big small{display:block;margin-top:4px;font-size:12.5px;color:var(--on-cloth);opacity:.8}
+.pv-rings{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:2px}
+.pv-ring{display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 4px}
+.pv-ring svg{width:112px;height:112px}
+.pv-ring .rl{margin-top:4px;font-weight:600;color:var(--ink)}
+.pv-ring .rs{font-size:12.5px;color:var(--ink-3)}
+.pv-fun{display:flex;flex-direction:column;gap:7px;margin-top:6px}
+.pv-fun .st{display:grid;grid-template-columns:minmax(110px,38%) 1fr auto;gap:10px;align-items:center}
+.pv-fun .st .l{font-size:14px;color:var(--ink-2);text-align:right}
+.pv-fun .st .t{height:22px;background:var(--track);border-radius:4px;overflow:hidden}
+.pv-fun .st .t i{display:block;height:100%;border-radius:4px}
+.pv-fun .st .v{font-size:14px;white-space:nowrap;min-width:92px}
+.pv-fun .st .v small{color:var(--ink-3)}
+.pv-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.pv-chips span{padding:4px 10px;border-radius:14px;background:var(--card-hi);border:1px solid var(--rule-soft);font-size:13px}
+.pv-chips b{margin-right:4px}
+.pv-states{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.pv-states span{font-size:12.5px;color:var(--ink-3)}
+.pv-states span b{color:var(--ink)}
+.pv-part{margin:20px 0 0;font-size:22px;padding-bottom:4px;border-bottom:1px solid var(--rule)}
+@media (max-width:640px){ .pv-hero h2{font-size:24px} .pv-big b{font-size:28px} .pv-fun .st{grid-template-columns:1fr auto} .pv-fun .st .t{grid-column:1/-1;order:3} .pv-fun .st .l{text-align:left} }
 .phrh-part{margin:18px 0 0;font-size:22px;padding-bottom:4px;border-bottom:1px solid var(--rule)}
 /* ---------- charts that scroll back through the months ---------- */
 .hscroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--gold) transparent;-webkit-overflow-scrolling:touch;padding-bottom:6px}
@@ -449,7 +481,7 @@ details.terms summary .ico{vertical-align:-.3em}
 const D = window.__D; delete window.__D;
 const LOADING = document.querySelector("#main .loading").outerHTML;   // the same loading screen the page opens with
 const SPEED = "ECEWS SPEED";
-const PAGES = [["overview","Overview"],["ipi","IPI & Non-IPI"],["hts","HIV Testing Services"],["phrh","PHRH"],["naomi","Saturation"],["art","Current on Treatment"],["vl","Viral Load"],
+const PAGES = [["overview","Overview"],["ipi","IPI & Non-IPI"],["hts","HIV Testing Services"],["phrh","PHRH"],["pcsvp","PCS/VP"],["naomi","Saturation"],["art","Current on Treatment"],["vl","Viral Load"],
   ["pmtct","AP3/PMTCT"],["tb","TB"],["ahd","AHD"],["pbs","Biometrics"],["live","Live data entry"],["methods","How it's calculated"],["flow","Data flow"]];
 let page = "overview", IPID = null, WHO = null;
 const F = {state:"", lga:"", fac:"", sex:"", age:""};
@@ -2365,6 +2397,115 @@ function artSnapshot(){ const v=agg();
    <section class="c3d">${secH("TX_CURR by facility","From the saved copies dated in this period")}${pivot("artsnap",[C("TX_CURR",V("tx_curr"),0,0,"tx_curr"),C(NDRT()?"TX_CURR (line list)":"TX_CURR (EMR)",V("tx_curr_emr")),C("3+ month refills",V("mmd3")),C("Refill share",RV("mmd3","tx_curr_emr"),1)],["org","paed","sex","age"])}</section>
    <p class="drillnote">Waterfalls, IIT and appointments are built from the current linelist and NDR file only.</p>`; }
 function trendsBlock(){ return `<details class="c3d trends"${TROPEN?" open":""}><summary data-trends>${secH("Trends — weekly","TX_CURR, TX_NEW / IIT, biometrics and viral load week by week · click to open or close")}</summary>${TROPEN?trendsPage():""}</details>`; }
+/* ---------- PCS/VP (formerly CCMP): the weekly bulletin, inbox/PCSVP_Weekly_Bulletin*.xlsx (kpi/pcsvp.py) ----------
+   The bulletin's figures are to-date values per state: the page shows each state's latest week in the selected
+   period (or, if none, its latest week before it) and adds the states up. */
+function pvData(){
+  const B = D.pcsvp; if(!B || !B.rows || !B.rows.length) return null;
+  const sts = F.state ? [F.state] : STATES, out = {latest:{}, weeks:new Map(), inPeriod:true};
+  for(const st of sts){
+    const rs = B.rows.filter(r=>r.state===st && r.date).sort((a,b)=>a.date<b.date?-1:1);
+    let r = rs.filter(r=>r.date>=P.start && r.date<=P.end).at(-1);
+    if(!r){ r = rs.filter(r=>r.date<=P.end).at(-1); if(r) out.inPeriod = false; }
+    if(r) out.latest[st] = r;
+    for(const x of rs){ const w = out.weeks.get(x.date) || {}; for(const k in x.v) w[k]=(w[k]||0)+x.v[k]; out.weeks.set(x.date, w); }
+  }
+  const L = Object.values(out.latest); if(!L.length) return null;
+  out.tot = {}; for(const r of L) for(const k in r.v) out.tot[k]=(out.tot[k]||0)+r.v[k];
+  out.wk = Math.max(...L.map(r=>r.week)); out.date = L.map(r=>r.date).sort().at(-1); out.states = L.map(r=>r.state);
+  return out;
+}
+function pvRing(p, label, sub, color="var(--s1)"){
+  const r=46, c=2*Math.PI*r, v=p==null||!isFinite(p) ? null : Math.max(0,Math.min(1,p));
+  return `<div class="pv-ring" data-tip="${esc(label)}: ${p==null?"no data":pct(p)}${sub?" · "+esc(sub):""}"><svg viewBox="0 0 112 112" role="img" aria-label="${esc(label)} ${p==null?"":pct(p,0)}">
+    <circle cx="56" cy="56" r="${r}" fill="none" stroke="var(--track)" stroke-width="11"/>
+    ${v!=null?`<circle cx="56" cy="56" r="${r}" fill="none" stroke="${color}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(c*v).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 56 56)"/>`:""}
+    <text x="56" y="62" text-anchor="middle" font-size="22" font-family="var(--display)" font-weight="700" fill="var(--ink)">${p==null?"—":pct(p,0)}</text></svg>
+    <span class="rl">${esc(label)}</span><span class="rs">${sub||""}</span></div>`;
+}
+// a cascade: each step as a bar against the first; the share is of the step before (or of the first, base:0)
+function pvFunnel(steps, color="var(--s1)", {base=null}={}){
+  const top = Math.max(1, ...steps.map(s=>s[1]||0));
+  return `<div class="pv-fun">${steps.map(([l,v,ofIdx],i)=>{ const ref = ofIdx===-1 ? null : ofIdx!=null ? steps[ofIdx][1] : base!=null ? steps[base][1] : i ? steps[i-1][1] : null;
+    return `<div class="st" data-tip="${esc(l)}: ${n(v)}${i&&ref?` · ${pct(div(v,ref))} of ${esc(steps[ofIdx??base??i-1][0])}`:""}"><span class="l">${esc(l)}</span>
+      <span class="t"><i style="width:${Math.max(v?1.5:0,(v||0)/top*100)}%;background:${color}"></i></span>
+      <span class="v"><b>${n(v)}</b>${i&&ref?` <small>${pct(div(v,ref),0)}</small>`:""}</span></div>`; }).join("")}</div>`;
+}
+function pvByState(V, keys, fmt){         // one small line per state under a panel
+  return `<div class="pv-states">${Object.values(V.latest).map(r=>`<span>${esc(r.state)} <b>${fmt(r.v)}</b></span>`).join('<span>·</span>')}</div>`;
+}
+function pcsvpPage(){
+  const V = pvData();
+  if(!V) return `<section class="c3d empty"><b>No PCS/VP bulletin yet${F.state?` for ${esc(F.state)}`:""}.</b> Save the weekly bulletin workbook (sheet “CCMP KPIs”) in the inbox as <code>PCSVP_Weekly_Bulletin_FY27.xlsx</code>; the next update reads it.</section>`;
+  const t = V.tot, g = k => t[k]||0, R = (a,b) => div(g(a),g(b));
+  const wkLab = `Week ${V.wk} · ${fmtDate(V.date)}`;
+  const miss = (F.state?[F.state]:STATES).filter(s=>!V.states.includes(s));
+  const hero = `<section class="pv-hero"><h2>PCS/VP weekly bulletin <span class="pv-tag">${esc(wkLab)}</span></h2>
+    <p class="pv-sub">Formerly CCMP · ${esc(F.state||"Delta, Ekiti, Osun")} · figures to date as reported in the bulletin${V.inPeriod?"":` · no bulletin inside ${esc(P.label)}: showing the latest before it`}${miss.length?` · not reported: ${esc(miss.join(", "))}`:""}</p>
+    <div class="pv-big">
+      <div><b>${n(g("reach_0_17")+g("reach_18_20"))}</b><span>CALHIV reached</span><small>${n(g("reach_0_17"))} aged 0–17 · ${n(g("reach_18_20"))} aged 18–20</small></div>
+      <div><b>${n(g("caregivers"))}</b><span>Positive caregivers reached</span></div>
+      <div><b>${pct(div(g("cov_0_14")+g("cov_15_17"), g("txc_0_14")+g("txc_15_17")),0)}</b><span>CCMP coverage, 0–17</span><small>${n(g("cov_0_14")+g("cov_15_17"))} of ${n(g("txc_0_14")+g("txc_15_17"))} children and adolescents on ART</small></div>
+      <div><b>${n(g("pvc_total"))}</b><span>Post-violence care</span><small>${n(g("surv_u15")+g("surv_15p"))} survivors · ${n(g("ipv_total"))} IPV identified</small></div>
+    </div></section>`;
+  const rings = `<section class="c3d">${secH("Key rates",wkLab)}<div class="pv-rings">
+    ${pvRing(R("cov_0_14","txc_0_14"),"Coverage 0–14",`${n(g("cov_0_14"))} of ${n(g("txc_0_14"))}`)}
+    ${pvRing(R("cov_15_17","txc_15_17"),"Coverage 15–17",`${n(g("cov_15_17"))} of ${n(g("txc_15_17"))}`)}
+    ${pvRing(R("tx_linkage","hts_pos_comm"),"Community linkage",`${n(g("tx_linkage"))} of ${n(g("hts_pos_comm"))} positive`,"var(--s3)")}
+    ${pvRing(R("rtt","iit"),"Returned to treatment",`${n(g("rtt"))} of ${n(g("iit"))} with IIT`,"var(--s2)")}
+    ${pvRing(R("hei_tested","hei_eligible"),"HEI tested for EID",`${n(g("hei_tested"))} of ${n(g("hei_eligible"))}`,"var(--s3)")}
+    ${pvRing(div(g("pvc_u15")+g("pvc_15p"), g("surv_u15")+g("surv_15p")),"Survivors given care",`${n(g("pvc_u15")+g("pvc_15p"))} of ${n(g("surv_u15")+g("surv_15p"))}${div(g("pvc_u15")+g("pvc_15p"), g("surv_u15")+g("surv_15p"))>1?" · see the check below":""}`,"var(--bar-critical)")}
+    </div></section>`;
+  const st = (k, f=v=>n(v[k]||0)) => pvByState(V, [k], f);
+  const chk = Object.values(V.latest).filter(r=>(r.v.pvc_u15||0)>(r.v.surv_u15||0) || (r.v.pvc_15p||0)>(r.v.surv_15p||0)).map(r=>r.state);
+  const panel = (title, note, body) => `<section class="c3d">${secH(title, note)}${body}</section>`;
+  const hts = panel("Community HIV testing","Children and adolescents tested in the community",
+    pvFunnel([["Tested (HTS_TST_COMM)",g("hts_comm")],["Positive",g("hts_pos_comm")],["Linked to ART",g("tx_linkage")]],"var(--s3)")
+    + `<div class="pv-chips"><span><b>${rpct(g("hts_pos_comm"),g("hts_comm"))}</b>yield</span><span><b>${rpct(g("tx_linkage"),g("hts_pos_comm"))}</b>linkage</span></div>` + st("hts_comm", v=>`${n(v.hts_comm||0)} tested · ${n(v.hts_pos_comm||0)} pos`));
+  const reach = panel("Beneficiaries reached","CALHIV and positive caregivers",
+    groupBars(V.states, [{l:"CALHIV 0–17",c:"var(--s1)",v:V.states.map(s=>V.latest[s].v.reach_0_17||0)},{l:"CALHIV 18–20",c:"var(--s3)",v:V.states.map(s=>V.latest[s].v.reach_18_20||0)},
+      {l:"Positive caregivers",c:"var(--s2)",v:V.states.map(s=>V.latest[s].v.caregivers||0)}], {H:170}));
+  const cov = panel("Treatment and CCMP coverage","Children and adolescents on ART, and how many the programme covers",
+    `<div class="tw"><table><thead><tr><th>State</th><th class="n">On ART 0–14</th><th class="n">Covered</th><th class="n">Coverage</th><th class="n">On ART 15–17</th><th class="n">Covered</th><th class="n">Coverage</th><th class="n">New on ART 0–17</th><th class="n">Linked to CCMP</th></tr></thead><tbody>
+     ${[...Object.values(V.latest).map(r=>[esc(r.state), r.v, 0]), ["Total", t, 1]].map(([l,v,tt])=>`<tr${tt?' class="total"':""}><td>${l}</td><td class="n">${n(v.txc_0_14||0)}</td><td class="n">${n(v.cov_0_14||0)}</td><td class="n"><b>${rpct(v.cov_0_14,v.txc_0_14,0)}</b></td>
+       <td class="n">${n(v.txc_15_17||0)}</td><td class="n">${n(v.cov_15_17||0)}</td><td class="n"><b>${rpct(v.cov_15_17,v.txc_15_17,0)}</b></td><td class="n">${n(v.tx_new_0_17||0)}</td><td class="n">${n(v.linked_ccmp||0)} <small>${rpct(v.linked_ccmp,v.tx_new_0_17,0)}</small></td></tr>`).join("")}</tbody></table></div>`);
+  const iit = panel("IIT tracking","CALHIV who interrupted treatment and those brought back",
+    pvFunnel([["Interrupted treatment",g("iit")],["Returned to treatment",g("rtt")]],"var(--s2)") + st("iit", v=>`${n(v.rtt||0)} of ${n(v.iit||0)} back`));
+  const nut = panel("CLHIV nutrition","Assessment, malnutrition and support",
+    pvFunnel([["Nutrition assessed",g("nut_assessed")],["Malnourished",g("malnourished")],["On nutrition support",g("nut_support")]],"var(--s1)")
+    + `<div class="pv-chips"><span><b>${n(g("sam"))}</b>SAM</span><span><b>${n(g("mam"))}</b>MAM / MOAM</span><span><b>${n(g("obese"))}</b>obese</span><span><b>${rpct(g("malnourished"),g("nut_assessed"))}</b>of assessed malnourished</span></div>`);
+  const hei = panel("HEI and PMTCT","HIV-exposed infants enrolled and tested",
+    pvFunnel([["HEI eligible for EID (enrolled)",g("hei_eligible")],["Tested for EID",g("hei_tested")]],"var(--s3)")
+    + `<div class="pv-chips"><span><b>${n(g("pmtct_outcome"))}</b>PMTCT outcomes</span></div>` + st("hei_eligible", v=>`${n(v.hei_tested||0)} of ${n(v.hei_eligible||0)}`));
+  const vio = panel("Violence and post-violence care","Survivors identified and given care (PVC)",
+    pvFunnel([["Survivors under 15",g("surv_u15")],["Given care, under 15",g("pvc_u15"),0],["Survivors 15+",g("surv_15p"),-1],["Given care, 15+",g("pvc_15p"),2]],"var(--bar-critical)")
+    + (chk.length?`<div class="pv-chips"><span style="border-color:var(--bar-warning);background:var(--warn-bg)"><b>Check</b>more care than survivors in ${esc(chk.join(", "))}: survivors may be missing from the bulletin</span></div>`:"")
+    + `<div class="pv-chips"><span><b>${n(g("pvc_phys"))}</b>physical / emotional</span><span><b>${n(g("pvc_sexual"))}</b>sexual violence</span><span><b>${n(g("pvc_total"))}</b>total post-violence care</span></div>` + st("pvc_total"));
+  const surv = panel("Survivors: HIV and STI services","Testing and treatment for survivors",
+    `<div class="grid g2"><div><h3 class="minih">HIV</h3>${pvFunnel([["Tested for HIV",g("surv_hiv_tst")],["Positive",g("surv_hiv_pos")],["Linked to ART",g("surv_hiv_art")]],"var(--s3)")}</div>
+     <div><h3 class="minih">STI</h3>${pvFunnel([["Tested for STI",g("surv_sti_tst")],["Positive",g("surv_sti_pos")],["Treated",g("surv_sti_rx")]],"var(--s2)")}</div></div>`);
+  const pep = panel("Prevention: PEP","Sexual violence (rape) survivors through the PEP course",
+    pvFunnel([["SV-rape survivors",g("sv_rape")],["PEP eligible",g("pep_eligible")],["PEP offered",g("pep_offered")],["PEP initiated",g("pep_initiated")],["PEP completed",g("pep_completed")],["Post-PEP HIV test",g("post_pep_hts")]],"var(--bar-critical)"));
+  const ipv = panel("Intimate partner violence","Clients identified with IPV and those given tailored interventions",
+    pvFunnel([["Identified at 1st EAC",g("ipv_eac")],["Identified at PrEP",g("ipv_prep")],["Identified at HTS",g("ipv_hts")],["Total IPV",g("ipv_total")],["Tailored interventions",g("ipv_tailored"),3]],"var(--s2)",{base:3}));
+  // weeks: trend of the to-date figures
+  const wks = [...V.weeks.keys()].filter(d=>d<=P.end).sort();
+  const trend = wks.length>1 ? panel("Week by week","Bulletin figures to date, each week",
+      lineChart([["CALHIV reached","reach_0_17","var(--s1)"],["Positive caregivers","caregivers","var(--s2)"],["Nutrition assessed","nut_assessed","var(--s3)"]]
+        .map(([l,k,c])=>({l,c,pts:wks.map(d=>({d, v:V.weeks.get(d)[k]||0}))})),{label:"PCS/VP weekly",weekly:true,endLabel:true}))
+    : panel("Week by week",`Week ${V.wk} is the first bulletin of the year`,`<div class="empty">The trend starts once a second week is in the bulletin.</div>`);
+  // the whole bulletin row by row, for checking against the workbook
+  const cols = (D.pcsvp.columns||[]), secs = [...new Set(cols.map(c=>c[2]))];
+  const full = `<section class="c3d">${secH("The full bulletin",`${wkLab} · every column of the workbook, by state`)}<details><summary>Show all ${cols.length} figures</summary>
+    <div class="tw"><table><thead><tr><th>Indicator</th>${V.states.map(s=>`<th class="n">${esc(s)}</th>`).join("")}<th class="n">Total</th></tr></thead><tbody>
+    ${secs.map(sc=>`<tr class="total"><td colspan="${V.states.length+2}">${esc(sc)}</td></tr>`+cols.filter(c=>c[2]===sc).map(([k,l])=>`<tr><td>${esc(l)}</td>${V.states.map(s=>`<td class="n">${n(V.latest[s].v[k]??null)}</td>`).join("")}<td class="n"><b>${n(t[k]??null)}</b></td></tr>`).join("")).join("")}
+    </tbody></table></div></details><p class="drillnote">From ${esc(D.pcsvp.file||"the bulletin")} (sheet “CCMP KPIs”). LGA and facility filters do not apply: the bulletin is by state.</p></section>`;
+  return hero + rings
+    + `<h2 class="pv-part">Care and treatment</h2><div class="grid g2">${hts}${reach}</div>${cov}<div class="grid g2">${iit}${nut}</div>${hei}`
+    + `<h2 class="pv-part">Violence prevention and response</h2><div class="grid g2">${vio}${surv}</div><div class="grid g2">${pep}${ipv}</div>`
+    + trend + full;
+}
+
 /* ---------- PHRH page: persons at higher risk, the CSCC (key-population one-stop) sites only ----------
    Everything here is the dashboard's own sums with the site group fixed to CSCC; the treatment part reuses the
    CSCC vs general population comparison of the treatment page. */
@@ -3482,7 +3623,7 @@ function render(){
   document.getElementById("nav").innerHTML=PAGES.filter(([k])=>(k!=="ipi"||ipiOn)&&(k!=="live"||LV.on)).map(([k,l])=>`<a href="#${k}"${k===page?' aria-current="page"':""}>${l}</a>`).join("");
   document.getElementById("filters").innerHTML=page==="live"?"":filtersBar();
   const fn={overview,hts:htsPage,art:artPage,vl:vlPage,pmtct:pmtctPage,tb:tbPage,ahd:ahdPage,pbs:pbsPage,trends:artPage,naomi:naomiPage,
-    ipi:()=>IPID?ipiDetail(IPID):ipiPage(),live:livePage,phrh:phrhPage,methods:methodsPage,flow:flowPage}[page]||overview;
+    ipi:()=>IPID?ipiDetail(IPID):ipiPage(),live:livePage,phrh:phrhPage,pcsvp:pcsvpPage,methods:methodsPage,flow:flowPage}[page]||overview;
   document.getElementById("who").innerHTML = WHO ? `<span>${ico("user",20)} Hi, <b>${esc(WHO.name)}</b></span><a href="/logout" title="${esc(WHO.email)}">Sign out</a>` : "";
   const hello = page==="overview" && WHO ? `<h2 class="hello">Hi, ${esc(WHO.name)} <small>here is where the programme stands for ${esc(P.label)}</small></h2>` : "";
   WIN=windowSet();

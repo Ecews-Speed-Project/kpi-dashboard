@@ -13,5 +13,7 @@ Each source can have its own folder (files directly in inbox\ still work):
 - IPI_manual_inputs*.xlsx       DQA coverage (sites planned / visited) and joint supportive supervision
                                 visits (done, and the annual target per state), one row per state per quarter.
                                 Update it each quarter; a blank copy: python -m kpi.ipi_inputs <file>
+- PCSVP_Weekly_Bulletin*.xlsx    PCS/VP (formerly CCMP) weekly bulletin, sheet "CCMP KPIs": one row per state per week.
+                                Fill the new week's rows and save it here (the newest file is used).
 - dqa_sites*.csv, joint_ssv*.csv  (older per-site lists; the dashboard cards now use IPI_manual_inputs)
 The pbs_all and EAC files are client-level data: do not email them or copy them elsewhere.
