@@ -118,6 +118,8 @@ non_ipi:
     name: DQA coverage rate
     pillar: Systems
     measures: "Supported sites with at least one comprehensive DQA under the FY27 SOP"
+    # dashboard (since 2026-11-16): sites visited against the planned base per state and quarter (about 10% of sites),
+    # entered in DQA_VISITS in dashboard/template.html; shown as a count against that base
     num: dqa_sites
     den: sites_total
     kind: rate

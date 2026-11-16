@@ -617,6 +617,22 @@ const monthLab = m => new Date(m+"-01T00:00:00").toLocaleDateString("en-GB",{mon
 
 /* ---------- scoring (same rules as kpi/engine.py) ---------- */
 const REG = Object.fromEntries(D.registry.map(i=>[i.code,i]));
+/* DQA coverage (agreed 2026-11-16): sites visited for DQA against the planned base for the quarter (about 10% of sites),
+   entered per state and quarter as [visited, base]. Add each new quarter's figures here. */
+const DQA_VISITS = {FY27Q1:{Delta:[7,6], Ekiti:[4,2], Osun:[4,3]}};
+if(REG.NIPI_DQA_COVERAGE) Object.assign(REG.NIPI_DQA_COVERAGE, {kind:"count", flow:"cumulative", den:null, paced:false, num:"dqa_sites",
+  measures:"Sites visited for DQA against the planned base for the period (about 10% of sites)"});
+function dqaEval(f){
+  const ind = REG.NIPI_DQA_COVERAGE, none = note => ({value:null, num:null, den:null, status:"none", target:null, note});
+  if(f.lga||f.fac||f.sex||f.age||f.grp) return none("DQA visits are entered by state");
+  const qs = D.quarters.filter(q=>dOf(q.start)<=dOf(P.end) && dOf(q.end)>=dOf(P.start) && DQA_VISITS[q.label]);
+  if(!qs.length) return none("DQA visits not entered for this period");
+  let v = 0, b = 0;
+  for(const q of qs) for(const [st,[x,y]] of Object.entries(DQA_VISITS[q.label])) if(!f.state||st===f.state){ v+=x; b+=y; }
+  if(!b) return none("No DQA base for this state");
+  const r = {value:v, num:v, den:b, target:b, pctQ:v/b};
+  r.status = scoreStatus(v/b, ind); return r;
+}
 const RAG = D.meta.rag, TFY = D.meta.fiscal_year;
 const qOf = d => D.quarters.find(q=>dOf(q.start)<=d && d<=dOf(q.end));
 /* targets are held per fiscal year (FY27 workbook; earlier years from settings.prior_targets):
@@ -628,6 +644,7 @@ function tgtRow(key, scope, band="All", fy=periodFY()){ return D.targets.find(t=
 const TL = () => P.mode==="quarter" ? "Q" : "period";
 function evaluate(code, v, f=F){
   const ind = REG[code];
+  if(code==="NIPI_DQA_COVERAGE") return dqaEval(f);
   if(WIN||(WIN=windowSet()), stockMissing(ind.num) || stockMissing(ind.den)) return {value:null, num:null, den:null, status:"none", target:null, note:"No data for this period"};
   const num = v[ind.num]??null, den = ind.den ? (v[ind.den]??null) : null;
   const value = ind.kind==="rate" ? (num!=null&&den ? (num||0)/den : null) : (num ?? (MEAS.includes(ind.num)?0:null));
@@ -1264,7 +1281,8 @@ function brfScorecard(ctx, state=""){
     // target (left)
     const tg = r.target;
     const tLab = tg==null ? "Target" : rate ? "Target" : snap ? "Target · annual" : `Target · ${P.mode==="quarter"?"this quarter":"this period"}`;
-    const tSub = tg==null ? (r.note||"no target loaded") : rate ? (r.den ? `${n(tg*r.den)} of ${n(r.den)}` : "") : !snap && r.annual ? `annual ${n(r.annual)}` : "";
+    const dqa = i.code==="NIPI_DQA_COVERAGE";
+    const tSub = dqa && tg!=null ? "planned sites (≈10% base)" : tg==null ? (r.note||"no target loaded") : rate ? (r.den ? `${n(tg*r.den)} of ${n(r.den)}` : "") : !snap && r.annual ? `annual ${n(r.annual)}` : "";
     const lw = w*0.44;
     T(tLab, {x:x+0.15, y:y+0.84, w:lw, h:0.18, fontSize:8, color:BC.ink3});
     T(tg==null ? "Not set" : rate ? pct(tg,0) : n(tg), {x:x+0.15, y:y+1.0, w:lw, h:0.34, fontFace:HF, fontSize:20, bold:true, color:tg==null?"A79B83":BC.cloth, fit:"shrink"});
@@ -1279,7 +1297,7 @@ function brfScorecard(ctx, state=""){
     const d = !rate && r.value!=null && tg!=null ? r.value-tg : null;
     const aSub = r.value==null ? "needs data" : rate ? (r.den ? `${n(r.num)} / ${n(r.den)}` : "")
       : d==null ? "" : (!snap && r.score!=null ? (d>=0 ? `+${n(d)} above` : `${n(-d)} short`)+` · ${pct(r.score,0)} of pace` : d>=0 ? `+${n(d)} above target` : `${n(-d)} short of target`);
-    T(aSub, {x:bx+0.1, y:by+0.48, w:bw-0.2, h:0.15, fontSize:7.5, color:BC.ink2, fit:"shrink"});
+    T(dqa && r.value!=null ? `sites visited · ${aSub.replace(" target","")}` : aSub, {x:bx+0.1, y:by+0.48, w:bw-0.2, h:0.15, fontSize:7.5, color:BC.ink2, fit:"shrink"});
   });
   // legend and source line
   const ly = y0+3*h+2*gy+0.08;
