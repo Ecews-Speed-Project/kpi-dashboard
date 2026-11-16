@@ -338,6 +338,7 @@ footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:
 .who a:hover{opacity:1}
 .hello{display:flex;gap:10px;align-items:center;font-size:27px;margin:0}
 .hello small{font-family:var(--body);font-weight:400;font-style:italic;font-size:15px;color:var(--ink-3)}
+.phrh-part{margin:18px 0 0;font-size:22px;padding-bottom:4px;border-bottom:1px solid var(--rule)}
 /* ---------- charts that scroll back through the months ---------- */
 .hscroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--gold) transparent;-webkit-overflow-scrolling:touch;padding-bottom:6px}
 .hscroll::-webkit-scrollbar{height:8px}.hscroll::-webkit-scrollbar-thumb{background:var(--gold);border-radius:4px}
@@ -448,7 +449,7 @@ details.terms summary .ico{vertical-align:-.3em}
 const D = window.__D; delete window.__D;
 const LOADING = document.querySelector("#main .loading").outerHTML;   // the same loading screen the page opens with
 const SPEED = "ECEWS SPEED";
-const PAGES = [["overview","Overview"],["ipi","IPI & Non-IPI"],["hts","HIV Testing Services"],["naomi","Saturation"],["art","Current on Treatment"],["vl","Viral Load"],
+const PAGES = [["overview","Overview"],["ipi","IPI & Non-IPI"],["hts","HIV Testing Services"],["phrh","PHRH"],["naomi","Saturation"],["art","Current on Treatment"],["vl","Viral Load"],
   ["pmtct","AP3/PMTCT"],["tb","TB"],["ahd","AHD"],["pbs","Biometrics"],["live","Live data entry"],["methods","How it's calculated"],["flow","Data flow"]];
 let page = "overview", IPID = null, WHO = null;
 const F = {state:"", lga:"", fac:"", sex:"", age:""};
@@ -495,7 +496,7 @@ function inWindow(m, s, e){
 let STOCK = true, _SM = null, SKIPM = null, SNL = null, SNN = null;
 /* parts of a live build fetched when a page needs them (see the manifest); an archived copy has them all */
 const MAN = D.manifest || null, PART = {};
-const PAGE_PARTS = {overview:["conc"], art:["appt","trends"], trends:["appt","trends"], vl:["vl"], pmtct:["vl"], pbs:["pbs","trends"], methods:["methods"]};
+const PAGE_PARTS = {overview:["conc"], phrh:["appt","trends"], art:["appt","trends"], trends:["appt","trends"], vl:["vl"], pmtct:["vl"], pbs:["pbs","trends"], methods:["methods"]};
 function partsFor(){ const want=[...(PAGE_PARTS[page]||[]), ...(page==="ipi"&&IPID?["trends","methods"]:[])];
   if(!STOCK) for(const k of [SNL,SNN]) if(k) want.push("snap:"+k);
   return MAN ? want.filter(n=>MAN.parts[n] && PART[n]!=="ready") : []; }
@@ -552,7 +553,7 @@ const isCscc = i => (ISC || (ISC = FAC.map(x=>/cscc/i.test(x.facility))))[i];
    (each value carries a single band, so nothing is counted twice). Other pages: five-year bands
    up to 65+, no 50+ line. */
 const OVER50 = new Set(["50-54","55-59","60-64","65+"]);
-const TOP50 = () => page==="hts" || page==="tb";     // pages whose DHIS2 data is reported as 50+
+const TOP50 = () => page==="hts" || page==="tb" || page==="phrh";     // pages whose DHIS2 data is reported as 50+
 const ageOf = a => TOP50() && OVER50.has(a) ? "50+" : a;
 const AGEBANDS = () => TOP50() ? AGE.filter(a=>!OVER50.has(a)) : AGE.filter(a=>a!=="50+");
 const bandRange = b => b==="<1" ? [0,0] : /^\d+\+$/.test(b) ? [+b.slice(0,-1),200] : /^\d+-\d+$/.test(b) ? b.split("-").map(Number) : null;
@@ -2363,6 +2364,63 @@ function artSnapshot(){ const v=agg();
    <section class="c3d">${secH("TX_CURR by facility","From the saved copies dated in this period")}${pivot("artsnap",[C("TX_CURR",V("tx_curr"),0,0,"tx_curr"),C(NDRT()?"TX_CURR (line list)":"TX_CURR (EMR)",V("tx_curr_emr")),C("3+ month refills",V("mmd3")),C("Refill share",RV("mmd3","tx_curr_emr"),1)],["org","paed","sex","age"])}</section>
    <p class="drillnote">Waterfalls, IIT and appointments are built from the current linelist and NDR file only.</p>`; }
 function trendsBlock(){ return `<details class="c3d trends"${TROPEN?" open":""}><summary data-trends>${secH("Trends — weekly","TX_CURR, TX_NEW / IIT, biometrics and viral load week by week · click to open or close")}</summary>${TROPEN?trendsPage():""}</details>`; }
+/* ---------- PHRH page: persons at higher risk, the CSCC (key-population one-stop) sites only ----------
+   Everything here is the dashboard's own sums with the site group fixed to CSCC; the treatment part reuses the
+   CSCC vs general population comparison of the treatment page. */
+function phrhPage(){
+  const f = {...F, grp:"cscc"}, v = agg(f), g = (x,k) => x[k]||0;
+  const sites = FAC.map((x,i)=>({x,i})).filter(o=>isCscc(o.i)&&facPass(o.i,F));
+  if(!sites.length) return context()+`<section class="c3d empty">No CSCC site in ${esc(filterText())}. CSCC sites: ${esc(FAC.filter((x,i)=>isCscc(i)).map(x=>x.facility).join(", "))}.</section>`;
+  const kits = g(v,"hivst_assisted")+g(v,"hivst_unassisted");
+  const head = `<section class="c3d phrh-head">${secH("PHRH — persons at higher risk",`${sites.length} CSCC site${sites.length>1?"s":""} (key-population one-stop shops) · ${esc(sites.map(o=>o.x.facility.replace(/ CSCC$/i,"")).join(", "))}`)}
+   <p class="drillnote" style="margin:0">Every figure on this page is for the CSCC sites only, with the same rules as the rest of the dashboard. Use the period, state and facility filters as usual.</p></section>`;
+  const kTest = `<div class="kpis">${kpi(n(v.hts_tst),"HTS_TST","tested at CSCC sites")}${kpi(n(v.hts_tst_pos),"HTS_TST_POS","newly diagnosed")}
+    ${kpi(rpct(v.hts_tst_pos,v.hts_tst),"Testing yield","POS ÷ TST")}${kpi(n(v.tx_new_q),"TX_NEW","new ART starts, transfer-ins removed")}
+    ${kpi(rpct(v.tx_new_q,v.hts_tst_pos),"Linkage","TX_NEW ÷ HTS_TST_POS")}${kpi(n(v.hts_tst_phrh),"PHRH tested (Mobile)",`${n(g(v,"hts_pos_phrh"))} positive · yield ${rpct(g(v,"hts_pos_phrh"),v.hts_tst_phrh)}`)}
+    ${kpi(n(v.prep_new),"PrEP_NEW",`${rpct(v.prep_new,v.prep_offered)} of those offered`)}${kpi(n(kits),"HIV self-test kits",`${n(v.hivst_confirmed)} confirmed positive`)}</div>`;
+  // testing by modality, PHRH shown inside Mobile
+  const mods = agg(f,{by:"mod"}), mk = [...mods.keys()].filter(k=>k&&mods.get(k).hts_tst);
+  const mrows = mk.map(k=>({l:k, t:mods.get(k).hts_tst||0, p:mods.get(k).hts_tst_pos||0})).sort((a,b)=>b.t-a.t);
+  if(v.hts_tst_phrh){ const i = mrows.findIndex(r=>r.l==="Mobile"); mrows.splice(i<0?mrows.length:i+1, 0, {l:"↳ of which PHRH", t:v.hts_tst_phrh, p:v.hts_pos_phrh||0, sub:1}); }
+  const modSec = `<section class="c3d">${secH("Testing by modality","Tests, positives, yield and share of all positives at the CSCC sites")}
+    ${mrows.length ? hbars(mrows.map(r=>({l:r.l, v:r.t, c:r.sub?"var(--s3)":undefined, txt:`<b>${n(r.t)}</b> · ${n(r.p)} pos · yield ${rpct(r.p,r.t)} · ${pct(div(r.p,v.hts_tst_pos),0)} of POS`,
+       tip:`${r.l}: ${n(r.t)} tests · ${n(r.p)} positive`}))) : `<div class="empty">No testing reported at the CSCC sites for ${esc(P.label)}.</div>`}
+    <p class="drillnote">PHRH = persons at higher risk of HIV, reported on the weekly form as part of Mobile testing (HTS_TST_MOBILE-PHRH); it is counted inside Mobile, not added to it.</p></section>`;
+  // monthly and weekly testing
+  const ms = lastMonths(6), gm = agg(f,{by:"month",months:"all"}), xm = mo => gm.get(mo)||{};
+  const gw = agg(f,{by:"week",months:"all"}), wks = [...gw.keys()].filter(w=>w && w<=D.meta.as_of && (gw.get(w).hts_tst||0)>0).sort().slice(-10), xw = w => gw.get(w)||{};
+  const ser = (keys, x) => [{l:"HTS_TST",c:"var(--s1)",v:keys.map(k=>x(k).hts_tst||0)},{l:"HTS_TST_POS",c:"var(--s2)",v:keys.map(k=>x(k).hts_tst_pos||0)}];
+  const yl = (keys, x) => [{l:"Yield",c:"var(--s3)",v:keys.map(k=>div(x(k).hts_tst_pos,x(k).hts_tst))}];
+  const trend = `<div class="grid g2"><section class="c3d">${secH("Testing by month",`${monthSpan(ms)} · DHIS2, the dashboard's quarter rule`)}
+     ${ms.length?groupBars(ms.map(monthShort), ser(ms,xm), {lines:yl(ms,xm), sep:true}):`<div class="empty">No monthly data.</div>`}</section>
+   <section class="c3d">${secH("Testing by week","Last 10 weeks with weekly reports · programme week numbers")}
+     ${wks.length?groupBars(wks.map(w=>"Wk "+fyWeek(w)), ser(wks,xw), {lines:yl(wks,xw), sep:true}):`<div class="empty">No weekly data.</div>`}</section></div>`;
+  const pyr = `<div class="grid g2"><section class="c3d">${secH("Tested by age and sex","HTS_TST at the CSCC sites")}${pyramid("hts_tst",{f})}</section>
+   <section class="c3d">${secH("Newly diagnosed by age and sex","HTS_TST_POS at the CSCC sites")}${pyramid("hts_tst_pos",{f})}</section></div>`;
+  // index testing cascade
+  const idx = [["Index cases","index_cases"],["Offered index testing","index_offered"],["Accepted","index_accepted"],["Contacts elicited","index_elicited"],
+    ["Contacts reached","index_reached"],["Contacts tested","index_tst"],["Contacts positive","index_pos"]].map(([l,k])=>({l,v:g(v,k)}));
+  const idxSec = `<section class="c3d">${secH("Index testing","Index cases to contacts tested and found positive, at the CSCC sites")}
+    ${idx.some(r=>r.v) ? hbars(idx.map((r,i)=>({l:r.l, v:r.v, txt:`<b>${n(r.v)}</b>${i===2?` · ${rpct(r.v,idx[1].v)} of offered`:i===5?` · ${rpct(r.v,idx[3].v)} of elicited`:i===6?` · yield ${rpct(r.v,idx[5].v)}`:""}`}))) : `<div class="empty">No index testing reported.</div>`}</section>`;
+  // prevention
+  const prev = `<section class="c3d">${secH("PrEP and HIV self-testing","At the CSCC sites")}
+    <div class="grid g2"><div><h3 class="minih">PrEP</h3>${hbars([["Offered PrEP","prep_offered"],["Accepted","prep_accepted"],["Newly enrolled (PrEP_NEW)","prep_new"],["Continuing (PrEP_CT)","prep_ct"]]
+        .map(([l,k],i)=>({l, v:g(v,k), txt:`<b>${n(g(v,k))}</b>${i===1?` · ${rpct(g(v,k),v.prep_offered)} of offered`:i===2?` · ${rpct(g(v,k),v.prep_offered)} of offered`:""}`})))}</div>
+     <div><h3 class="minih">HIV self-testing</h3>${hbars([["Kits, assisted","hivst_assisted"],["Kits, unassisted","hivst_unassisted"],["Reactive","hivst_reactive"],["Confirmed positive","hivst_confirmed"],["Linked to ART","hivst_linked"]]
+        .map(([l,k])=>({l, v:g(v,k), txt:`<b>${n(g(v,k))}</b>`})))}</div></div></section>`;
+  // one row per CSCC site: testing and prevention
+  const srow = (l, x, t) => `<tr${t?' class="total"':""}><td>${l}</td><td class="n">${n(x.hts_tst)}</td><td class="n">${n(x.hts_tst_pos)}</td><td class="n">${rpct(x.hts_tst_pos,x.hts_tst)}</td>
+    <td class="n">${n(g(x,"hts_tst_phrh"))}</td><td class="n">${n(g(x,"hts_pos_phrh"))}</td><td class="n">${n(x.tx_new_q)}</td><td class="n">${rpct(x.tx_new_q,x.hts_tst_pos)}</td>
+    <td class="n">${n(x.index_tst)}</td><td class="n">${n(x.prep_new)}</td><td class="n">${n(g(x,"hivst_assisted")+g(x,"hivst_unassisted"))}</td></tr>`;
+  const rows = sites.map(o=>({o, x:agg({...F,state:o.x.state,lga:o.x.lga,fac:o.x.facility})})).sort((a,b)=>g(b.x,"hts_tst")-g(a.x,"hts_tst"));
+  const siteSec = `<section class="c3d">${secH("CSCC sites, one by one — testing and prevention",P.label)}<div class="tw"><table><thead><tr><th>CSCC site</th><th class="n">HTS_TST</th><th class="n">HTS_POS</th><th class="n">Yield</th>
+    <th class="n">PHRH tested</th><th class="n">PHRH pos</th><th class="n">TX_NEW</th><th class="n">Linkage</th><th class="n">Index tested</th><th class="n">PrEP_NEW</th><th class="n">HIVST kits</th></tr></thead><tbody>
+    ${rows.map(r=>srow(esc(r.o.x.facility),r.x)).join("")}${srow("All CSCC sites",v,1)}</tbody></table></div></section>`;
+  const treat = STOCK && HAS() ? `<h2 class="phrh-part">Treatment, continuity and viral load</h2>${csccArt(agg())}`
+    : noData("TX_CURR, IIT, the waterfall, viral load and biometrics");
+  return context()+head+`<h2 class="phrh-part">Testing and linkage</h2>`+kTest+modSec+trend+pyr+idxSec+`<h2 class="phrh-part">Prevention</h2>`+prev+siteSec+treat;
+}
+
 /* ---------- Current on treatment: CSCC sites vs general population sites ----------
    Same waterfall numbers as the page, split by site group; projections carry the quarter's pace so far forward. */
 function csccArt(v){
@@ -3423,7 +3481,7 @@ function render(){
   document.getElementById("nav").innerHTML=PAGES.filter(([k])=>(k!=="ipi"||ipiOn)&&(k!=="live"||LV.on)).map(([k,l])=>`<a href="#${k}"${k===page?' aria-current="page"':""}>${l}</a>`).join("");
   document.getElementById("filters").innerHTML=page==="live"?"":filtersBar();
   const fn={overview,hts:htsPage,art:artPage,vl:vlPage,pmtct:pmtctPage,tb:tbPage,ahd:ahdPage,pbs:pbsPage,trends:artPage,naomi:naomiPage,
-    ipi:()=>IPID?ipiDetail(IPID):ipiPage(),live:livePage,methods:methodsPage,flow:flowPage}[page]||overview;
+    ipi:()=>IPID?ipiDetail(IPID):ipiPage(),live:livePage,phrh:phrhPage,methods:methodsPage,flow:flowPage}[page]||overview;
   document.getElementById("who").innerHTML = WHO ? `<span>${ico("user",20)} Hi, <b>${esc(WHO.name)}</b></span><a href="/logout" title="${esc(WHO.email)}">Sign out</a>` : "";
   const hello = page==="overview" && WHO ? `<h2 class="hello">Hi, ${esc(WHO.name)} <small>here is where the programme stands for ${esc(P.label)}</small></h2>` : "";
   WIN=windowSet();
