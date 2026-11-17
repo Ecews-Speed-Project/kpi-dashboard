@@ -339,9 +339,20 @@ footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:
 .hello{display:flex;gap:10px;align-items:center;font-size:27px;margin:0}
 .hello small{font-family:var(--body);font-weight:400;font-style:italic;font-size:15px;color:var(--ink-3)}
 /* ---------- PCS/VP page ---------- */
-.pv-hero{position:relative;overflow:hidden;border-radius:8px;padding:22px 24px 20px;color:var(--on-cloth);
+.pv-hero,.pg-hero{position:relative;overflow:hidden;border-radius:8px;padding:22px 24px 20px;color:var(--on-cloth);
   background:radial-gradient(120% 140% at 100% 0%,rgba(184,145,58,.35),transparent 55%),linear-gradient(135deg,var(--cloth),var(--cloth-2));
   border:1px solid var(--cloth-2);box-shadow:0 10px 24px -14px var(--shadow)}
+.pg-hero{margin-bottom:2px}
+.pg-hero.slim{padding:16px 24px 14px}.pg-hero.slim>.pv-sub{margin-bottom:0}
+.pg-hero>h2{margin:0;font-family:var(--display);font-size:28px;color:#fff;letter-spacing:.3px}
+.pg-hero>.pv-sub{margin:2px 0 14px;font-style:italic;color:var(--on-cloth);opacity:.9}
+.pg-hero .kpi{background:rgba(255,255,255,.07);border:1px solid rgba(243,233,207,.2);box-shadow:none;position:relative}
+.pg-hero .kpi::before,.pg-hero .kpi::after{display:none}
+.pg-hero .kpi .k-v{color:#fff}
+.pg-hero .kpi .k-l{color:var(--on-cloth)}
+.pg-hero .kpi .k-s,.pg-hero .kpi .k-t{color:var(--on-cloth);opacity:.8}
+.pg-hero .kpi.has-ring{padding-right:62px}
+.pg-hero .k-ring{position:absolute;top:10px;right:10px;width:46px;height:46px}
 .pv-hero h2{margin:0;font-family:var(--display);font-size:30px;color:#fff;letter-spacing:.3px}
 .pv-hero .pv-sub{margin:4px 0 16px;font-style:italic;color:var(--on-cloth);opacity:.9}
 .pv-hero .pv-tag{display:inline-block;margin-left:8px;padding:2px 10px;border-radius:12px;background:var(--gold);color:#fff;font-family:var(--caps);font-size:11px;letter-spacing:1px;vertical-align:middle}
@@ -2436,12 +2447,12 @@ function pvByState(V, keys, fmt){         // one small line per state under a pa
 }
 function pcsvpPage(){
   const V = pvData();
-  if(!V) return `<section class="c3d empty"><b>No PCS/VP bulletin yet${F.state?` for ${esc(F.state)}`:""}.</b> Save the weekly bulletin workbook (sheet “CCMP KPIs”) in the inbox as <code>PCSVP_Weekly_Bulletin_FY27.xlsx</code>; the next update reads it.</section>`;
+  if(!V) return `<section class="c3d empty"><b>No PCS/VP figures yet${F.state?` for ${esc(F.state)}`:""}.</b> Save the weekly PCS/VP workbook in the inbox; the next update reads it.</section>`;
   const t = V.tot, g = k => t[k]||0, R = (a,b) => div(g(a),g(b));
   const wkLab = `Week ${V.wk} · ${fmtDate(V.date)}`;
   const miss = (F.state?[F.state]:STATES).filter(s=>!V.states.includes(s));
-  const hero = `<section class="pv-hero"><h2>PCS/VP weekly bulletin <span class="pv-tag">${esc(wkLab)}</span></h2>
-    <p class="pv-sub">Formerly CCMP · ${esc(F.state||"Delta, Ekiti, Osun")} · figures to date as reported in the bulletin${V.inPeriod?"":` · no bulletin inside ${esc(P.label)}: showing the latest before it`}${miss.length?` · not reported: ${esc(miss.join(", "))}`:""}</p>
+  const hero = `<section class="pv-hero"><h2>PCS/VP <span class="pv-tag">${esc(wkLab)}</span></h2>
+    <p class="pv-sub">${esc(F.state||"Delta, Ekiti, Osun")} · figures to date, as reported each week${V.inPeriod?"":` · no report inside ${esc(P.label)}: showing the latest before it`}${miss.length?` · not reported: ${esc(miss.join(", "))}`:""}</p>
     <div class="pv-big">
       <div><b>${n(g("reach_0_17")+g("reach_18_20"))}</b><span>CALHIV reached</span><small>${n(g("reach_0_17"))} aged 0–17 · ${n(g("reach_18_20"))} aged 18–20</small></div>
       <div><b>${n(g("caregivers"))}</b><span>Positive caregivers reached</span></div>
@@ -2479,7 +2490,7 @@ function pcsvpPage(){
     + `<div class="pv-chips"><span><b>${n(g("pmtct_outcome"))}</b>PMTCT outcomes</span></div>` + st("hei_eligible", v=>`${n(v.hei_tested||0)} of ${n(v.hei_eligible||0)}`));
   const vio = panel("Violence and post-violence care","Survivors identified and given care (PVC)",
     pvFunnel([["Survivors under 15",g("surv_u15")],["Given care, under 15",g("pvc_u15"),0],["Survivors 15+",g("surv_15p"),-1],["Given care, 15+",g("pvc_15p"),2]],"var(--bar-critical)")
-    + (chk.length?`<div class="pv-chips"><span style="border-color:var(--bar-warning);background:var(--warn-bg)"><b>Check</b>more care than survivors in ${esc(chk.join(", "))}: survivors may be missing from the bulletin</span></div>`:"")
+    + (chk.length?`<div class="pv-chips"><span style="border-color:var(--bar-warning);background:var(--warn-bg)"><b>Check</b>more care than survivors in ${esc(chk.join(", "))}: survivors may be missing from the weekly report</span></div>`:"")
     + `<div class="pv-chips"><span><b>${n(g("pvc_phys"))}</b>physical / emotional</span><span><b>${n(g("pvc_sexual"))}</b>sexual violence</span><span><b>${n(g("pvc_total"))}</b>total post-violence care</span></div>` + st("pvc_total"));
   const surv = panel("Survivors: HIV and STI services","Testing and treatment for survivors",
     `<div class="grid g2"><div><h3 class="minih">HIV</h3>${pvFunnel([["Tested for HIV",g("surv_hiv_tst")],["Positive",g("surv_hiv_pos")],["Linked to ART",g("surv_hiv_art")]],"var(--s3)")}</div>
@@ -2490,16 +2501,16 @@ function pcsvpPage(){
     pvFunnel([["Identified at 1st EAC",g("ipv_eac")],["Identified at PrEP",g("ipv_prep")],["Identified at HTS",g("ipv_hts")],["Total IPV",g("ipv_total")],["Tailored interventions",g("ipv_tailored"),3]],"var(--s2)",{base:3}));
   // weeks: trend of the to-date figures
   const wks = [...V.weeks.keys()].filter(d=>d<=P.end).sort();
-  const trend = wks.length>1 ? panel("Week by week","Bulletin figures to date, each week",
+  const trend = wks.length>1 ? panel("Week by week","Figures to date, each week",
       lineChart([["CALHIV reached","reach_0_17","var(--s1)"],["Positive caregivers","caregivers","var(--s2)"],["Nutrition assessed","nut_assessed","var(--s3)"]]
         .map(([l,k,c])=>({l,c,pts:wks.map(d=>({d, v:V.weeks.get(d)[k]||0}))})),{label:"PCS/VP weekly",weekly:true,endLabel:true}))
-    : panel("Week by week",`Week ${V.wk} is the first bulletin of the year`,`<div class="empty">The trend starts once a second week is in the bulletin.</div>`);
+    : panel("Week by week",`Week ${V.wk} is the first report of the year`,`<div class="empty">The trend starts once a second week is reported.</div>`);
   // the whole bulletin row by row, for checking against the workbook
   const cols = (D.pcsvp.columns||[]), secs = [...new Set(cols.map(c=>c[2]))];
-  const full = `<section class="c3d">${secH("The full bulletin",`${wkLab} · every column of the workbook, by state`)}<details><summary>Show all ${cols.length} figures</summary>
+  const full = `<section class="c3d">${secH("All figures",`${wkLab} · every indicator, by state`)}<details><summary>Show all ${cols.length} figures</summary>
     <div class="tw"><table><thead><tr><th>Indicator</th>${V.states.map(s=>`<th class="n">${esc(s)}</th>`).join("")}<th class="n">Total</th></tr></thead><tbody>
     ${secs.map(sc=>`<tr class="total"><td colspan="${V.states.length+2}">${esc(sc)}</td></tr>`+cols.filter(c=>c[2]===sc).map(([k,l])=>`<tr><td>${esc(l)}</td>${V.states.map(s=>`<td class="n">${n(V.latest[s].v[k]??null)}</td>`).join("")}<td class="n"><b>${n(t[k]??null)}</b></td></tr>`).join("")).join("")}
-    </tbody></table></div></details><p class="drillnote">From ${esc(D.pcsvp.file||"the bulletin")} (sheet “CCMP KPIs”). LGA and facility filters do not apply: the bulletin is by state.</p></section>`;
+    </tbody></table></div></details><p class="drillnote">Reported by state each week: the LGA and facility filters do not apply.</p></section>`;
   return hero + rings
     + `<h2 class="pv-part">Care and treatment</h2><div class="grid g2">${hts}${reach}</div>${cov}<div class="grid g2">${iit}${nut}</div>${hei}`
     + `<h2 class="pv-part">Violence prevention and response</h2><div class="grid g2">${vio}${surv}</div><div class="grid g2">${pep}${ipv}</div>`
@@ -3423,7 +3434,25 @@ function icard(i){
    <a class="vdet" href="#ipi/${i.code}">View details ${ico("arrow",16)}</a></article>`;
 }
 /* ---------- after each render: searchable dropdowns, month scrollers opened at the latest month ---------- */
+// every page's headline cards sit in the green band; a percentage card gets a ring (the figure itself is unchanged)
+function heroBand(){
+  if(["pcsvp","methods","flow","live"].includes(page)) return;
+  if(document.querySelector("#main .pg-hero")) return;
+  const k = document.querySelector("#main > .kpis"), lab = (PAGES.find(x=>x[0]===page)||[,""])[1];
+  const h = document.createElement("section"); h.className = "pg-hero" + (k ? "" : " slim");
+  h.innerHTML = `<h2>${esc(page==="overview"?"Programme at a glance":lab)}</h2><p class="pv-sub">${esc(filterText())} · ${esc(P.label)}</p>`;
+  // no headline cards on the page: a title band above the first panel (after the period line)
+  const at = k || [...document.querySelectorAll("#main > *")].find(x=>!x.matches(".ctx,.drillnote,.rp-bar,.hello,.demo"));
+  if(!at) return;
+  at.before(h); if(!k) return; h.appendChild(k);
+  k.querySelectorAll(".kpi:not(.kpi2)").forEach(c=>{ const v = c.querySelector(".k-v"), m = v && v.textContent.trim().match(/^(-?\d+(?:\.\d+)?)%$/); if(!m) return;
+    const p = Math.max(0, Math.min(1, +m[1]/100)), r = 18, C = 2*Math.PI*r;
+    c.classList.add("has-ring");
+    c.insertAdjacentHTML("afterbegin", `<svg class="k-ring" viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="${r}" fill="none" stroke="rgba(243,233,207,.18)" stroke-width="6"/>
+      <circle cx="23" cy="23" r="${r}" fill="none" stroke="var(--gold)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(C*p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 23 23)"/></svg>`); });
+}
 function afterRender(){
+  heroBand();
   enhanceSelects(document);
   const ms=document.getElementById("m-search");
   if(ms){ methodsSearch(false);
