@@ -1487,8 +1487,8 @@ function brfHts(ctx){
   const v = agg(), ht = ev("HTS_TST", v), cf = ev("HTS_TST_POS", v), lk = ev("IPI_ART_COV", v);
   const s = bSlide(ctx, "1st 95", "Testing and linkage", `${ctx.scope} · ${P.label} · DHIS2${P.mode==="quarter"?" monthly reports":""} · TX_NEW from the line list`);
   bCards(ctx, s, 1.75, 1.3, [[bN(v.hts_tst), "HTS_TST", tgtTxt("HTS_TST", ht), ht.status], [bN(v.hts_tst_pos), "HTS_TST_POS", tgtTxt("HTS_TST_POS", cf), cf.status],
-    [bP(div(v.hts_tst_pos, v.hts_tst)), "Testing yield", "POS ÷ TST"], [bN(v.tx_new_q), "TX_NEW", "new ART starts, transfer-ins removed"],
-    [bP(div(v.tx_new_q, v.hts_tst_pos)), "Linkage", "TX_NEW ÷ HTS_TST_POS", periodFY()===TFY ? lk.status : null]]);
+    [bP(div(v.hts_tst_pos, v.hts_tst)), "Testing yield", "POS ÷ TST"], [`${bN(v.tx_new_q)} | ${bN(v.tx_new_unique)}`, "TX_NEW", "non-unique | unique"],
+    [`${bP(div(v.tx_new_q, v.hts_tst_pos))} | ${bP(div(v.tx_new_unique, v.hts_tst_pos))}`, "Linkage", "non-unique | unique", periodFY()===TFY ? lk.status : null]]);
   const ms = lastMonths(12), g = agg(F, {by:"month", months:"all"}), x = mo => g.get(mo) || {};
   if(ms.length){
     s.addChart(ctx.pres.charts.BAR, [{name:"HTS_TST_POS", labels:ms.map(monthTick), values:ms.map(mo=>x(mo).hts_tst_pos||0)}], bChartBase({x:0.5, y:3.3, w:7.5, h:3.0,
@@ -1499,7 +1499,7 @@ function brfHts(ctx){
       showLegend:false, showTitle:true, title:"Testing yield by month", catAxisLabelFontSize:10}));
   } else bNoData(s, 0.5, 3.3, 12.33, 3.0, "No monthly testing data for this period.");
   bTake(ctx, s, `${bN(v.hts_tst_pos)} new diagnoses from ${bN(v.hts_tst)} tests (yield ${bP(div(v.hts_tst_pos,v.hts_tst))}); ${bP(div(v.tx_new_q, v.hts_tst_pos))} linked to ART${lk.target!=null&&periodFY()===TFY?` against a ${pct(lk.target,0)} target`:""}.`);
-  s.addNotes("The latest month is provisional while facilities submit. TX_NEW = every new ART start in the period with transfer-ins removed (plain count, no unique-print filter). Linkage = TX_NEW ÷ HTS_TST_POS.");
+  s.addNotes("The latest month is provisional while facilities submit. TX_NEW non-unique = new ART starts with transfer-ins removed (used for linkage and every other calculation). Unique = also counted in the NDR unique TX_CURR (CDC pillar rules, from FY26 Q3); before that both are the same. Linkage = TX_NEW ÷ HTS_TST_POS.");
 }
 
 /* ---------- a small by-state (or by-LGA) table that sits beside a slide's main visual ---------- */
@@ -1933,10 +1933,11 @@ function htsPage(){
   return context()+`<div class="kpis">${kpi(n(v.hts_tst),"HTS_TST",ht.target!=null?`${TL()} target ${n(ht.target)}`:"",ht.status)}
    ${kpi(n(v.hts_tst_pos),"HTS_TST_POS",cf.target!=null?`${TL()} target ${n(cf.target)}`:"",cf.status)}
    ${kpi(pct(div(v.hts_tst_pos,v.hts_tst)),"Testing yield","HTS_TST_POS ÷ HTS_TST")}
-   ${(()=>{ const ipiYr=periodFY()===TFY, tip="TX_NEW = every new ART start in the period, transfer-ins removed (plain count, no unique-print filter).";
-     return kpi(n(v.tx_new_q),"TX_NEW","new ART starts, transfer-ins removed",null,tip)
-       +kpi(pct(div(v.tx_new_q,v.hts_tst_pos)),ipiYr?"Linkage (IPI)":"Linkage",
-             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"TX_NEW ÷ HTS_TST_POS",ipiYr?lk.status:null,tip)
+   ${(()=>{ const ipiYr=periodFY()===TFY, pf=D.meta.tx_new_pillars_from||"";
+     const lab=["Non-unique","Unique"], tip="Non-unique (used in every calculation): new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same.";
+     return kpi2("TX_NEW",[[n(v.tx_new_q),lab[0]],[n(v.tx_new_unique),lab[1]]],"",null,tip)
+       +kpi2(ipiYr?"Linkage (IPI)":"Linkage",[[pct(div(v.tx_new_q,v.hts_tst_pos)),lab[0]],[pct(div(v.tx_new_unique,v.hts_tst_pos)),lab[1]]],
+             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"",ipiYr?lk.status:null,tip)
        +kpi(pct(div((v.tx_new_q||0)-(v.pmtct_gc7||0),v.hts_tst_pos)),"Linkage without GC7",`(TX_NEW − GC7 ${n(v.pmtct_gc7||0)}) ÷ HTS_TST_POS`,null,
             "GC7 = pregnant women newly started on ART (PMTCT_ART, weekly DHIS2 form, reported from November 2026). Taking them out of TX_NEW shows linkage of the other positives."); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
    <section class="c3d">${secH("Testing by modality","Tests, positives and share of all positives")}
@@ -2451,14 +2452,11 @@ function pcsvpPage(){
   const t = V.tot, g = k => t[k]||0, R = (a,b) => div(g(a),g(b));
   const wkLab = `Week ${V.wk} · ${fmtDate(V.date)}`;
   const miss = (F.state?[F.state]:STATES).filter(s=>!V.states.includes(s));
-  const hero = `<section class="pv-hero"><h2>PCS/VP <span class="pv-tag">${esc(wkLab)}</span></h2>
-    <p class="pv-sub">${esc(F.state||"Delta, Ekiti, Osun")} · figures to date, as reported each week${V.inPeriod?"":` · no report inside ${esc(P.label)}: showing the latest before it`}${miss.length?` · not reported: ${esc(miss.join(", "))}`:""}</p>
-    <div class="pv-big">
-      <div><b>${n(g("reach_0_17")+g("reach_18_20"))}</b><span>CALHIV reached</span><small>${n(g("reach_0_17"))} aged 0–17 · ${n(g("reach_18_20"))} aged 18–20</small></div>
-      <div><b>${n(g("caregivers"))}</b><span>Positive caregivers reached</span></div>
-      <div><b>${pct(div(g("cov_0_14")+g("cov_15_17"), g("txc_0_14")+g("txc_15_17")),0)}</b><span>CCMP coverage, 0–17</span><small>${n(g("cov_0_14")+g("cov_15_17"))} of ${n(g("txc_0_14")+g("txc_15_17"))} children and adolescents on ART</small></div>
-      <div><b>${n(g("pvc_total"))}</b><span>Post-violence care</span><small>${n(g("surv_u15")+g("surv_15p"))} survivors · ${n(g("ipv_total"))} IPV identified</small></div>
-    </div></section>`;
+  const hero = `<div class="kpis">${kpi(n(g("reach_0_17")+g("reach_18_20")),"CALHIV reached",`${n(g("reach_0_17"))} aged 0–17 · ${n(g("reach_18_20"))} aged 18–20`)}
+      ${kpi(n(g("caregivers")),"Positive caregivers reached")}
+      ${kpi(pct(div(g("cov_0_14")+g("cov_15_17"), g("txc_0_14")+g("txc_15_17")),0),"CCMP coverage, 0–17",`${n(g("cov_0_14")+g("cov_15_17"))} of ${n(g("txc_0_14")+g("txc_15_17"))} on ART`)}
+      ${kpi(n(g("pvc_total")),"Post-violence care",`${n(g("surv_u15")+g("surv_15p"))} survivors · ${n(g("ipv_total"))} IPV identified`)}</div>
+    <p class="drillnote">${esc(wkLab)} · figures to date, as reported each week${V.inPeriod?"":` · no report inside ${esc(P.label)}: showing the latest before it`}${miss.length?` · not reported: ${esc(miss.join(", "))}`:""}</p>`;
   const rings = `<section class="c3d">${secH("Key rates",wkLab)}<div class="pv-rings">
     ${pvRing(R("cov_0_14","txc_0_14"),"Coverage 0–14",`${n(g("cov_0_14"))} of ${n(g("txc_0_14"))}`)}
     ${pvRing(R("cov_15_17","txc_15_17"),"Coverage 15–17",`${n(g("cov_15_17"))} of ${n(g("txc_15_17"))}`)}
@@ -2525,8 +2523,7 @@ function phrhPage(){
   const sites = FAC.map((x,i)=>({x,i})).filter(o=>isCscc(o.i)&&facPass(o.i,F));
   if(!sites.length) return context()+`<section class="c3d empty">No CSCC site in ${esc(filterText())}. CSCC sites: ${esc(FAC.filter((x,i)=>isCscc(i)).map(x=>x.facility).join(", "))}.</section>`;
   const kits = g(v,"hivst_assisted")+g(v,"hivst_unassisted");
-  const head = `<section class="c3d phrh-head">${secH("PHRH — persons at higher risk",`${sites.length} CSCC site${sites.length>1?"s":""} (key-population one-stop shops) · ${esc(sites.map(o=>o.x.facility.replace(/ CSCC$/i,"")).join(", "))}`)}
-   <p class="drillnote" style="margin:0">Every figure on this page is for the CSCC sites only, with the same rules as the rest of the dashboard. Use the period, state and facility filters as usual.</p></section>`;
+  const head = "";
   const kTest = `<div class="kpis">${kpi(n(v.hts_tst),"HTS_TST","tested at CSCC sites")}${kpi(n(v.hts_tst_pos),"HTS_TST_POS","newly diagnosed")}
     ${kpi(rpct(v.hts_tst_pos,v.hts_tst),"Testing yield","POS ÷ TST")}${kpi(n(v.tx_new_q),"TX_NEW","new ART starts, transfer-ins removed")}
     ${kpi(rpct(v.tx_new_q,v.hts_tst_pos),"Linkage","TX_NEW ÷ HTS_TST_POS")}${kpi(n(v.hts_tst_phrh),"PHRH tested (Mobile)",`${n(g(v,"hts_pos_phrh"))} positive · yield ${rpct(g(v,"hts_pos_phrh"),v.hts_tst_phrh)}`)}
@@ -2571,7 +2568,7 @@ function phrhPage(){
     ${rows.map(r=>srow(esc(r.o.x.facility),r.x)).join("")}${srow("All CSCC sites",v,1)}</tbody></table></div></section>`;
   const treat = STOCK && HAS() ? `<h2 class="phrh-part">Treatment, continuity and viral load</h2>${csccArt(agg())}`
     : noData("TX_CURR, IIT, the waterfall, viral load and biometrics");
-  return context()+head+`<h2 class="phrh-part">Testing and linkage</h2>`+kTest+modSec+trend+pyr+idxSec+`<h2 class="phrh-part">Prevention</h2>`+prev+siteSec+treat;
+  return context()+kTest+head+modSec+trend+pyr+idxSec+`<h2 class="phrh-part">Prevention</h2>`+prev+siteSec+treat;
 }
 
 /* ---------- Current on treatment: CSCC sites vs general population sites ----------
@@ -3436,7 +3433,7 @@ function icard(i){
 /* ---------- after each render: searchable dropdowns, month scrollers opened at the latest month ---------- */
 // every page's headline cards sit in the green band; a percentage card gets a ring (the figure itself is unchanged)
 function heroBand(){
-  if(["pcsvp","methods","flow","live"].includes(page)) return;
+  if(["methods","flow","live"].includes(page)) return;
   if(document.querySelector("#main .pg-hero")) return;
   const k = document.querySelector("#main > .kpis"), lab = (PAGES.find(x=>x[0]===page)||[,""])[1];
   const h = document.createElement("section"); h.className = "pg-hero" + (k ? "" : " slim");

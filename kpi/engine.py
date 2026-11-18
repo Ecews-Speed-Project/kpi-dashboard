@@ -485,7 +485,8 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
     if pf:
         y = parts[1]
         early = lambda m: (y["measure"] == m) & (y["period"].fillna("").str.match(r"^\d{4}-\d{2}-\d{2}$")) & (y["period"].fillna("") < pf)
-        parts[1] = pd.concat([y[~early("tx_new_q")], y[early("tx_new_ti")].assign(measure="tx_new_q")], ignore_index=True)
+        parts[1] = pd.concat([y[~early("tx_new_q") & ~early("tx_new_unique")], y[early("tx_new_ti")].assign(measure="tx_new_q"),
+                              y[early("tx_new_ti")].assign(measure="tx_new_unique")], ignore_index=True)
     if pbs_source == "ndr":
         nd = [d for d, _ in (past or {}).get("ndr", [])]
         ndr_date = max(nd) if nd else None          # the newest saved copy is today's file
