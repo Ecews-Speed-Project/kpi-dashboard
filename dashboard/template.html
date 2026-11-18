@@ -1789,6 +1789,14 @@ function txNewCascade(v){
      ${has?kpi(pct(div(g("txn_cap"),tn)),"New clients with prints","captured ÷ TX_NEW","")+kpi(n(tn-tu),"Not in TX_NEW unique","non-unique − unique"):""}</div>`;
   return `<section class="c3d">${secH("TX_NEW cascade","Positives to new on ART, prints captured or not, unique and non-unique, linkage and GC7 · "+esc(P.label))}
     ${hbars(bars,{max:Math.max(pos,tn,1)})}${cards}
+    ${secH("TX_NEW cascade breakdown","Click a state, then an LGA, to reach facilities · or switch to LGA, facility, sex or age · sort any column")}
+    ${pivot("txn",[C("HTS_TST_POS",V("hts_tst_pos"),0,0,"hts_tst_pos"),C("TX_NEW non-unique",V("tx_new_q")),
+      ...(has?[C("Prints captured",V("txn_cap")),C("Captured %",RV("txn_cap","tx_new_q"),1,x=>rateStatus(div(x.txn_cap||0,x.tx_new_q),.95)),C("No prints",V("txn_nocap")),
+      C("Valid unique print",V("txn_valid")),C("Print issue",V("txn_issue"))]:[]),
+      C("TX_NEW unique",V("tx_new_unique")),C("GC7",V("pmtct_gc7")),
+      C("Linkage with GC7, non-unique",RV("tx_new_q","hts_tst_pos"),1),C("Linkage with GC7, unique",RV("tx_new_unique","hts_tst_pos"),1),
+      C("Linkage without GC7, non-unique",x=>div(Math.max(0,(x.tx_new_q||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
+      C("Linkage without GC7, unique",x=>div(Math.max(0,(x.tx_new_unique||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1)],["org","sex","age"])}
     <p class="drillnote">TX_NEW non-unique = every new ART start in the period, transfer-ins removed (used in every calculation). Unique = also in the NDR unique TX_CURR (active, with a valid unique print or under 15). Prints are as recorded in the NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}; a valid unique print = fingerprint valid, not a suppressed duplicate, not waiting for adjudication. GC7 = pregnant women found by CBOs in the community and started on ART at our sites, so they are in TX_NEW but not in our HTS_TST_POS.${has?"":" Print details come with the next update."}</p></section>`;
 }
 /* Clients seen at the facility in the period (drug refill or VL sample): were prints captured, any print issue, enrolled and matched */
