@@ -259,6 +259,7 @@ tr.total td{font-weight:600;border-top:2px solid var(--rule);background:var(--pa
 .modr{font-size:15px}.modr .lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.modh .n,.modr .n{text-align:right;font-variant-numeric:tabular-nums}
 @media(max-width:700px){.modh,.modr{grid-template-columns:90px minmax(0,1fr) 56px 48px 56px;gap:6px;font-size:13px}}
 .tw svg.mchart{max-height:215px;display:block;margin:0 auto}
+.pv-back{display:inline-flex;gap:6px;flex-wrap:wrap}.pv-back .reset{font-weight:600}
 .drill{border:0;background:none;cursor:pointer;padding:0;text-decoration:underline dotted var(--gold);text-underline-offset:3px;font-weight:600}
 .dimbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
@@ -858,7 +859,11 @@ function pivot(id, cols, dims, def=null){
   const DL = {org:"State", lga:"LGA", facility:"Facility", sex:"Sex", age:"Age band", agegrp:"Age group", paed:"Paediatric / adult", mod: ["pmtct","fit"].includes(id)?"Setting":"Modality"};
   const cell = (c,v) => { const x=c.f(v); const s=c.s?c.s(v):null; return `<td class="n">${c.p==="r"?ratio(x,1):c.p==="x"?(x==null?"—":x.toFixed(1)):c.p?pct(x):n(x)}${s?dot(s):""}</td>`; };
   const orgSel = d => `<select class="orgsel${["org","lga","facility"].includes(dim)?" on":""}" data-pdimsel="${id}" aria-label="Rows by place">${[["org","By state (drill down)"],["lga","By LGA"],["facility","By facility"]].map(([k,l])=>`<option value="${k}"${dim===k?" selected":""}>${l}</option>`).join("")}</select>`;
-  return `<div class="dimbar"><span class="eyebrow">Rows by</span>${dims.includes("org")?orgSel():""}<span class="seg">${dims.filter(d=>d!=="org").map(d=>`<button data-pdim="${id}:${d}" aria-pressed="${d===dim}">${DL[d]}</button>`).join("")}</span>
+  // back buttons: from a facility to its LGA, from an LGA to its state, or straight back to all states
+  const back = dims.includes("org") && (F.state||F.lga||F.fac) ? `<span class="pv-back">${[
+      [true,"all","← All states"], [!!(F.lga||F.fac),"state",`← ${esc(F.state)} LGAs`], [!!F.fac,"lga",`← ${esc(F.lga)} facilities`]]
+      .filter(x=>x[0]).map(([,k,l])=>`<button class="reset" data-back="${k}">${l}</button>`).join("")}</span>` : "";
+  return `<div class="dimbar"><span class="eyebrow">Rows by</span>${dims.includes("org")?orgSel():""}${back}<span class="seg">${dims.filter(d=>d!=="org").map(d=>`<button data-pdim="${id}:${d}" aria-pressed="${d===dim}">${DL[d]}</button>`).join("")}</span>
     ${dim==="org"?`<span class="drillnote">${levelDim==="state"?"Click a state to drill to LGAs":levelDim==="lga"?"Click an LGA to drill to facilities":F.fac?"Single facility":"Click a facility to select it"}</span>`:(dim==="lga"||dim==="facility")&&!F.fac?`<span class="drillnote">Click a row to select it</span>`:""}</div>
    <div class="tw" style="max-height:560px;margin-top:8px"><table><thead><tr><th>${dim==="org"?levelDim[0].toUpperCase()+levelDim.slice(1):DL[dim]}</th>
    ${cols.map((c,i)=>`<th data-psort="${id}:${i}" title="Sort">${c.l}${st.sort===i?(st.dir<0?" ▾":" ▴"):""}</th>`).join("")}</tr></thead><tbody>
@@ -3765,6 +3770,8 @@ document.addEventListener("click", e=>{
   if(e.target.closest("#f-toggle")){ FHIDE=!FHIDE; try{localStorage.setItem("speed.filtersHidden",FHIDE?"1":"0");}catch(err){} render(); return; }
   if(e.target.closest("#dhis-csv")){ dhisCsv(); return; }
   if(e.target.closest("#f-reset")){Object.assign(F,{state:"",lga:"",fac:"",sex:"",age:""}); render(); return;}
+  const bk=e.target.closest("[data-back]"); if(bk){const b=bk.dataset.back;
+    if(b==="all") Object.assign(F,{state:"",lga:"",fac:""}); else if(b==="state") Object.assign(F,{lga:"",fac:""}); else F.fac=""; render(); return;}
   const d=e.target.closest("[data-drill]"); if(d){const lv=d.dataset.drill, val=d.dataset.val;
     if(lv==="state"){F.state=val;F.lga="";F.fac="";} else if(lv==="lga"){const x=FAC.find(f=>f.lga===val); F.lga=val;F.fac=""; if(x) F.state=x.state;}
     else {const x=FAC.find(f=>f.facility===val); F.fac=val; if(x){F.state=x.state;F.lga=x.lga;}} render(); return;}
