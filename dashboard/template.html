@@ -1974,7 +1974,13 @@ function htsPage(){
       C("Referred",V("hivst_referred")),C("Confirmed",V("hivst_confirmed")),C("Linked",V("hivst_linked")),C("Linkage",RV("hivst_linked","hivst_confirmed"),1)],["org","sex","age"])}</section>
    ${csccSection()}
    <section class="c3d">${secH("HTS breakdown","Drill like a DHIS2 pivot")}${pivot("hts",[C("HTS_TST",V("hts_tst"),0,0,"hts_tst"),C("HTS_POS",V("hts_tst_pos")),C("Yield",RV("hts_tst_pos","hts_tst"),1),
-     C("TX_NEW",V("tx_new_q")),C("Linkage",RV("tx_new_q","hts_tst_pos"),1,v=>rateStatus(div(v.tx_new_q,v.hts_tst_pos),.98)),C("PrEP_NEW",V("prep_new"))],
+     // TX_NEW comes from the line list, which has no testing modality: those columns show "—" on modality rows
+     C("TX_NEW non-unique",x=>x.tx_new_q??null),C("TX_NEW unique",x=>x.tx_new_q==null?null:x.tx_new_unique||0),C("GC7",x=>x.tx_new_q==null?null:x.pmtct_gc7||0),
+     C("Linkage with GC7, non-unique",x=>x.tx_new_q==null?null:div(x.tx_new_q,x.hts_tst_pos),1,v=>v.tx_new_q==null?null:rateStatus(div(v.tx_new_q,v.hts_tst_pos),.98)),
+     C("Linkage with GC7, unique",x=>x.tx_new_q==null?null:div(x.tx_new_unique||0,x.hts_tst_pos),1),
+     C("Linkage without GC7, non-unique",x=>x.tx_new_q==null?null:div(Math.max(0,(x.tx_new_q||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
+     C("Linkage without GC7, unique",x=>x.tx_new_q==null?null:div(Math.max(0,(x.tx_new_unique||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
+     C("PrEP_NEW",V("prep_new"))],
      ["org","paed","sex","age","mod"])}</section>`;
 }
 /* ================= Q3 performance-review additions (ECEWS_Q3_Performance Meeting_Final) ================= */
