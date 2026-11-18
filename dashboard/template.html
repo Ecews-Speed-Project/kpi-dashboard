@@ -1936,10 +1936,11 @@ function htsPage(){
    ${(()=>{ const ipiYr=periodFY()===TFY, pf=D.meta.tx_new_pillars_from||"";
      const lab=["Non-unique","Unique"], tip="Non-unique (used in every calculation): new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same.";
      return kpi2("TX_NEW",[[n(v.tx_new_q),lab[0]],[n(v.tx_new_unique),lab[1]]],"",null,tip)
-       +kpi2(ipiYr?"Linkage (IPI)":"Linkage",[[pct(div(v.tx_new_q,v.hts_tst_pos)),lab[0]],[pct(div(v.tx_new_unique,v.hts_tst_pos)),lab[1]]],
-             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"",ipiYr?lk.status:null,tip)
-       +kpi(pct(div((v.tx_new_q||0)-(v.pmtct_gc7||0),v.hts_tst_pos)),"Linkage without GC7",`(TX_NEW − GC7 ${n(v.pmtct_gc7||0)}) ÷ HTS_TST_POS`,null,
-            "GC7 = pregnant women newly started on ART (PMTCT_ART, weekly DHIS2 form, reported from November 2026). Taking them out of TX_NEW shows linkage of the other positives."); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
+       +kpi2(ipiYr?"Linkage with GC7 (IPI)":"Linkage with GC7",[[pct(div(v.tx_new_q,v.hts_tst_pos)),lab[0]],[pct(div(v.tx_new_unique,v.hts_tst_pos)),lab[1]]],
+             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"TX_NEW ÷ HTS_TST_POS",ipiYr?lk.status:null,"Linkage with GC7 = all TX_NEW ÷ HTS_TST_POS (GC7 women included). "+tip)
+       +kpi2("Linkage without GC7",[[pct(div(Math.max(0,(v.tx_new_q||0)-(v.pmtct_gc7||0)),v.hts_tst_pos)),lab[0]],[pct(div(Math.max(0,(v.tx_new_unique||0)-(v.pmtct_gc7||0)),v.hts_tst_pos)),lab[1]]],
+            `(TX_NEW − GC7 ${n(v.pmtct_gc7||0)}) ÷ HTS_TST_POS`,null,
+            "GC7 = pregnant women found by CBOs in the community and newly started on ART at our sites (PMTCT_ART, weekly DHIS2 form, reported from November 2026). They are not in our HTS_TST_POS, so taking them out of TX_NEW shows linkage of our own positives. "+tip); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
    <section class="c3d">${secH("Testing by modality","Tests, positives and share of all positives")}
     ${hbars(modRows.map(r=>({l:r.l,v:r.t,txt:`<b>${n(r.t)}</b> · ${n(r.p)} pos · ${pct(div(r.p,v.hts_tst_pos),0)} of POS`, tip:`${r.l}: ${n(r.t)} tests · ${n(r.p)} positive · yield ${pct(div(r.p,r.t))} · ${pct(div(r.p,v.hts_tst_pos),0)} of all positives`})))}</section>
    ${opdSection()}
@@ -2950,11 +2951,11 @@ function gc7Section(){
     return `<div class="gc7r${r.tot?" tot":""}" data-tip="${esc(r.l)}: TX_NEW ${n(tx(r.x))} = ${n(o)} others + ${n(g(r.x))} GC7 · HTS_TST_POS ${n(pos(r.x))}">
      <span>${esc(r.l)}</span><span class="trk"><i style="left:0;width:${w(o)}%;background:var(--s1)"></i>${g(r.x)?`<i style="left:${w(o)}%;width:max(4px,${w(g(r.x))}%);background:var(--s2)"></i>`:""}<em style="left:calc(${w(pos(r.x))}% - 1px)"></em></span>
      <span class="num"><b>${n(tx(r.x))}</b> TX_NEW${g(r.x)?` · <b style="color:var(--s2)">${n(g(r.x))}</b> GC7`:""} · ${n(pos(r.x))} POS</span></div>`; };
-  const tab=`<div class="tw" style="margin-top:14px"><table><thead><tr><th></th><th class="n">HTS_TST_POS</th><th class="n">TX_NEW</th><th class="n">of which GC7</th><th class="n">TX_NEW above POS</th><th class="n">GC7 share of TX_NEW</th><th class="n">Linkage</th><th class="n">Linkage without GC7</th></tr></thead><tbody>
+  const tab=`<div class="tw" style="margin-top:14px"><table><thead><tr><th></th><th class="n">HTS_TST_POS</th><th class="n">TX_NEW</th><th class="n">of which GC7</th><th class="n">TX_NEW above POS</th><th class="n">GC7 share of TX_NEW</th><th class="n">Linkage with GC7</th><th class="n">Linkage without GC7</th></tr></thead><tbody>
     ${st.map(r=>`<tr${r.tot?' class="total"':""}><td>${esc(r.l)}</td><td class="n">${n(pos(r.x))}</td><td class="n">${n(tx(r.x))}</td><td class="n">${n(g(r.x))}</td><td class="n">${ex(r.x)?n(ex(r.x)):"—"}</td><td class="n">${rpct(g(r.x),tx(r.x))}</td><td class="n">${rpct(tx(r.x),pos(r.x))}</td><td class="n">${rpct(tx(r.x)-g(r.x),pos(r.x))}</td></tr>`).join("")}</tbody></table></div>`;
   const e=ex(v);
   return `<section class="c3d">${secH("GC7 contribution to new on ART","Global Fund Grant Cycle 7 · pregnant women found by NEPHAWN and other CBOs in the community and started on ART at our sites")}
-   <div class="kpis">${kpi(n(g(v)),"GC7 new on ART","PMTCT_ART · New on ART (GC7)")}${kpi(rpct(g(v),tx(v)),"GC7 share of TX_NEW",`${n(g(v))} of ${n(tx(v))}`)}${kpi(rpct(tx(v),pos(v)),"Linkage","TX_NEW ÷ HTS_TST_POS")}${kpi(rpct(tx(v)-g(v),pos(v)),"Linkage without GC7","(TX_NEW − GC7) ÷ HTS_TST_POS")}</div>
+   <div class="kpis">${kpi(n(g(v)),"GC7 new on ART","PMTCT_ART · New on ART (GC7)")}${kpi(rpct(g(v),tx(v)),"GC7 share of TX_NEW",`${n(g(v))} of ${n(tx(v))}`)}${kpi(rpct(tx(v),pos(v)),"Linkage with GC7","TX_NEW ÷ HTS_TST_POS")}${kpi(rpct(tx(v)-g(v),pos(v)),"Linkage without GC7","(TX_NEW − GC7) ÷ HTS_TST_POS")}</div>
    <p style="margin:14px 0 6px">${e?`TX_NEW is <b>${n(e)}</b> above HTS_TST_POS; GC7 accounts for <b>${n(Math.min(g(v),e))}</b> of that (${rpct(Math.min(g(v),e),e,0)}).`:`TX_NEW (${n(tx(v))}) is not above HTS_TST_POS (${n(pos(v))}); GC7 adds <b>${n(g(v))}</b> to TX_NEW.`}</p>
    <div class="legend" style="margin:4px 0 6px"><span><span class="sw" style="background:var(--s1)"></span>TX_NEW, others</span><span><span class="sw" style="background:var(--s2)"></span>TX_NEW, GC7</span><span><span class="sw" style="background:var(--ink);width:3px"></span>HTS_TST_POS (our testing)</span></div>
    <div>${st.map(row).join("")}</div>
