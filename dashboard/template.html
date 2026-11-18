@@ -590,7 +590,15 @@ function covered(through){ const s=dOf(P.start), e=dOf(P.end), t=dOf(through);
 
 function facPass(i, f){ const x=FAC[i];
   return (!f.state||x.state===f.state)&&(!f.lga||x.lga===f.lga)&&(!f.fac||x.facility===f.fac)&&(!f.grp||(f.grp==="cscc")===isCscc(i)); }
-// site group: CSCC (key-population one-stop sites, "… CSCC" in the name) or general population site
+/* facility lists show only the EMR line-list facilities (DATIM-coded, recognised by CDC: 96 sites). DHIS2-only org units
+   (community points, other sites) still count in LGA, state and programme totals, they are just not listed as facilities. */
+let EMRF = null;
+function isEmrFac(name){
+  if(EMRF===null){ const g=agg({},{by:"facility"});
+    EMRF = new Set([...g].filter(([,x])=>((x.emr_active_cdr||0)+(x.vl_tx||0)+(x.tx_curr_emr||0)+(x.emr_active||0))>0).map(([k])=>k));
+    if(!EMRF.size) EMRF = false; }
+  return !EMRF || EMRF.has(name);
+}// site group: CSCC (key-population one-stop sites, "… CSCC" in the name) or general population site
 let ISC = null;
 const isCscc = i => (ISC || (ISC = FAC.map(x=>/cscc/i.test(x.facility))))[i];
 /* Age bands. HIV Testing Services and TB: one top band, 50+ = the "50+" reports plus 50-54 … 65+
@@ -849,6 +857,7 @@ function pivot(id, cols, dims, def=null, opt={}){
   else { const by = dim; g = agg({...F, ...(dim==="sex"?{sex:""}:{}), ...(dim==="age"||dim==="agegrp"||dim==="paed"?{age:""}:{})},{by}); keys=[...g.keys()];
     if(dim==="paed") keys = ["<20","20+","Unknown"].filter(k=>keys.includes(k));
     if(dim==="age") keys = AGEBANDS().filter(a=>keys.includes(a)); if(dim==="sex") keys = ["F","M","U"].filter(k=>keys.includes(k)); if(dim==="mod") keys = keys.filter(k=>k && (id==="pmtct" ? ["Facility","Community"].includes(k) : !["Facility","Community"].includes(k))); }
+  if(dim==="facility"||levelDim==="facility") keys = keys.filter(k=>k===F.fac||isEmrFac(k));
   const fOf = k => dim==="facility" ? {...F,fac:k} : dim==="lga" ? {...F,lga:k} : dim==="org" ? (levelDim==="state"?{...F,state:k}:levelDim==="lga"?{...F,lga:k}:{...F,fac:k}) : dim==="sex"?{...F,sex:k}:(dim==="age"||dim==="agegrp"||dim==="paed")?{...F,age:k==="Unknown"?"":k}:F;
   let rows = keys.map(k=>({k, v: withExtras({...(g.get(k)||{})}, fOf(k))}));
   if(st.sort!=null) rows.sort((a,b)=>((cols[st.sort].f(b.v)??-1e18)-(cols[st.sort].f(a.v)??-1e18))*-st.dir);
@@ -3717,7 +3726,7 @@ function filtersSummary(){ const p=[P.label, F.fac||F.lga||F.state||"All states"
 function filtersBar(){
   if(FHIDE) return `<button class="ftog" id="f-toggle" aria-expanded="false" title="Show the period and filter controls">Show filters ▾</button><span class="fsum">${esc(filtersSummary())}</span>${dhisMeas().length?`<button class="dhcsv" id="dhis-csv" title="Download the DHIS2 data behind this page for the selected period and filters">${ico("download",14)} DHIS2 data (CSV)</button>`:""}`;
   const lgas=[...new Set(FAC.filter(f=>!F.state||f.state===F.state).map(f=>f.lga))].sort();
-  const facs=FAC.filter(f=>(!F.state||f.state===F.state)&&(!F.lga||f.lga===F.lga)).map(f=>f.facility).sort();
+  const facs=FAC.filter(f=>(!F.state||f.state===F.state)&&(!F.lga||f.lga===F.lga)&&(f.facility===F.fac||isEmrFac(f.facility))).map(f=>f.facility).sort();
   const opt=(arr,sel,all)=>`<option value="">${all}</option>`+arr.map(x=>`<option${x===sel?" selected":""}>${esc(x)}</option>`).join("");
   const ages=["<15","15+","<20","20+",...AGEBANDS().filter(a=>a!=="Unknown")];
   const qopts = [...D.quarters].reverse().map(q=>`<option value="q:${q.label}"${P.mode==="quarter"&&P.label===q.label?" selected":""}>${q.label}${q.label===D.meta.quarter?" (current)":""}</option>`).join("");
