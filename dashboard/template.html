@@ -840,8 +840,8 @@ function pyramid(measure, {f=F, title="", outline=null, den=null, d=1, compact=f
 }
 
 /* DHIS2-style pivot: rows by a chosen dimension, page columns, click to drill */
-const PIVOT = {};
-function pivot(id, cols, dims, def=null){
+const PIVOT = {}, PIVOT_CSV = {};
+function pivot(id, cols, dims, def=null, opt={}){
   const st = PIVOT[id] || (PIVOT[id] = {dim: def||dims[0], sort: null, dir: -1});
   if(!(dims.includes(st.dim) || dims.includes("org")&&["lga","facility"].includes(st.dim))) st.dim = dims[0];
   let dim = st.dim, keys, g, levelDim = null;
@@ -864,7 +864,18 @@ function pivot(id, cols, dims, def=null){
       [true,"all","← All states"], [!!(F.lga||F.fac),"state",`← ${esc(F.state)} LGAs`], [!!F.fac,"lga",`← ${esc(F.lga)} facilities`]]
       .filter(x=>x[0]).map(([,k,l])=>`<button class="reset" data-back="${k}">${l}</button>`).join("")}</span>` : "";
   const scope = dims.includes("org") ? placeScope(dim) : "";
-  return `<div class="dimbar"><span class="eyebrow">Rows by</span>${dims.includes("org")?orgSel():""}${scope}${back}<span class="seg">${dims.filter(d=>d!=="org").map(d=>`<button data-pdim="${id}:${d}" aria-pressed="${d===dim}">${DL[d]}</button>`).join("")}</span>
+  // CSV of exactly what the table shows (rows view, filters, period), with state / LGA beside each place
+  let csvBtn = "";
+  if(opt.csv){
+    const ld = dim==="org" ? levelDim : dim, raw = (c,v) => { const x=c.f(v); return x==null||!isFinite(x) ? "" : c.p&&c.p!=="r"&&c.p!=="x" ? (x*100).toFixed(1)+"%" : c.p==="r"||c.p==="x" ? x.toFixed(1) : Math.round(x); };
+    const place = k => { if(ld==="facility"){ const f=FAC.find(x=>x.facility===k)||{}; return [f.state||"",f.lga||"",k]; }
+      if(ld==="lga"){ const f=FAC.find(x=>x.lga===k)||{}; return [f.state||"",k,""]; } if(ld==="state") return [k,"",""]; return null; };
+    const pl = ["state","lga","facility"].includes(ld);
+    PIVOT_CSV[id] = {name: opt.csv, head: [...(pl?["State","LGA","Facility"]:[DL[dim]]), ...cols.map(c=>c.l)],
+      rows: [...rows.map(r=>[...(pl?place(r.k):[lab(r.k)]), ...cols.map(c=>raw(c,r.v))]), [...(pl?["Total: "+filterText(),"",""]:["Total: "+filterText()]), ...cols.map(c=>raw(c,total))]]};
+    csvBtn = `<button class="reset" data-pcsv="${id}" style="margin-left:auto">Download CSV</button>`;
+  }
+  return `<div class="dimbar"><span class="eyebrow">Rows by</span>${dims.includes("org")?orgSel():""}${scope}${back}<span class="seg">${dims.filter(d=>d!=="org").map(d=>`<button data-pdim="${id}:${d}" aria-pressed="${d===dim}">${DL[d]}</button>`).join("")}</span>${csvBtn}
     ${dim==="org"?`<span class="drillnote">${levelDim==="state"?"Click a state to drill to LGAs":levelDim==="lga"?"Click an LGA to drill to facilities":F.fac?"Single facility":"Click a facility to select it"}</span>`:(dim==="lga"||dim==="facility")&&!F.fac?`<span class="drillnote">Click a row to select it</span>`:""}</div>
    <div class="tw" style="max-height:560px;margin-top:8px"><table><thead><tr><th>${dim==="org"?levelDim[0].toUpperCase()+levelDim.slice(1):DL[dim]}</th>
    ${cols.map((c,i)=>`<th data-psort="${id}:${i}" title="Sort">${c.l}${st.sort===i?(st.dir<0?" ▾":" ▴"):""}</th>`).join("")}</tr></thead><tbody>
@@ -872,6 +883,11 @@ function pivot(id, cols, dims, def=null){
    <tr class="total"><td>${esc(filterText())}</td>${cols.map(c=>cell(c,total)).join("")}</tr></tbody></table></div>`;
 }
 const C = (l, f, p=false, s=null, m=null) => ({l, f, p, s, m});
+function pivotCsv(id){ const t=PIVOT_CSV[id]; if(!t) return;
+  const q=s=>`"${String(s??"").replaceAll('"','""')}"`;
+  const lines=[t.head.map(q).join(",")].concat(t.rows.map(r=>r.map(q).join(",")));
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv"}));
+  a.download=`${t.name}_${(F.fac||F.lga||F.state||"SPEED").replace(/[^\w-]+/g,"_")}_${P.label.replace(/[^\w-]+/g,"_")}.csv`; a.click(); URL.revokeObjectURL(a.href); }
 /* place pickers beside "By LGA" / "By facility" in any table: list one state's (or one LGA's) rows only.
    They set the page filters, the same as the drill buttons and the filter bar. */
 function placeScope(dim){
@@ -1804,14 +1820,14 @@ function txNewCascade(v){
      ${has?kpi(pct(div(g("txn_cap"),tn)),"New clients with prints","captured ÷ TX_NEW","")+kpi(n(tn-tu),"Not in TX_NEW unique","non-unique − unique"):""}</div>`;
   return `<section class="c3d">${secH("TX_NEW cascade","Positives to new on ART, prints captured or not, unique and non-unique, linkage and GC7 · "+esc(P.label))}
     ${hbars(bars,{max:Math.max(pos,tn,1)})}${cards}
-    ${secH("TX_NEW cascade breakdown","Click a state, then an LGA, to reach facilities · or switch to LGA, facility, sex or age · sort any column")}
+    <div style="height:26px"></div>${secH("TX_NEW cascade breakdown","Click a state, then an LGA, to reach facilities · or switch to LGA, facility, sex or age · sort any column")}
     ${pivot("txn",[C("HTS_TST_POS",V("hts_tst_pos"),0,0,"hts_tst_pos"),C("TX_NEW non-unique",V("tx_new_q")),
       ...(has?[C("Prints captured",V("txn_cap")),C("Captured %",RV("txn_cap","tx_new_q"),1,x=>rateStatus(div(x.txn_cap||0,x.tx_new_q),.95)),C("No prints",V("txn_nocap")),
       C("Valid unique print",V("txn_valid")),C("Print issue",V("txn_issue"))]:[]),
       C("TX_NEW unique",V("tx_new_unique")),C("GC7",V("pmtct_gc7")),
       C("Linkage with GC7, non-unique",RV("tx_new_q","hts_tst_pos"),1),C("Linkage with GC7, unique",RV("tx_new_unique","hts_tst_pos"),1),
       C("Linkage without GC7, non-unique",x=>div(Math.max(0,(x.tx_new_q||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
-      C("Linkage without GC7, unique",x=>div(Math.max(0,(x.tx_new_unique||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1)],["org","sex","age"])}
+      C("Linkage without GC7, unique",x=>div(Math.max(0,(x.tx_new_unique||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1)],["org","sex","age"],null,{csv:"tx_new_cascade"})}
     <p class="drillnote">TX_NEW non-unique = every new ART start in the period, transfer-ins removed (used in every calculation). Unique = also in the NDR unique TX_CURR (active, with a valid unique print or under 15). Prints are as recorded in the NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}; a valid unique print = fingerprint valid, not a suppressed duplicate, not waiting for adjudication. GC7 = pregnant women found by CBOs in the community and started on ART at our sites, so they are in TX_NEW but not in our HTS_TST_POS.${has?"":" Print details come with the next update."}</p></section>`;
 }
 /* Clients seen at the facility in the period (drug refill or VL sample): were prints captured, any print issue, enrolled and matched */
@@ -3782,6 +3798,7 @@ document.addEventListener("click", e=>{
   if(e.target.closest("#f-toggle")){ FHIDE=!FHIDE; try{localStorage.setItem("speed.filtersHidden",FHIDE?"1":"0");}catch(err){} render(); return; }
   if(e.target.closest("#dhis-csv")){ dhisCsv(); return; }
   if(e.target.closest("#f-reset")){Object.assign(F,{state:"",lga:"",fac:"",sex:"",age:""}); render(); return;}
+  const pcsvB=e.target.closest("[data-pcsv]"); if(pcsvB){ pivotCsv(pcsvB.dataset.pcsv); return; }
   const bk=e.target.closest("[data-back]"); if(bk){const b=bk.dataset.back;
     if(b==="all") Object.assign(F,{state:"",lga:"",fac:""}); else if(b==="state") Object.assign(F,{lga:"",fac:""}); else F.fac=""; render(); return;}
   const d=e.target.closest("[data-drill]"); if(d){const lv=d.dataset.drill, val=d.dataset.val;
