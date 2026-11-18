@@ -75,7 +75,6 @@ non_ipi:
     num: pmtct_eid_pos
     kind: count
     flow: cumulative
-    neutral: true             # target 49 is a planning figure, not better/worse
     target: NIPI_INFANT_DX
     source: DHIS2 (PMTCT EID)
   - code: NIPI_CASE_FINDING
@@ -95,7 +94,6 @@ non_ipi:
     den: plhiv_est
     kind: rate
     target: NIPI_POP_VLS
-    neutral: true             # shown against the target but not rated (Naomi denominator is an estimate)
     source: Central repository, Naomi estimate (manual)
   - code: NIPI_TX_CURR
     name: TX_CURR
