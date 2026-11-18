@@ -863,7 +863,8 @@ function pivot(id, cols, dims, def=null){
   const back = dims.includes("org") && (F.state||F.lga||F.fac) ? `<span class="pv-back">${[
       [true,"all","← All states"], [!!(F.lga||F.fac),"state",`← ${esc(F.state)} LGAs`], [!!F.fac,"lga",`← ${esc(F.lga)} facilities`]]
       .filter(x=>x[0]).map(([,k,l])=>`<button class="reset" data-back="${k}">${l}</button>`).join("")}</span>` : "";
-  return `<div class="dimbar"><span class="eyebrow">Rows by</span>${dims.includes("org")?orgSel():""}${back}<span class="seg">${dims.filter(d=>d!=="org").map(d=>`<button data-pdim="${id}:${d}" aria-pressed="${d===dim}">${DL[d]}</button>`).join("")}</span>
+  const scope = dims.includes("org") ? placeScope(dim) : "";
+  return `<div class="dimbar"><span class="eyebrow">Rows by</span>${dims.includes("org")?orgSel():""}${scope}${back}<span class="seg">${dims.filter(d=>d!=="org").map(d=>`<button data-pdim="${id}:${d}" aria-pressed="${d===dim}">${DL[d]}</button>`).join("")}</span>
     ${dim==="org"?`<span class="drillnote">${levelDim==="state"?"Click a state to drill to LGAs":levelDim==="lga"?"Click an LGA to drill to facilities":F.fac?"Single facility":"Click a facility to select it"}</span>`:(dim==="lga"||dim==="facility")&&!F.fac?`<span class="drillnote">Click a row to select it</span>`:""}</div>
    <div class="tw" style="max-height:560px;margin-top:8px"><table><thead><tr><th>${dim==="org"?levelDim[0].toUpperCase()+levelDim.slice(1):DL[dim]}</th>
    ${cols.map((c,i)=>`<th data-psort="${id}:${i}" title="Sort">${c.l}${st.sort===i?(st.dir<0?" ▾":" ▴"):""}</th>`).join("")}</tr></thead><tbody>
@@ -871,6 +872,15 @@ function pivot(id, cols, dims, def=null){
    <tr class="total"><td>${esc(filterText())}</td>${cols.map(c=>cell(c,total)).join("")}</tr></tbody></table></div>`;
 }
 const C = (l, f, p=false, s=null, m=null) => ({l, f, p, s, m});
+/* place pickers beside "By LGA" / "By facility" in any table: list one state's (or one LGA's) rows only.
+   They set the page filters, the same as the drill buttons and the filter bar. */
+function placeScope(dim){
+  if(!["lga","facility"].includes(dim) || F.fac) return "";
+  const lgas = [...new Set(FAC.filter(f=>f.state===F.state).map(f=>f.lga))].filter(Boolean).sort();
+  const sel = (k, opts, cur, lab) => `<select class="orgsel${cur?" on":""}" data-pscope="${k}" aria-label="${lab}">${opts.map(([v,l])=>`<option value="${esc(v)}"${cur===v?" selected":""}>${esc(l)}</option>`).join("")}</select>`;
+  return `<span class="eyebrow" style="margin-left:6px">in</span>${sel("state",[["","All states"],...STATES.map(s=>[s,s])],F.state,"State")}
+    ${dim==="facility"&&F.state?sel("lga",[["",`All LGAs in ${F.state}`],...lgas.map(s=>[s,s])],F.lga,"LGA"):""}`;
+}
 const V = (m) => v => v[m]??0;
 const RV = (a,b) => v => div(v[a]??0, v[b]);
 
@@ -2442,7 +2452,7 @@ function appointmentsSection(v){
   const lab = k => ADIM==="sex"?SEXL[k]:ADIM==="age"?k+" yrs":ADIM==="paed"?({"<20":"Paediatric & adolescent (<20)","20+":"Adult (20+)"}[k]||k):k;
   const T={n:all.length,bio:c(all,"Biometrics"),vl:c(all,"VL"),p:past,m:mis.length,i:iit.length};
   const trow=(l,o,tc,t)=>`<tr${t?' class="total"':""}><td>${l}</td><td class="n">${n(tc)}</td><td class="n">${n(o.n)}</td><td class="n">${n(o.bio)}</td><td class="n">${n(o.vl)}</td><td class="n">${n(o.m)}</td><td class="n">${n(o.i)}</td></tr>`;
-  const table = `<div class="dimbar"><span class="eyebrow">Rows by</span><select id="appt-dim" class="orgsel on" aria-label="Rows by">${[["state","State"],["lga","LGA"],["facility","Facility"],["paed","Paediatric / adult"],["sex","Sex"],["age","Age band"]].map(([k,l])=>`<option value="${k}"${ADIM===k?" selected":""}>${l}</option>`).join("")}</select></div>
+  const table = `<div class="dimbar"><span class="eyebrow">Rows by</span><select id="appt-dim" class="orgsel on" aria-label="Rows by">${[["state","State"],["lga","LGA"],["facility","Facility"],["paed","Paediatric / adult"],["sex","Sex"],["age","Age band"]].map(([k,l])=>`<option value="${k}"${ADIM===k?" selected":""}>${l}</option>`).join("")}</select>${placeScope(ADIM)}</div>
    <div class="tw" style="max-height:440px;margin-top:8px"><table><thead><tr><th>${{state:"State",lga:"LGA",facility:"Facility",paed:"Paediatric / adult",sex:"Sex",age:"Age band"}[ADIM]}</th><th class="n">TX_CURR (EMR)</th><th class="n">Scheduled</th><th class="n">With biometric issue</th><th class="n">With VL gap</th><th class="n">Missed (&lt;28 days)</th><th class="n">IIT (28+ days)</th></tr></thead><tbody>
    ${keys.map(k=>trow(esc(lab(k)),grp.get(k),(tx.get(k)||{}).tx_curr_emr)).join("")}${trow(esc(filterText()),T,v.tx_curr_emr,1)}</tbody></table></div>`;
   const sel=apptSel(), show=sel.slice(0,300), cols=AC.cols.filter(x=>x!=="datim"), cnts=[all.length,mis.length,iit.length];
@@ -2873,7 +2883,7 @@ function eacSection(){
   let keys=[...grp.keys()]; if(ES.dim==="age") keys=AGEBANDS().filter(x=>keys.includes(x)); else if(ES.dim==="paed") keys=["<20","20+","Unknown"].filter(x=>keys.includes(x)); else keys.sort((x,y)=>grp.get(y).length-grp.get(x).length);
   const lab = k => ES.dim==="sex"?SEXL[k]:ES.dim==="age"?k+" yrs":ES.dim==="paed"?({"<20":"Paediatric & adolescent (<20)","20+":"Adult (20+)"}[k]||k):k;
   const trow=(l,o,tot)=>`<tr${tot?' class="total"':""}><td>${l}</td><td class="n">${n(o.n)}</td><td class="n">${n(o.st)}</td><td class="n">${rpct(o.st,o.n)}</td><td class="n">${n(o.s3)}</td><td class="n">${n(o.ext)}</td><td class="n">${n(o.fu)}</td><td class="n">${rpct(o.fu,o.n)}</td><td class="n">${n(o.sup)}</td><td class="n">${n(o.llv)}</td><td class="n">${n(o.uns)}</td><td class="n">${rpct(o.sup,o.fu)}</td><td class="n">${n(o.sw)}</td></tr>`;
-  const table = `<div class="dimbar" style="margin-top:12px"><span class="eyebrow">Rows by</span><select id="eac-dim" class="orgsel on" aria-label="Rows by">${[["state","State"],["lga","LGA"],["facility","Facility"],["paed","Paediatric / adult"],["sex","Sex"],["age","Age band"]].map(([k,l])=>`<option value="${k}"${ES.dim===k?" selected":""}>${l}</option>`).join("")}</select></div>
+  const table = `<div class="dimbar" style="margin-top:12px"><span class="eyebrow">Rows by</span><select id="eac-dim" class="orgsel on" aria-label="Rows by">${[["state","State"],["lga","LGA"],["facility","Facility"],["paed","Paediatric / adult"],["sex","Sex"],["age","Age band"]].map(([k,l])=>`<option value="${k}"${ES.dim===k?" selected":""}>${l}</option>`).join("")}</select>${placeScope(ES.dim)}</div>
    <div class="tw" style="max-height:440px;margin-top:8px"><table><thead><tr><th>${{state:"State",lga:"LGA",facility:"Facility",paed:"Paediatric / adult",sex:"Sex",age:"Age band"}[ES.dim]}</th><th class="n">High VL</th><th class="n">EAC started</th><th class="n">Uptake</th><th class="n">3 sessions</th><th class="n">Extended</th><th class="n">Follow-up VL</th><th class="n">FU coverage</th><th class="n">Re-suppressed</th><th class="n">LLV</th><th class="n">Unsuppressed</th><th class="n">Re-suppression</th><th class="n">2nd line</th></tr></thead><tbody>
    ${keys.map(k=>trow(esc(lab(k)),eacSum(grp.get(k)))).join("")}${trow(esc(filterText()),t,1)}</tbody></table></div>`;
   const pick=ECATS[ES.cat][1], q=ES.q.trim().toLowerCase(), sel=all.filter(r=>pick(r)&&(!q||EC.cols.some(c=>String(ecv(r,c)).toLowerCase().includes(q)))), show=sel.slice(0,300), cols=EC.cols.filter(x=>x!=="datim");
@@ -3755,6 +3765,8 @@ document.addEventListener("change", e=>{
   else if(id==="f-fac"){F.fac=e.target.value; if(F.fac){const x=FAC.find(f=>f.facility===F.fac); F.state=x.state; F.lga=x.lga;}}
   else if(id==="f-age") F.age=e.target.value;
   else if(e.target.dataset.pdimsel){ const st=PIVOT[e.target.dataset.pdimsel]; st.dim=e.target.value; st.sort=null; }
+  else if(e.target.dataset.pscope==="state"){ F.state=e.target.value; F.lga=""; F.fac=""; }
+  else if(e.target.dataset.pscope==="lga"){ F.lga=e.target.value; F.fac=""; }
   else if(id==="appt-from"||id==="appt-to"){ const a=document.getElementById("appt-from").value, b=document.getElementById("appt-to").value; if(a&&b) ARNG={s:a<b?a:b, e:a<b?b:a}; }
   else if(id==="appt-dim") ADIM=e.target.value;
   else if(id==="cl-fac") CLFAC=e.target.value;
