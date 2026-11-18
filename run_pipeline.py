@@ -333,6 +333,10 @@ def ndr_linelist(pbs: pd.DataFrame, cdr: pd.DataFrame, cfg: dict, file_date: dt.
         "outcomes_date": iso(pd.concat([day(col("transferredoutdate")), day(col("patientdeceaseddate"))], axis=1).max(axis=1)),
         "datim_code": col("datimcode"), "pepid": col("patientartnumber"), "patienthospitalno": col("hospitalnumber"),
         "validbiometric": valid.map({True: "Yes", False: "No"}),
+        # print details for the TX_NEW and facility-visit biometrics (kpi.measures._bio_flow)
+        "bio_baseline": col("fingerprint enrolled"), "bio_fp_status": col("fingerprintstatus"),
+        "bio_dup_type": col("duplicate_type"), "bio_recapture": col("recapture fingerprint enrolled"),
+        "bio_match": col("match_outcome"),
     })
     # EMR-only fields from the CDR line list (DATIM + ART number, punctuation and leading zeros ignored)
     emr_cols = [lc[k] for k in EMR_ONLY if lc.get(k) in cdr]

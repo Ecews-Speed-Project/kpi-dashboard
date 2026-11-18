@@ -1763,9 +1763,55 @@ function overviewPage(){
     return `<a class="c3d icard mini-i" href="#ipi"><div class="tags">${ico(PILLAR_ICON[i.pillar]||"ipi",22)}<span class="tag ipi">IPI</span><span class="tag">${esc(i.pillar)}</span></div><h3 style="font-size:19px">${esc(i.name)}</h3>
      <div class="iv"><span class="big num" style="font-size:34px">${r.value==null?"—":fmtInd(i.code,r)}</span><small>${r.note?esc(r.note):r.target!=null?"target "+(i.kind==="rate"?pct(r.target,0):n(r.target)):""}</small></div>${meter(i,r)}<div>${chip(r.status,r.note?"Not due":null)}</div></a>`;}).join("");
 
-  return context() + kpiSummary(v) + `<div class="grid g3">${a}${b}${c}</div>${concurrenceSection(v)}<div class="grid g3">${pmtct}${tb}${bio}</div>
+  return context() + kpiSummary(v) + `<div class="grid g3">${a}${b}${c}</div>${txNewCascade(v)}${concurrenceSection(v)}<div class="grid g3">${pmtct}${tb}${bio}</div>
    ${periodFY()===TFY?`${secH("IPI scorecard","Incentive-linked indicators against this quarter's milestone")}<div class="grid g4">${ipi}</div>`:""}${ribbon}
    ${!F.state&&!F.lga&&!F.fac?statesTable():""}`;
+}
+/* TX_NEW cascade: positives -> new on ART -> prints captured or not -> valid unique print -> TX_NEW unique, with linkage and GC7.
+   Print fields are from the NDR file (as of its date); TX_NEW is the plain (non-unique) count. */
+function txNewCascade(v){
+  const g=k=>v[k]||0, pos=g("hts_tst_pos"), tn=g("tx_new_q"), tu=g("tx_new_unique"), gc=g("pmtct_gc7");
+  const has=v.txn_cap!=null||v.txn_nocap!=null;
+  const sh=(a,b)=>b?` · ${pct(div(a,b),0)}`:"";
+  const bars=[
+    {l:"HTS_TST_POS", v:pos, c:"var(--bar-none)", txt:`<b>${n(pos)}</b> new positives`},
+    {l:"TX_NEW (non-unique)", v:tn, txt:`<b>${n(tn)}</b>${pos?` · linkage ${pct(div(tn,pos))}`:""}`},
+    ...(has?[
+    {l:"  with prints captured", v:g("txn_cap"), c:"var(--s1)", txt:`<b>${n(g("txn_cap"))}</b>${sh(g("txn_cap"),tn)} of TX_NEW`},
+    {l:"  no prints captured", v:g("txn_nocap"), c:"var(--s2)", txt:`<b>${n(g("txn_nocap"))}</b>${sh(g("txn_nocap"),tn)}${g("txn_nocap_u15")?` · ${n(g("txn_nocap_u15"))} under 15`:""}`},
+    {l:"  valid unique print", v:g("txn_valid"), c:"var(--bar-good)", txt:`<b>${n(g("txn_valid"))}</b>${sh(g("txn_valid"),tn)}`},
+    {l:"  print issue", v:g("txn_issue"), c:"var(--bar-critical)", txt:`<b>${n(g("txn_issue"))}</b> · invalid ${n(g("txn_iss_inv"))} · adjudication ${n(g("txn_iss_adj"))} · duplicate ${n(g("txn_iss_dup"))}`}]:[]),
+    {l:"TX_NEW (unique)", v:tu, c:"var(--s3)", txt:`<b>${n(tu)}</b>${sh(tu,tn)} of TX_NEW${pos?` · linkage ${pct(div(tu,pos))}`:""}`},
+    {l:"of TX_NEW: GC7", v:gc, c:"var(--s2)", txt:`<b>${n(gc)}</b> GC7 women (tested in the community)`}];
+  const L=(a)=>pct(div(Math.max(0,a),pos));
+  const cards=`<div class="kpis" style="margin-top:12px">${kpi2("Linkage with GC7",[[L(tn),"Non-unique"],[L(tu),"Unique"]],"TX_NEW ÷ HTS_TST_POS")}
+     ${kpi2("Linkage without GC7",[[L(tn-gc),"Non-unique"],[L(tu-gc),"Unique"]],`(TX_NEW − GC7 ${n(gc)}) ÷ HTS_TST_POS`)}
+     ${has?kpi(pct(div(g("txn_cap"),tn)),"New clients with prints","captured ÷ TX_NEW","")+kpi(n(tn-tu),"Not in TX_NEW unique","non-unique − unique"):""}</div>`;
+  return `<section class="c3d">${secH("TX_NEW cascade","Positives to new on ART, prints captured or not, unique and non-unique, linkage and GC7 · "+esc(P.label))}
+    ${hbars(bars,{max:Math.max(pos,tn,1)})}${cards}
+    <p class="drillnote">TX_NEW non-unique = every new ART start in the period, transfer-ins removed (used in every calculation). Unique = also in the NDR unique TX_CURR (active, with a valid unique print or under 15). Prints are as recorded in the NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}; a valid unique print = fingerprint valid, not a suppressed duplicate, not waiting for adjudication. GC7 = pregnant women found by CBOs in the community and started on ART at our sites, so they are in TX_NEW but not in our HTS_TST_POS.${has?"":" Print details come with the next update."}</p></section>`;
+}
+/* Clients seen at the facility in the period (drug refill or VL sample): were prints captured, any print issue, enrolled and matched */
+function visitBio(){
+  const v=agg({...F,sex:"",age:""}), g=k=>v[k]||0;
+  if(v.vis_any==null) return `<section class="c3d">${secH("Clients seen at the facility: biometrics")}<div class="empty">Comes with the next update (needs the NDR file's print details).</div></section>`;
+  const rows=[["Drug refill","rf"],["VL sample collected","vl"],["Refill or VL sample (each client once)","any"]];
+  const tr=([l,k],t)=>{ const a=g(`vis_${k}`), c=g(`vis_${k}_cap`); return `<tr${t?' class="total"':""}><td>${l}</td><td class="n">${n(a)}</td><td class="n">${n(c)}</td><td class="n">${rpct(c,a)}${dot(rateStatus(div(c,a),.95))}</td><td class="n">${n(a-c)}</td>
+     <td class="n">${n(g(`vis_${k}_enr`))}</td><td class="n">${n(g(`vis_${k}_issue`))}</td><td class="n">${k==="any"?n(g("vis_any_match")):"—"}</td><td class="n">${k==="any"?n(g("vis_any_nomatch")):"—"}</td></tr>`; };
+  const a=g("vis_any");
+  const bars=hbars([
+    {l:"Seen (refill or VL)", v:a, c:"var(--bar-none)"},
+    {l:"Prints captured", v:g("vis_any_cap"), txt:`<b>${n(g("vis_any_cap"))}</b> · ${pct(div(g("vis_any_cap"),a))}`},
+    {l:"No prints captured", v:g("vis_any_nocap"), c:"var(--s2)", txt:`<b>${n(g("vis_any_nocap"))}</b> · missed chance to capture`},
+    {l:"Enrolled (valid unique print)", v:g("vis_any_enr"), c:"var(--bar-good)", txt:`<b>${n(g("vis_any_enr"))}</b> · ${pct(div(g("vis_any_enr"),a))}`},
+    {l:"Enrolled and matched at recapture", v:g("vis_any_match"), c:"var(--s1)", txt:`<b>${n(g("vis_any_match"))}</b> · ${pct(div(g("vis_any_match"),g("vis_any_enr")))} of enrolled`},
+    {l:"Biometric issue", v:g("vis_any_issue"), c:"var(--bar-critical)", txt:`<b>${n(g("vis_any_issue"))}</b> · captured, not a valid unique print`},
+    {l:"Recapture not matched", v:g("vis_any_nomatch"), c:"var(--bar-critical)", txt:`<b>${n(g("vis_any_nomatch"))}</b> · no match, no base or rejected`}],{max:Math.max(a,1)});
+  return `<section class="c3d">${secH("Clients seen at the facility: biometrics",`Came for a drug refill or a VL sample in ${esc(P.label)} · prints captured, issues, enrolled and matched`)}
+    ${bars}
+    <div class="tw" style="margin-top:14px"><table><thead><tr><th>Visit</th><th class="n">Clients</th><th class="n">Prints captured</th><th class="n">Captured %</th><th class="n">Not captured</th><th class="n">Enrolled (valid unique)</th><th class="n">Biometric issue</th><th class="n">Enrolled & matched</th><th class="n">Recapture not matched</th></tr></thead>
+    <tbody>${rows.map((r,i)=>tr(r,i===2)).join("")}</tbody></table></div>
+    <p class="drillnote">A client counts once per visit type, on their latest refill or VL sample date in the NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}, fiscal year to date. Biometric issue = baseline captured but not a valid unique print (invalid, waiting for adjudication or a duplicate). Enrolled & matched = valid unique print and matched at recapture. This section follows the state, LGA and facility filters (not sex or age).</p></section>`;
 }
 function statesTable(){
   const cols=[["TX_CURR vs target","NIPI_TX_CURR","s"],["Saturation","SAT"],["Linkage (IPI)","IPI_ART_COV"],["VLS on ART (IPI)","IPI_VLS_ON_ART"],["VLS among results","NIPI_VLS_WITH_RESULT"],["Case-finding pace","NIPI_CASE_FINDING","s"],["PMTCT ART (IPI)","IPI_PMTCT_ART_COV"],["PrEP among negatives","NIPI_PREP_AMONG_NEG"]]
@@ -3185,6 +3231,8 @@ function pbsPage(){
     <div class="kpis">${bioCards(v)}</div>
     <section class="c3d">${secH("Where we stand: TX_CURR to TX_CURR_Unique", `NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)} · active clients`)}${bioWaterfall(v)}</section>
     ${awCallout(v)}
+    ${txNewCascade(v)}
+    ${visitBio()}
     <section class="c3d">${secH("Unique print categories by state, LGA and facility","Click a state or LGA to drill down · sort any column")}${pivot("bio",bioCols(),["org","sex","age"])}</section>
     <section class="c3d">${secH("Unusable prints and remediation — weekly trend","Active clients the NDR does not count, by reason · one point per week from the NDR files")}${bioTrend()}</section>
     <section class="c3d">${secH("Remediation plan: who to reach, and how","Tiers from the FY26Q3 adjudication work · counts from the current NDR file")}${bioTiers(v)}</section>

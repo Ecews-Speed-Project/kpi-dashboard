@@ -759,6 +759,9 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
                       "otz_transitioned": active & col("otz_transitioned").eq("yes")})
 
     out = [_long(d, masks, dated=dated)]
+    # ---- biometrics of new clients and of clients seen at the facility (NDR PBS fields, joined in run_pipeline)
+    if "bio_baseline" in d:
+        out.append(_bio_flow(d, c, start, ti, pickup, h0, p))
     for key, meas in (("regimen_line", "tx_regline"), ("regimen", "tx_regimen")):
         if c.get(key) in d:
             out.append(_long_by(d, active, d[c[key]], meas))
@@ -768,6 +771,42 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         out.append(_long_by(d, vl_res, d[c["regimen_line"]], "vlr_regline"))
         out.append(_long_by(d, vl_res & (vl < 1000), d[c["regimen_line"]], "vls_regline"))
     return pd.concat(out, ignore_index=True)
+
+
+def _bio_flow(d: pd.DataFrame, c: dict, start, ti, pickup, h0: dt.date, p: Period) -> pd.DataFrame:
+    """Biometrics along TX_NEW, and among clients who came to the facility for a drug refill or a VL sample.
+    Print fields are the NDR PBS file's (as of the file date). Valid unique print = the validbiometric flag
+    (fingerprint valid, not a suppressed duplicate, not waiting for adjudication).
+      txn_*: dated by ART start, same clients as tx_new_q (transfer-ins removed, no status or print filter)
+      vis_*: dated by the last refill (rf), the last VL sample (vl) or the later of the two (any);
+             the fiscal year to date only, and without sex / age (keeps the cube small)."""
+    n = lambda k: _norm(d[k]) if k in d else pd.Series("", index=d.index)
+    base, fp, dup, rec, mo = n("bio_baseline").eq("yes"), n("bio_fp_status"), n("bio_dup_type"), n("bio_recapture").eq("yes"), n("bio_match")
+    valid = _norm(d[c["valid_bio"]]).eq("yes") if c.get("valid_bio") in d else pd.Series(False, index=d.index)
+    issue = base & ~valid
+    u15 = pd.to_numeric(d[c["age"]], errors="coerce") < 15 if c.get("age") in d else pd.Series(False, index=d.index)
+    new = (start >= h0) & (start <= p.as_of) & (ti != "yes")
+    txn = {"txn_cap": new & base, "txn_nocap": new & ~base, "txn_valid": new & valid, "txn_issue": issue & new,
+           "txn_iss_inv": new & base & fp.eq("no_valid_data"), "txn_iss_adj": new & base & fp.eq("adjudicationwaiting"),
+           "txn_iss_dup": new & base & ~valid & (dup.eq("duplicate") | fp.eq("duplicate")),
+           "txn_nocap_u15": new & ~base & u15}
+    sd = pd.Series(start, index=d.index)
+    parts = [_long(d, txn, dated={k: sd for k in txn})]
+    pk = pd.Series(pickup.dt.date, index=d.index)
+    sm = pd.Series(_dates(d[c["sample_date"]]), index=d.index) if c.get("sample_date") in d else pd.Series(pd.NaT, index=d.index)
+    an = pd.concat([pd.to_datetime(pk), pd.to_datetime(sm)], axis=1).max(axis=1).dt.date
+    w0 = max(h0, p.fy_start)
+    inw = lambda s: s.notna() & (s >= w0) & (s <= p.as_of)
+    vis, vdt = {}, {}
+    for k, s in (("rf", pk), ("vl", sm), ("any", pd.Series(an, index=d.index))):
+        v = inw(s).fillna(False).astype(bool)
+        m = {f"vis_{k}": v, f"vis_{k}_cap": v & base, f"vis_{k}_enr": v & valid, f"vis_{k}_issue": v & issue}
+        if k == "any":
+            m.update(vis_any_nocap=v & ~base, vis_any_match=v & valid & rec & mo.eq("match"),
+                     vis_any_nomatch=v & rec & mo.isin({"no match", "no base", "rejected"}))
+        vis.update(m); vdt.update({x: s for x in m})
+    parts.append(_long(d.assign(sex="U", age=UNKNOWN_AGE), vis, dated=vdt))
+    return pd.concat(parts, ignore_index=True)
 
 
 def ndr_waterfall(pbs: pd.DataFrame, c: dict, q_start: dt.date, as_of: dt.date) -> pd.DataFrame:
