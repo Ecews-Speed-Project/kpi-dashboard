@@ -557,6 +557,9 @@ const MAN = D.manifest || null, PART = {};
 const PAGE_PARTS = {overview:["conc"], phrh:["appt","trends"], art:["appt","trends"], trends:["appt","trends"], vl:["vl"], pmtct:["vl"], pbs:["pbs","trends"], methods:["methods"]};
 function partsFor(){ const want=[...(PAGE_PARTS[page]||[]), ...(page==="ipi"&&IPID?["trends","methods"]:[])];
   if(!STOCK) for(const k of [SNL,SNN]) if(k) want.push("snap:"+k);
+  // an indicator's weekly progress: every saved line-list / NDR copy from just before the period to its end
+  if(page==="ipi" && IPID){ const a=dOf(P.start).getTime()-45*DAY, b=Math.min(dOf(P.end), dOf(D.meta.as_of));
+    for(const m of PM) if(m.kind==="S"){ const d=dOf(m.start).getTime(); if(d>=a && d<=b) want.push("snap:"+m.key); } }
   return MAN ? want.filter(n=>MAN.parts[n] && PART[n]!=="ready") : []; }
 function loadPart(n){
   if(PART[n]==="loading") return; PART[n]="loading";
@@ -3712,7 +3715,13 @@ function atEnd(end, fn, weekly=false){
       PM.forEach((m,i)=>{ if(m.kind!=="M") return; const done = dOf(m.end) <= e;
         if(!done) WIN.delete(i);
         PM.forEach((w,j)=>{ if((w.kind!=="W"&&w.kind!=="T")||w.month!==m.month) return; const a=dOf(w.anchor);
-          if(!done && a>=s && a<=e) WIN.add(j); else WIN.delete(j); }); }); }
+          if(!done && a>=s && a<=e) WIN.add(j); else WIN.delete(j); }); });
+      // stock figures (TX_CURR, viral load): the latest saved copy on or before this week's end, even one from just
+      // before the period (30 Sep for the first weeks of a quarter), as long as it is within 45 days
+      if(!STOCK){ const pick=pre=>{ let best=null; for(const m of PM) if(m.kind==="S"&&m.key.startsWith(pre)){ const d=dOf(m.start);
+          if(d<=e && (e-d)/DAY<=45 && (!best||m.key>best)) best=m.key; } return best; };
+        if(!SNL) SNL=pick("SL"); if(!SNN) SNN=pick("SN");
+        PM.forEach((m,i)=>{ if(m.kind==="S" && (m.key===SNL||m.key===SNN)) WIN.add(i); }); } }
     return fn(); }
   finally { [P,WIN,STOCK,SNL,SNN,SKIPM]=keep; }
 }
@@ -3765,7 +3774,7 @@ function ipiDetail(code){
      <div class="tw" style="margin-top:10px"><table><thead><tr><th>Week ending</th><th class="n">${esc(i.name)}</th><th class="n">${rate?"Target":"Target, paced"}</th><th class="n">Status</th></tr></thead><tbody>
      ${wk.slice().reverse().map(w=>`<tr><td>${fmtDate(w.d)}</td><td class="n">${w.value==null?"—":fmt(w.value)}</td><td class="n">${w.target==null?"—":fmt(w.target)}</td><td class="n">${w.value==null?"No data":chip(w.status)}</td></tr>`).join("")}
      </tbody></table></div>
-     ${!rate?"":`<p class="drillnote">Rates built from stock figures (TX_CURR, viral load) only have values on the weeks a line-list snapshot was saved.</p>`}</section>
+     ${!rate?"":`<p class="drillnote">Stock figures (TX_CURR, viral load) come from the latest saved line-list or NDR copy on or before each week's end (the 30 September copy for the first weeks of the quarter); DHIS2 figures from the weekly reports until the month's monthly report is complete.</p>`}</section>
    <a class="back" href="#ipi">${ico("back",16)} Back to IPI cards</a>`;
 }
 function ipiPage(){
