@@ -166,7 +166,8 @@ def replaced_weeks(weekly: pd.DataFrame, monthly: pd.DataFrame, merged: pd.DataF
     w = w.merge(kept, on=["table", "facility_key", "period"], how="left")
     w = w[w["_kept"].isna()].drop(columns="_kept")
     out = w.groupby(DIMS + ["period"], dropna=False)["value"].sum().reset_index()
-    return out.assign(period="T" + out["period"].astype(str), source="trend", weeks=out["period"].astype(str))
+    # source stays "weekly": the DHIS2 indicator terms of the weekly instance pick their values by source
+    return out.assign(period="T" + out["period"].astype(str), source="weekly", weeks=out["period"].astype(str))
 
 
 def month_status(merged: pd.DataFrame, n_facilities: int, as_of: dt.date,

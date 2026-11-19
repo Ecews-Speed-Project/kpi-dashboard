@@ -1,4 +1,4 @@
-"""Weekly reports replaced by a monthly report are kept apart (period T<week>) for the weekly trend charts only."""
+﻿"""Weekly reports replaced by a monthly report are kept apart (period T<week>) for the weekly trend charts only."""
 import pandas as pd
 
 from etl.period_merge import merge_weekly_monthly, replaced_weeks
@@ -18,7 +18,7 @@ def test_replaced_weeks_keeps_only_the_weeks_a_monthly_report_replaced():
     # facility a: both weeks replaced by its October report; facility b's week is still in the totals
     assert sorted(t["period"]) == ["T2026W41", "T2026W42"]
     assert set(t["facility_key"]) == {"a"} and t["value"].sum() == 5
-    assert (t["source"] == "trend").all()
+    assert (t["source"] == "weekly").all() and t["period"].str.startswith("T").all()
     # the totals are unchanged: monthly for a, weekly for b
     assert merged["value"].sum() == 10
 

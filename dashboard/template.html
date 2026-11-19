@@ -2040,8 +2040,8 @@ function htsPage(){
   const mods = agg(F,{by:"mod"}); const mk=[...mods.keys()].filter(k=>k&&mods.get(k).hts_tst);
   const modRows = mk.map(k=>({l:k, t:mods.get(k).hts_tst||0, p:mods.get(k).hts_tst_pos||0})).sort((a,b)=>b.t-a.t);
   const kits = gv(v,"hivst_assisted")+gv(v,"hivst_unassisted");
-  return context()+`<div class="kpis">${kpi(n(v.hts_tst),"HTS_TST",ht.target!=null?`${TL()} target ${n(ht.target)}`:"",ht.status)}
-   ${kpi(n(v.hts_tst_pos),"HTS_TST_POS",cf.target!=null?`${TL()} target ${n(cf.target)}`:"",cf.status)}
+  return context()+`<div class="kpis">${kpi(n(v.hts_tst),"HTS_TST",ht.target!=null?`${TL()} target ${n(ht.target)} · <b>${pct(div(v.hts_tst,ht.target),0)}</b> achieved`:"",ht.status)}
+   ${kpi(n(v.hts_tst_pos),"HTS_TST_POS",cf.target!=null?`${TL()} target ${n(cf.target)} · <b>${pct(div(v.hts_tst_pos,cf.target),0)}</b> achieved`:"",cf.status)}
    ${kpi(pct(div(v.hts_tst_pos,v.hts_tst)),"Testing yield","HTS_TST_POS ÷ HTS_TST")}
    ${(()=>{ const ipiYr=periodFY()===TFY, pf=D.meta.tx_new_pillars_from||"";
      const lab=["Non-unique","Unique"], tip="Non-unique (used in every calculation): new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same.";
@@ -2050,7 +2050,7 @@ function htsPage(){
              ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"TX_NEW ÷ HTS_TST_POS",ipiYr?lk.status:null,"Linkage with GC7 = all TX_NEW ÷ HTS_TST_POS (GC7 women included). "+tip)
        +kpi2("Linkage without GC7",[[pct(div(Math.max(0,(v.tx_new_q||0)-(v.pmtct_gc7||0)),v.hts_tst_pos)),lab[0]],[pct(div(Math.max(0,(v.tx_new_unique||0)-(v.pmtct_gc7||0)),v.hts_tst_pos)),lab[1]]],
             `(TX_NEW − GC7 ${n(v.pmtct_gc7||0)}) ÷ HTS_TST_POS`,null,
-            "GC7 = pregnant women found by CBOs in the community and newly started on ART at our sites (PMTCT_ART, weekly DHIS2 form, reported from November 2026). They are not in our HTS_TST_POS, so taking them out of TX_NEW shows linkage of our own positives. "+tip); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)}`:"",pr.status)}</div>
+            "GC7 = pregnant women found by CBOs in the community and newly started on ART at our sites (PMTCT_ART, weekly DHIS2 form, reported from November 2026). They are not in our HTS_TST_POS, so taking them out of TX_NEW shows linkage of our own positives. "+tip); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)} · <b>${pct(div(v.prep_new,pr.target),0)}</b> achieved`:"",pr.status)}</div>
    <section class="c3d">${secH("Testing by modality","Tests, positives and share of all positives")}
     ${hbars(modRows.map(r=>({l:r.l,v:r.t,txt:`<b>${n(r.t)}</b> · ${n(r.p)} pos · ${pct(div(r.p,v.hts_tst_pos),0)} of POS`, tip:`${r.l}: ${n(r.t)} tests · ${n(r.p)} positive · yield ${pct(div(r.p,r.t))} · ${pct(div(r.p,v.hts_tst_pos),0)} of all positives`})))}</section>
    ${opdSection()}
