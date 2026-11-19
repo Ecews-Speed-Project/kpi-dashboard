@@ -339,7 +339,21 @@ footer{color:var(--ink-3);font-size:14px;max-width:1360px;margin:0 auto;padding:
 .who a:hover{opacity:1}
 .hello{display:flex;gap:10px;align-items:center;font-size:27px;margin:0}
 .hello small{font-family:var(--body);font-weight:400;font-style:italic;font-size:15px;color:var(--ink-3)}
-/* ---------- PCS/VP page ---------- */
+/* ---------- International Men's Day (19 Nov 2026): a temporary theme, on until Saturday 21 Nov 06:00 (imdOn) ---------- */
+html.imd{--cloth:#182B42;--cloth-2:#0F1D2E;--s3:#3E6A8A}
+html.imd .top{background:var(--noise),linear-gradient(180deg,#1B2F48 0%,#152A3E 58%,#123327 100%)}
+html.imd .pg-hero,html.imd .pv-hero{border-color:#0F1D2E;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 15px),
+    radial-gradient(120% 140% at 100% 0%,rgba(184,145,58,.30),transparent 55%),linear-gradient(135deg,#1C3049 0%,#152A3E 52%,#133A2D 100%)}
+.imd-band{display:flex;gap:16px;align-items:center;margin:12px 0 4px;padding:14px 20px;border-radius:8px;color:#F3E9CF;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 15px),linear-gradient(100deg,#14243A 0%,#1C3550 70%,#193D33 100%);
+  border-left:4px solid var(--gold);box-shadow:0 10px 22px -16px var(--shadow)}
+.imd-band svg{flex:none}
+.imd-band .t{font-family:var(--caps);letter-spacing:2px;font-size:12px;color:var(--gold)}
+.imd-band p{margin:2px 0 0;font-size:16px;line-height:1.4}
+.imd-band p b{color:#fff}
+.imd-band .q{font-family:var(--display);font-style:italic;font-size:19px;color:#fff}
+@media (max-width:640px){.imd-band{flex-direction:column;align-items:flex-start;padding:12px 16px}.imd-band svg{display:none}}/* ---------- PCS/VP page ---------- */
 .pv-hero,.pg-hero{position:relative;overflow:hidden;border-radius:8px;padding:22px 24px 20px;color:var(--on-cloth);
   background:radial-gradient(120% 140% at 100% 0%,rgba(184,145,58,.35),transparent 55%),linear-gradient(135deg,var(--cloth),var(--cloth-2));
   border:1px solid var(--cloth-2);box-shadow:0 10px 24px -14px var(--shadow)}
@@ -3535,7 +3549,25 @@ function icard(i){
 }
 /* ---------- after each render: searchable dropdowns, month scrollers opened at the latest month ---------- */
 // every page's headline cards sit in the green band; a percentage card gets a ring (the figure itself is unchanged)
-function heroBand(){
+/* International Men's Day: theme and a short note on men's figures, from 19 Nov to Saturday 21 Nov 2026 06:00 (viewer's clock); ?imd=1 previews it */
+const imdOn = () => { const t=Date.now(); return /[?&]imd=1/.test(location.search) || (t>=new Date(2026,10,19).getTime() && t<new Date(2026,10,21,6).getTime()); };
+function imdBand(){
+  document.documentElement.classList.toggle("imd", imdOn());
+  if(!imdOn() || !["overview","hts","art","vl","pbs"].includes(page) || document.querySelector("#main .imd-band")) return;
+  const f={...F,sex:""}, M=agg({...f,sex:"M"}), W=agg({...f,sex:"F"}), g=(x,k)=>x[k]||0, sh=(k)=>pct(div(g(M,k),g(M,k)+g(W,k)),0);
+  const lines = {
+    overview: `Men are <b>${sh("tx_curr")}</b> of people on treatment and <b>${sh("hts_tst_pos")}</b> of new positives in ${esc(P.label)}. Viral suppression: men <b>${pct(div(g(M,"vl_suppressed"),g(M,"vl_result")))}</b>, women ${pct(div(g(W,"vl_suppressed"),g(W,"vl_result")))}.`,
+    hts: `Men took <b>${sh("hts_tst")}</b> of tests but were <b>${sh("hts_tst_pos")}</b> of positives: yield ${pct(div(g(M,"hts_tst_pos"),g(M,"hts_tst")))} for men, ${pct(div(g(W,"hts_tst_pos"),g(W,"hts_tst")))} for women. Reaching more men finds more people who need treatment.`,
+    art: `<b>${n(g(M,"tx_curr"))}</b> men are on treatment, <b>${sh("tx_curr")}</b> of all. ${n(g(M,"tx_new_q"))} men started ART in ${esc(P.label)}.`,
+    vl: `Viral suppression among men with a result: <b>${pct(div(g(M,"vl_suppressed"),g(M,"vl_result")))}</b> (women ${pct(div(g(W,"vl_suppressed"),g(W,"vl_result")))}). VL coverage for men: <b>${pct(div(g(M,"vl_result"),g(M,"vl_eligible")))}</b>.`,
+    pbs: `Men are <b>${sh("pbs_active")}</b> of clients on treatment in the NDR; <b>${n(g(M,"pbs_active")-g(M,"pbs_baseline"))}</b> men are still to have prints captured.`};
+  const icon = `<svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="none" stroke="var(--gold)" stroke-width="1.5"/>
+    <circle cx="17" cy="23" r="7" fill="none" stroke="#F3E9CF" stroke-width="2"/><path d="M22 18l7-7M23.5 11H29v5.5" fill="none" stroke="#F3E9CF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const b = document.createElement("section"); b.className="imd-band";
+  b.innerHTML = `${icon}<div><div class="t">International Men's Day · 19 November</div>
+    ${page==="overview"?`<div class="q">Healthy men, stronger families, a stronger response.</div>`:""}<p>${lines[page]}</p></div>`;
+  const h = document.querySelector("#main .pg-hero, #main .pv-hero"); if(h) h.after(b); else document.getElementById("main").prepend(b);
+}function heroBand(){
   if(["methods","flow","live"].includes(page)) return;
   if(document.querySelector("#main .pg-hero")) return;
   const k = document.querySelector("#main > .kpis"), lab = (PAGES.find(x=>x[0]===page)||[,""])[1];
@@ -3552,7 +3584,7 @@ function heroBand(){
       <circle cx="23" cy="23" r="${r}" fill="none" stroke="var(--gold)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(C*p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 23 23)"/></svg>`); });
 }
 function afterRender(){
-  heroBand();
+  heroBand(); imdBand();
   enhanceSelects(document);
   const ms=document.getElementById("m-search");
   if(ms){ methodsSearch(false);
