@@ -189,7 +189,7 @@ def load_targets(path: str, case_finding_source: str = "non_ipi") -> pd.DataFram
         # VLS among those with a result: no target in the IPI sheet -> use the
         # conventional assumption (95% of results suppressed)
         setv("NIPI_VLS_WITH_RESULT", sc, annual=0.95, unit="rate",
-             note="No target in sheet; uses conventional assumption (95% of results suppressed)")
+             note="Blank in the Non-IPI sheet; the Conventional sheet (TX_PVLS_N, MoU) sets 95% of clients with a result suppressed")
 
     # Case finding (Non-IPI): the Non-IPI sheet's own target (4,545 for FY27), agreed 2026-11-19. The conventional
     # HTS_TST_POS target (6,423) stays on the HTS_TST_POS indicator only. The sheet has no state split, so the
