@@ -108,7 +108,7 @@ def _match(text, table):
     return None
 
 
-def load_targets(path: str, case_finding_source: str = "conventional") -> pd.DataFrame:
+def load_targets(path: str, case_finding_source: str = "non_ipi") -> pd.DataFrame:
     xl = pd.ExcelFile(path)
     rows = []
 
@@ -191,15 +191,20 @@ def load_targets(path: str, case_finding_source: str = "conventional") -> pd.Dat
         setv("NIPI_VLS_WITH_RESULT", sc, annual=0.95, unit="rate",
              note="No target in sheet; uses conventional assumption (95% of results suppressed)")
 
-    # Case finding: Non-IPI sheet says 4,545, conventional HTS_TST_POS sums to 6,423
+    # Case finding (Non-IPI): the Non-IPI sheet's own target (4,545 for FY27), agreed 2026-11-19. The conventional
+    # HTS_TST_POS target (6,423) stays on the HTS_TST_POS indicator only. The sheet has no state split, so the
+    # states share it as they share the conventional HTS_TST_POS target.
     conv_pos = t[(t.target_key == "HTS_TST_POS") & (t.age_band == "All")].set_index("scope")["annual"]
+    cf_sheet = t[(t.target_key == "NIPI_CASE_FINDING") & (t.scope == "ECEWS SPEED")]["annual"]
+    cf_total = float(cf_sheet.iloc[0]) if len(cf_sheet) and pd.notna(cf_sheet.iloc[0]) else None
     for sc in ["ECEWS SPEED", *STATES]:
-        if case_finding_source == "conventional":
+        if case_finding_source == "conventional" or cf_total is None:
             setv("NIPI_CASE_FINDING", sc, annual=conv_pos.get(sc), unit="count",
-                 note="Using conventional HTS_TST_POS; Non-IPI sheet states 4,545")
+                 note="Using conventional HTS_TST_POS (no case-finding target in the Non-IPI sheet)")
         elif sc != "ECEWS SPEED":
             share = conv_pos.get(sc) / conv_pos.get("ECEWS SPEED")
-            setv("NIPI_CASE_FINDING", sc, annual=round(4545 * share))
+            setv("NIPI_CASE_FINDING", sc, annual=round(cf_total * share), unit="count",
+                 note=f"Non-IPI target {cf_total:,.0f}, shared by state as the conventional HTS_TST_POS target")
         conv_curr = t[(t.target_key == "TX_CURR") & (t.age_band == "All") & (t.scope == sc)]["annual"]
         setv("NIPI_TX_CURR", sc, annual=float(conv_curr.iloc[0]), unit="count")
         # Infant diagnoses: split 49 by PMTCT_ART share

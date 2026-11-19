@@ -1344,7 +1344,7 @@ function brfGlance(ctx){
   const v = agg(), cf = ev("NIPI_CASE_FINDING", v), cur = ev("NIPI_TX_CURR", v), vls = ev("IPI_VLS_ON_ART", v), lk = ev("IPI_ART_COV", v);
   const sat = div(v.tx_curr, v.plhiv_est);
   const s = bSlide(ctx, "At a glance", "The 95-95-95 cascade", `${ctx.scope} · ${P.label}`);
-  const cols = [["1st 95", "Diagnose", bN(v.hts_tst_pos), "new HIV diagnoses (HTS_TST_POS)", cf.target!=null?`${TL()} target ${n(cf.target)}`:"", cf.status,
+  const cols = [["1st 95", "Diagnose", bN(v.hts_tst_pos), "case finding (Non-IPI): new HIV diagnoses", cf.target!=null?`${TL()} target ${n(cf.target)}`:"", cf.status,
       [["Tested (HTS_TST)", bN(v.hts_tst)], ["Testing yield", bP(div(v.hts_tst_pos,v.hts_tst))], ["Linkage to ART", bP(lk.value)]]],
     ["2nd 95", "Treat", bN(v.tx_curr), TXL(), cur.target!=null?`${pct(cur.score,0)} of target ${n(cur.target)}`:"", cur.status,
       [["Saturation vs Naomi PLHIV", bP(sat)], ["TX_NEW in period", bN(v.tx_new_q)], STOCK ? ["IIT rate", bP(WF().rate(v),2)] : ["On 3+ month refills", bP(div(v.mmd3, v.tx_curr_emr))]]],
@@ -1774,7 +1774,7 @@ function overviewPage(){
   const v = agg(), E = c=>evaluate(c,v);
   const cf=E("NIPI_CASE_FINDING"), lk=E("IPI_ART_COV"), vls=E("IPI_VLS_ON_ART"), cur=E("NIPI_TX_CURR"), txn=E("TX_NEW"), hts=E("HTS_TST"), vr=E("NIPI_VLS_WITH_RESULT"), pvd=E("TX_PVLS_D");
   const sat = div(v.tx_curr, v.plhiv_est);
-  const a = hero("hts","1st 95","HIV Testing Services", n(cf.value), "New HIV diagnoses (HTS_TST_POS)", cf.target!=null?`Q target ${n(cf.target)}`:"", cf.status,[
+  const a = hero("hts","1st 95","HIV Testing Services", n(cf.value), "Case finding (Non-IPI): new HIV diagnoses", cf.target!=null?`Q target ${n(cf.target)} · FY ${n(cf.annual)}`:"", cf.status,[
     row("HTS_TST", n(v.hts_tst), hts.target!=null?`${TL()} ${n(hts.target)}`:"", hts.status),
     row("Testing yield", pct(div(v.hts_tst_pos, v.hts_tst))),
     row("Linkage to ART (IPI)", pct(lk.value), lk.target!=null?`target ${pct(lk.target,0)}`:"", lk.status),
