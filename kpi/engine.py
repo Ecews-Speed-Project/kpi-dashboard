@@ -157,6 +157,11 @@ def period_meta(key: str, rule: str = "thursday") -> dict:
     if key[:2] in ("SL", "SN"):      # stock figures from a saved linelist (SL) / NDR file (SN) copy of that date
         d = key[2:]
         return dict(key=key, kind="S", start=d, end=d, anchor=d, month=d[:7])
+    if key[:1] == "T" and WEEK_RE.match(key[1:]):   # a weekly report its monthly report replaced: weekly trends only
+        mon, sun = week_bounds(key[1:])
+        anchor = {"thursday": mon + dt.timedelta(days=3), "week_end": sun, "week_start": mon}[rule]
+        return dict(key=key, kind="T", start=mon.isoformat(), end=sun.isoformat(), anchor=anchor.isoformat(),
+                    month=week_to_month(key[1:], rule))
     if WEEK_RE.match(key):
         mon, sun = week_bounds(key)
         anchor = {"thursday": mon + dt.timedelta(days=3), "week_end": sun, "week_start": mon}[rule]
@@ -190,6 +195,8 @@ def quarters(history_start: dt.date, p: Period) -> list[dict]:
 def in_window(meta: dict, start: dt.date, end: dt.date) -> bool:
     if meta["kind"] == "":
         return True
+    if meta["kind"] == "T":         # trend-only weeks never count in a total
+        return False
     s, e = dt.date.fromisoformat(meta["start"]), dt.date.fromisoformat(meta["end"])
     if meta["kind"] == "M":
         overlap = (min(e, end) - max(s, start)).days + 1
@@ -408,7 +415,8 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
                linelist: pd.DataFrame, pbs: pd.DataFrame, manual: dict, targets: pd.DataFrame,
                master: pd.DataFrame, as_of: dt.date, weekly_raw: pd.DataFrame, naomi: pd.DataFrame,
                demo: bool = False, history: pd.DataFrame | None = None,
-               prev_quarter: pd.DataFrame | None = None, past: dict | None = None) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
+               prev_quarter: pd.DataFrame | None = None, past: dict | None = None,
+               trend_weeks: pd.DataFrame | None = None) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
     reg = yaml.safe_load(open(registry_path, encoding="utf-8"))
     p = Period(as_of=as_of, fy_start=pd.to_datetime(str(settings["fy_start"])).date())
     cols = settings["columns"]
@@ -436,6 +444,8 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
     history_start = (pd.Timestamp(p.fy_start) - pd.DateOffset(months=settings["reporting"].get("history_months", 12))).date()
     dq: dict = {}
     dcube = attach_master(dhis_cube(merged), master, "dhis2", dq)
+    if trend_weeks is not None and len(trend_weeks):   # period "T<week>": weekly progress charts only (etl.period_merge.replaced_weeks)
+        dcube = pd.concat([dcube, attach_master(dhis_cube(trend_weeks), master, "dhis2_trend", {})], ignore_index=True)
     # PMTCT facility vs community follows the dataset (PMTCT vs Community PMTCT), as the deck does
     parts = [dcube,
              attach_master(linelist_cube(linelist, cols["linelist"], p_ll, history_start, today=as_of), master, "linelist", dq),

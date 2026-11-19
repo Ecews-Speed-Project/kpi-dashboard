@@ -544,7 +544,8 @@ function setPeriod(mode, value, start, end){
 /* A period counts when its anchor date (Thursday of a week, the event date) is
    inside the range, or a month is at least half covered — same rule as the pipeline. */
 function inWindow(m, s, e){
-  if(!m.kind) return STOCK; if(m.kind==="S") return m.key===SNL||m.key===SNN; const ps=dOf(m.start), pe=dOf(m.end);
+  if(!m.kind) return STOCK; if(m.kind==="S") return m.key===SNL||m.key===SNN; if(m.kind==="T") return false;   // trend-only weeks (see atEnd)
+  const ps=dOf(m.start), pe=dOf(m.end);
   if(m.kind==="M"){ const ov=(Math.min(pe,e)-Math.max(ps,s))/DAY+1; return ov*2 >= (pe-ps)/DAY+1; }
   const a=dOf(m.anchor); return a>=s && a<=e;
 }
@@ -598,6 +599,7 @@ function windowSet(){ const s=dOf(P.start), e=new Date(Math.min(dOf(P.end), dOf(
 let WIN = null;
 const monOf = d => { const x=new Date(d); x.setDate(x.getDate()-((x.getDay()+6)%7)); return iso(x); };
 PM.forEach(p=>{ p.wk = p.kind==="D"||p.kind==="W" ? monOf(dOf(p.start)) : null; });
+const TRW = Uint8Array.from(PM, p=>p.kind==="T"?1:0);   // weekly reports kept only for the weekly progress charts
 function covered(through){ const s=dOf(P.start), e=dOf(P.end), t=dOf(through);
   return Math.max(0, Math.min(1, ((Math.min(e,t)-s)/DAY+1)/((e-s)/DAY+1))); }
 
@@ -639,6 +641,7 @@ function agg(f=F, {by=null, months="q"}={}){
   const out = new Map(); const kf = by ? keyFns[by] : null;
   for (let r=0;r<N;r++){
     if(!fp[rf[r]]) continue; if(sexI>=0&&rs[r]!==sexI) continue; if(!ageOk[ra[r]]) continue; if(mset&&(!mset.has(rt[r])||SKIPM[rk[r]])) continue;
+    if(!mset && TRW[rt[r]]) continue;                 // trend-only weeks: never in an all-months total
     const k = kf?kf(r):"_"; let o=out.get(k); if(!o){o={};out.set(k,o);}
     const m=MEAS[rk[r]]; o[m]=(o[m]||0)+rv[r];
   }
@@ -3700,9 +3703,17 @@ const EMRK = () => NDRT() && MEAS.includes("tx_curr_cdr") ? "tx_curr_cdr" : "tx_
 const TXE = () => NDRT() ? "TX_CURR" : "TX_CURR (EMR)";
 const srcOf = i => NDRT() ? String(i.source||"").replace(/Central repository(?: \(linelist\))?/g, "NDR line list") : i.source;
 /* evaluate with the period cut at another end date (weekly progress) */
-function atEnd(end, fn){
+function atEnd(end, fn, weekly=false){
   const keep=[P,WIN,STOCK,SNL,SNN,SKIPM];
-  try { P={...P, end}; WIN=null; WIN=windowSet(); return fn(); }
+  try { P={...P, end}; WIN=null; WIN=windowSet();
+    // weekly progress: a month still running at this week's end is read from its weekly reports, including the
+    // ones its monthly report later replaced (periods "T<week>", kept for this only); a finished month from its monthly report
+    if(weekly){ const s=dOf(P.start), e=dOf(end);
+      PM.forEach((m,i)=>{ if(m.kind!=="M") return; const done = dOf(m.end) <= e;
+        if(!done) WIN.delete(i);
+        PM.forEach((w,j)=>{ if((w.kind!=="W"&&w.kind!=="T")||w.month!==m.month) return; const a=dOf(w.anchor);
+          if(!done && a>=s && a<=e) WIN.add(j); else WIN.delete(j); }); }); }
+    return fn(); }
   finally { [P,WIN,STOCK,SNL,SNN,SKIPM]=keep; }
 }
 function weeklyProgress(code){
@@ -3712,7 +3723,7 @@ function weeklyProgress(code){
   const span=(dOf(P.end)-dOf(P.start))/DAY+1, full=evaluate(code, agg());
   const T = i.kind==="rate" ? trendAgg() : null;
   return ends.map(e=>{
-    let r = atEnd(e, ()=>evaluate(code, agg()));
+    let r = atEnd(e, ()=>evaluate(code, agg()), true);
     if(r.value==null && T && T[i.num] && T[i.den]){                       // stock rates: the weekly snapshots
       const nu=T[i.num].get(e), de=T[i.den].get(e); if(nu!=null && de) r={...r, value:nu/de};
     }

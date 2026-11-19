@@ -151,6 +151,24 @@ def merge_weekly_monthly(weekly: pd.DataFrame, monthly: pd.DataFrame,
     return out.sort_values(DIMS).reset_index(drop=True)
 
 
+def replaced_weeks(weekly: pd.DataFrame, monthly: pd.DataFrame, merged: pd.DataFrame,
+                   rule: str = "thursday", since: str | None = None) -> pd.DataFrame:
+    """The weekly reports a monthly report replaced (facility x month x table), one row per week, with the
+    period written 'T<week>' (e.g. T2026W41). They are never added to any total: the dashboard reads them only
+    for week-by-week progress inside a month that has its monthly report. since: first month kept (YYYY-MM)."""
+    if not len(weekly):
+        return merged.iloc[0:0].copy()
+    w = split_weekly_only(weekly, monthly).copy()
+    w["month"] = w["period"].map(lambda p: week_to_month(p, rule))
+    if since:
+        w = w[w["month"] >= since]
+    kept = merged.loc[merged["source"].eq("weekly"), ["table", "facility_key", "period"]].drop_duplicates().assign(_kept=True)
+    w = w.merge(kept, on=["table", "facility_key", "period"], how="left")
+    w = w[w["_kept"].isna()].drop(columns="_kept")
+    out = w.groupby(DIMS + ["period"], dropna=False)["value"].sum().reset_index()
+    return out.assign(period="T" + out["period"].astype(str), source="trend", weeks=out["period"].astype(str))
+
+
 def month_status(merged: pd.DataFrame, n_facilities: int, as_of: dt.date,
                  completeness: float = 0.90, close_day: int = 15) -> pd.DataFrame:
     """Per month: how many facilities are on monthly vs weekly data, and

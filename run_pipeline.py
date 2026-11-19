@@ -633,6 +633,8 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
     monthly = prefer_monthly_variants(monthly)        # TX_TB: monthly values, not the half-year totals
     merged = merge_weekly_monthly(weekly, monthly, rule=r["week_to_month_rule"], takeover=r["monthly_takeover"],
                                   keep_weeks=True, as_of=as_of, switch_day=r.get("monthly_switch_day"))
+    from etl.period_merge import replaced_weeks       # weekly reports a monthly report replaced: weekly trends only
+    trend_w = replaced_weeks(weekly, monthly, merged, rule=r["week_to_month_rule"], since=str(cfg["fy_start"])[:7])
     n_fac = master["facility"].nunique()
     ms = month_status(merged, n_fac, as_of, r["month_close_completeness"], r["month_close_day"])
     targets = load_targets(source(cfg, "targets", cfg["excel"]["targets"])).assign(fy=cfg["fiscal_year"])
@@ -646,7 +648,8 @@ def finish(cfg, weekly, monthly, linelist, pbs, manual, master, as_of, demo, pre
     naomi = load_naomi(source(cfg, "naomi", cfg["manual"]["naomi"]), lga_lookup, cfg["manual"].get("naomi_quarter") or None)
     data, scorecard, cube = run_engine(cfg, ROOT / "config" / "indicators.yaml", merged, ms, linelist, pbs,
                                        manual, targets, master, as_of, weekly, naomi, demo=demo,
-                                       history=None if demo else load_history(), prev_quarter=prev_quarter, past=past)
+                                       history=None if demo else load_history(), prev_quarter=prev_quarter, past=past,
+                                       trend_weeks=trend_w)
     snap = data.pop("_snapshot")
     if not demo and len(snap):
         save_history(snap)
