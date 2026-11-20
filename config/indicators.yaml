@@ -31,8 +31,8 @@ ipi:
   - code: IPI_VLS_ON_ART
     name: Viral suppression among clients on ART
     pillar: 3rd 95
-    measures: "Everyone on ART with a valid VL result (last 12 months) below 1,000 copies/mL, whatever their time on ART, over everyone on ART. Clients without a recent result count against it"
-    num: vl_supp_tx      # every Active client with a valid result < 1000 (not only the 180+ days eligible)
+    measures: "Everyone on ART whose latest VL result is below 1,000 copies/mL (any date, any time on ART), over everyone on ART. Clients with no result count against it"
+    num: vl_supp_tx      # every Active client whose latest result is < 1000, any date (programme team's count)
     den: vl_tx           # everyone Active in the EMR line list: the VL cascade's own base (Power BI VL rules)
     kind: rate
     target: IPI_VLS_ON_ART

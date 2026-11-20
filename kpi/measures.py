@@ -678,9 +678,9 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         sums = {"vl_pend_days": (pend, wait)}
     else:
         sums = {}
-    # VLS among clients on ART (IPI): everyone Active with a valid result (in the 12 months) below 1,000,
-    # whatever their time on ART; the denominator stays everyone Active (vl_tx)
-    masks["vl_supp_tx"] = active_all & vl_win(vl_date) & (vl < 1000)
+    # VLS among clients on ART (IPI), as the programme team counts it (agreed 2026-11-20): everyone Active whose
+    # latest VL result is below 1,000, whatever its date or their time on ART; the denominator stays everyone Active (vl_tx)
+    masks["vl_supp_tx"] = active_all & (vl < 1000)
     # EMR waterfall for the quarter the linelist date falls in (deck 'Continuity on Treatment'):
     # previous-quarter status from previous_quarter_status; the starting TX_CURR comes from that
     # table itself (engine), so clients no longer in the linelist land in 'gain/loss'

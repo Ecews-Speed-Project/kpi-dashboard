@@ -2994,7 +2994,7 @@ function vlPage(){
      fr("Sample collection rate",v.vl_sample,v.vl_eligible),fs("Result received",v.vl_result),fr("Coverage",v.vl_result,v.vl_eligible),fs("Suppressed <1000",v.vl_suppressed),
      fr("Suppression rate",v.vl_suppressed,v.vl_result),fs("Unsuppressed ≥1000",v.vl_unsuppressed),fr("Unsuppressed rate",v.vl_unsuppressed,v.vl_result),fs("LLV 50–999",v.vl_llv),fr("LLV rate",v.vl_llv,v.vl_result),fs("Undetectable <50",v.vl_undetectable),fr("Undetectable rate",v.vl_undetectable,v.vl_result),
      fs("Pending result",pend,"Samples collected − results received, as in Power BI")])+`
-   <div class="kpis">${kpi(pct(ip.value),"VLS on ART (IPI)",`${D.meta.quarter.slice(-2)} milestone ${pct(ip.target,0)}`,ip.status,"Everyone Active with a valid result <1,000 (any time on ART) ÷ everyone Active (EMR)")}${v.vl_supp_tx!=null?kpi(n(v.vl_supp_tx),"Suppressed, all on ART","valid result <1,000 · any time on ART"):""}${kpi(n(v.vl_unsuppressed),"Unsuppressed ≥1000","need EAC and a repeat VL")}</div>
+   <div class="kpis">${kpi(pct(ip.value),"VLS on ART (IPI)",`${D.meta.quarter.slice(-2)} milestone ${pct(ip.target,0)}`,ip.status,"Everyone Active whose latest result is <1,000 (any date, any time on ART) ÷ everyone Active (EMR)")}${v.vl_supp_tx!=null?kpi(n(v.vl_supp_tx),"Suppressed, all on ART","latest result <1,000 · any date"):""}${kpi(n(v.vl_unsuppressed),"Unsuppressed ≥1000","need EAC and a repeat VL")}</div>
    <section class="c3d">${secH("Paediatric & adolescent vs adult","Same flow for <20 and 20+ (EMR line list)")}<div class="tw"><table>${VLHEAD}<tbody>${grp.map(([l,f])=>vlRow(l,agg(f))).join("")}</tbody></table></div></section>
    <section class="c3d">${secH("By state")}<div class="tw"><table>${VLHEAD}<tbody>${st.map(s=>vlRow(esc(s),agg({...F,state:s,lga:"",fac:""}))).join("")}<tr class="total">${vlRow(esc(filterText()),v).slice(4)}</tbody></table></div></section>
    <div class="grid g2"><section class="c3d">${secH("VL coverage by age and sex","Results ÷ eligible · dashed line at 95%")}${pyramid("vl_result",{den:"vl_eligible",ref:.95,title:"Red number: below 95%"})}</section>
@@ -3435,7 +3435,7 @@ function methodsPage(){
       ["Undetectable / low-level viraemia", `&lt; 50 / 50 to 999 copies`, `${n(v.vl_undetectable)} / ${n(v.vl_llv)}`],
       ["VL coverage", "results ÷ eligible", pct(div(g("vl_result"),g("vl_eligible")))],
       ["VLS among results", "suppressed ÷ results", pct(div(g("vl_suppressed"),g("vl_result")))],
-      ["VLS on ART (IPI)", "everyone Active with a valid result (12 months) <1,000, any time on ART ÷ everyone Active in the EMR line list", pct(div(g("vl_supp_tx"),g("vl_tx")))]]))
+      ["VLS on ART (IPI)", "everyone Active whose latest result is <1,000 (any date, any time on ART) ÷ everyone Active in the EMR line list", pct(div(g("vl_supp_tx"),g("vl_tx")))]]))
   + sec("PMTCT", dh,
       tt("pmtct_stat_den","PMTCT_STAT_D","Facility PMTCT + Community PMTCT, as in the DAX and the deck's PMTCT slide.")
     + tt("pmtct_stat_num","PMTCT_STAT_N") + tt("pmtct_stat_pos","PMTCT_STAT_POS")
