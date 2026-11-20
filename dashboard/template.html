@@ -577,6 +577,7 @@ function usePart(n,x){
   if(x.vl_clients) VC=x.vl_clients;
   if(x.vl_gap_clients) VG=x.vl_gap_clients;
   if(x.eac_clients) EC=x.eac_clients;
+  if(x.txn_clients) TXC=x.txn_clients;
   if(x.pbs_clients){ PC=x.pbs_clients; if(!PC.cats[PBSCAT]) PBSCAT=Object.keys(PC.cats)[0]||""; }
   if(x.trend_series) TS=x.trend_series;
   if(x.methods) ME=x.methods; }
@@ -1849,6 +1850,7 @@ function txNewCascade(v){
   return `<section class="c3d">${secH("TX_NEW cascade","Positives to new on ART, prints captured or not, unique and non-unique, linkage and GC7 · "+esc(P.label))}
     ${hbars(bars,{max:Math.max(pos,tn,1)})}${cards}
     <div style="height:26px"></div>${secH("TX_NEW cascade breakdown","Click a state, then an LGA, to reach facilities · or switch to LGA, facility, sex or age · sort any column")}
+    ${has&&!(D.meta.archived||D.meta.shared)?`<div class="dimbar" style="margin-bottom:4px"><span class="drillnote" style="margin:0">Client list for follow-up: patient ID, DATIM code and PEPID of each TX_NEW client in this view (state, LGA, facility, sex, age and period filters), with print status and unique flag.</span><button class="reset" data-txncsv="1" style="margin-left:auto">Download client list (CSV)</button></div>`:""}
     ${pivot("txn",[C("HTS_TST_POS",V("hts_tst_pos"),0,0,"hts_tst_pos"),C("TX_NEW non-unique",V("tx_new_q")),
       ...(has?[C("Prints captured",V("txn_cap")),C("Captured %",RV("txn_cap","tx_new_q"),1,x=>rateStatus(div(x.txn_cap||0,x.tx_new_q),.95)),C("No prints",V("txn_nocap")),
       C("Valid unique print",V("txn_valid")),C("Print issue",V("txn_issue"))]:[]),
@@ -1858,6 +1860,22 @@ function txNewCascade(v){
       C("Linkage without GC7, unique",x=>div(Math.max(0,(x.tx_new_unique||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1)],["org","sex","age"],null,{csv:"tx_new_cascade"})}
     <p class="drillnote">TX_NEW non-unique = every new ART start in the period, transfer-ins removed (used in every calculation). Unique = also in the NDR unique TX_CURR (active, with a valid unique print or under 15). Prints are as recorded in the NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}; a valid unique print = fingerprint valid, not a suppressed duplicate, not waiting for adjudication. GC7 = pregnant women found by CBOs in the community and started on ART at our sites, so they are in TX_NEW but not in our HTS_TST_POS.${has?"":" Print details come with the next update."}</p></section>`;
 }
+/* TX_NEW client list (NDR file): one row per new client in the period and the current filters, for follow-up.
+   Fetched only when the button is clicked (a live build keeps it in its own part). */
+let TXC = D.txn_clients || {cols:[], rows:[], dict:{}};
+const txv = (r,c) => { const v=r[3+TXC.cols.indexOf(c)]; return TXC.dict&&TXC.dict[c] ? TXC.dict[c][v] : v; };
+async function txnCsv(btn){
+  if(MAN && MAN.parts.txn && PART.txn!=="ready"){ btn.disabled=true; const t=btn.textContent; btn.textContent="Preparing…";
+    try{ const x=await (await fetch(MAN.base+MAN.parts.txn)).json(); usePart("txn",x); PART.txn="ready"; }catch(e){ btn.textContent=t; btn.disabled=false; alert("Could not load the client list. Refresh the page and try again."); return; }
+    btn.textContent=t; btn.disabled=false; }
+  if(!TXC.rows.length){ alert(D.meta.archived||D.meta.shared?"Client lists are not included in this copy of the dashboard.":"No TX_NEW client list in this build."); return; }
+  const sexI=F.sex?DM.sex.indexOf(F.sex):-1, a=P.start, b=P.end<D.meta.as_of?P.end:D.meta.as_of;
+  const rows=TXC.rows.filter(r=>facPass(r[0],F)&&(sexI<0||r[1]===sexI)&&agePass(r[2],F.age)&&isEmrFac(FAC[r[0]].facility)&&txv(r,"art_start")>=a&&txv(r,"art_start")<=b);
+  const head=["State","LGA","Facility","DATIM code","Patient ID","PEPID (ART number)","Sex","Age band","ART start","Prints captured","Print status","TX_NEW unique","Current ART status"];
+  const q=s=>`"${String(s??"").replaceAll('"','""')}"`;
+  const lines=[head.map(q).join(",")].concat(rows.map(r=>{const fc=FAC[r[0]]; return [fc.state,fc.lga,fc.facility,txv(r,"datim"),txv(r,"patient_id"),txv(r,"art_no"),DM.sex[r[1]],AGE[r[2]],txv(r,"art_start"),txv(r,"captured"),txv(r,"print_status"),txv(r,"unique"),txv(r,"status")].map(q).join(",");}));
+  const el=document.createElement("a"); el.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"}));
+  el.download=`tx_new_clients_${(F.fac||F.lga||F.state||"SPEED").replace(/[^\w-]+/g,"_")}_${P.label.replace(/[^\w-]+/g,"_")}.csv`; el.click(); URL.revokeObjectURL(el.href); }
 /* Clients seen at the facility in the period (drug refill or VL sample): were prints captured, any print issue, enrolled and matched */
 function visitBio(){
   const v=agg({...F,sex:"",age:""}), g=k=>v[k]||0;
@@ -3891,6 +3909,7 @@ document.addEventListener("click", e=>{
   if(e.target.closest("#dhis-csv")){ dhisCsv(); return; }
   if(e.target.closest("#f-reset")){Object.assign(F,{state:"",lga:"",fac:"",sex:"",age:""}); render(); return;}
   const pcsvB=e.target.closest("[data-pcsv]"); if(pcsvB){ pivotCsv(pcsvB.dataset.pcsv); return; }
+  const txcB=e.target.closest("[data-txncsv]"); if(txcB){ txnCsv(txcB); return; }
   const bk=e.target.closest("[data-back]"); if(bk){const b=bk.dataset.back;
     if(b==="all") Object.assign(F,{state:"",lga:"",fac:""}); else if(b==="state") Object.assign(F,{lga:"",fac:""}); else F.fac=""; render(); return;}
   const d=e.target.closest("[data-drill]"); if(d){const lv=d.dataset.drill, val=d.dataset.val;

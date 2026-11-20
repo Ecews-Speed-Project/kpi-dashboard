@@ -874,6 +874,38 @@ def vl_clients(ll: pd.DataFrame, lc: dict, ll_date: dt.date) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
+TXN_COLS = ["patient_id", "datim", "art_no", "art_start", "captured", "print_status", "unique", "status"]
+
+
+def txn_clients(ll: pd.DataFrame, lc: dict, h0: dt.date, as_of: dt.date) -> pd.DataFrame:
+    """TX_NEW clients, one row each, the same clients as tx_new_q (ART start from h0 to as_of, transfer-ins
+    removed, no status or print filter), with the print details of the TX_NEW cascade (kpi.measures._bio_flow)
+    and the TX_NEW unique flag. Patient ID, DATIM code and PEPID (ART number); no names."""
+    if ll.empty or lc.get("art_start") not in ll or "bio_baseline" not in ll:
+        return pd.DataFrame()
+    start = _dates(ll[lc["art_start"]])
+    ti = _norm(ll[lc["ti"]]) if lc.get("ti") in ll else pd.Series("", index=ll.index)
+    sel = ll[(start >= h0) & (start <= as_of) & (ti != "yes")]
+    if sel.empty:
+        return pd.DataFrame()
+    n = lambda k: _norm(sel[k]) if k in sel else pd.Series("", index=sel.index)
+    txt = lambda k: sel[k].fillna("").astype(str).replace({"nan": "", "None": ""}) if k in sel else ""
+    base, fp, dup = n("bio_baseline").eq("yes"), n("bio_fp_status"), n("bio_dup_type")
+    valid = _norm(sel[lc["valid_bio"]]).eq("yes") if lc.get("valid_bio") in sel else pd.Series(False, index=sel.index)
+    ps = np.select([~base, valid, fp.eq("no_valid_data"), fp.eq("adjudicationwaiting"), dup.eq("duplicate") | fp.eq("duplicate")],
+                   ["No prints captured", "Valid unique print", "Issue: invalid print", "Issue: adjudication waiting", "Issue: duplicate"],
+                   "Issue: other")
+    active = emr_unique(sel, lc, _norm(sel[lc["status"]]).isin(STATUS["active"]))
+    uniq = _norm(sel[lc["new_unique"]]).eq("yes") if lc.get("new_unique") in sel else active
+    out = pd.DataFrame({
+        "state": sel[lc["state"]], "facility": sel[lc["facility"]], "sex": norm_sex(sel[lc["sex"]]),
+        "age": age_bands(sel[lc["age"]]) if lc.get("age") in sel else UNKNOWN_AGE,
+        "patient_id": txt(lc.get("id", "unique_id")), "datim": txt(lc["datim"]), "art_no": txt(lc["art_no"]),
+        "art_start": _iso(start[sel.index]), "captured": np.where(base, "Yes", "No"), "print_status": ps,
+        "unique": np.where(uniq, "Yes", "No"), "status": txt(lc["status"])}, index=sel.index)
+    return out.reset_index(drop=True)
+
+
 def vl_gap_split(d: pd.DataFrame, c: dict, as_of: dt.date):
     """For clients with no valid result in the treatment list: (in_emr, pending, last VL date, last VL value, last sample).
     in_emr = the CDR holds a result from the 12 months that the NDR does not have yet; pending = a sample in the

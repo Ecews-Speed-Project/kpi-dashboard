@@ -9,7 +9,7 @@ import re
 import pandas as pd
 import yaml
 
-from .measures import (AGE_BANDS, APPT_COLS, VL_COLS, vl_clients, VL_GAP_COLS, vl_gap_clients, EAC_COLS, eac_clients, _datetimes, CONC_CATS, CONC_COLS, DIMS, PBS_FOLLOWUP, UNKNOWN_AGE, Period,
+from .measures import (AGE_BANDS, APPT_COLS, VL_COLS, vl_clients, TXN_COLS, txn_clients, VL_GAP_COLS, vl_gap_clients, EAC_COLS, eac_clients, _datetimes, CONC_CATS, CONC_COLS, DIMS, PBS_FOLLOWUP, UNKNOWN_AGE, Period,
                        appointment_clients, concurrence, dhis_cube, facility_key, linelist_backfill, ndr_waterfall,
                        linelist_cube, week_ends, pbs_backfill, pbs_clients, pbs_cube, pbs_from_linelist)
 from .naomi import AGE5
@@ -627,6 +627,8 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
         "vl_clients": encode_vl_clients(vl_clients(cdr if cdr is not None and len(cdr) else linelist, cols["linelist"], vl_asof), master),
         "vl_gap_clients": encode_vl_clients(vl_gap_clients(linelist, cols["linelist"], ll_asof), master, VL_GAP_COLS,
                                             ("datim", "gap", "vl_history", "regimen_line", "regimen")),
+        "txn_clients": encode_vl_clients(txn_clients(linelist, cols["linelist"], history_start, p_ll.as_of), master, TXN_COLS,
+                                         ("datim", "captured", "print_status", "unique", "status")),
         "geo": manual.get("geo") or [],
         "eac_clients": encode_eac_clients(eac_clients(manual.get("eac"), cols.get("eac", {}), history_start), master),
         "trend_series": encode_trend(est, snaps, master, dq),
