@@ -1460,7 +1460,7 @@ function brfHtsDetail(ctx){
     {labelW:1.45, valW:1.5, max:1.2, rowH:0.36, title:"HTS_TST_POS against the period target · line = expected by the data date"});
   const top = mr[0];
   bTake(ctx, s, top ? `${top.l} gives the most positives: ${n(top.v)} (${bP(div(top.v, v.hts_tst_pos),0)} of all), at a ${bP(div(top.v, top.t))} yield.` : "");
-  s.addNotes("Targets are for the period chosen, at programme and state level (LGAs have no targets). % of target uses the whole period target; the colour follows the pace to the data date. Linkage = TX_NEW ÷ HTS_TST_POS (TX_NEW = new ART starts, transfer-ins removed).");
+  s.addNotes("Targets are for the period chosen, at programme and state level (LGAs have no targets). % of target uses the whole period target; the colour follows the pace to the data date. Linkage (IPI) = TX_NEW unique ÷ HTS_TST_POS (new ART starts, transfer-ins removed, also in the NDR unique TX_CURR).");
 }
 
 /* ---------- 6. 2nd 95: on treatment ---------- */
@@ -1558,8 +1558,8 @@ function brfHts(ctx){
       chartColors:[BC.st.critical], lineSize:2.5, lineDataSymbol:"circle", lineDataSymbolSize:6, showValue:false, valAxisLabelFormatCode:"0.0%", valAxisMinVal:0,
       showLegend:false, showTitle:true, title:"Testing yield by month", catAxisLabelFontSize:10}));
   } else bNoData(s, 0.5, 3.3, 12.33, 3.0, "No monthly testing data for this period.");
-  bTake(ctx, s, `${bN(v.hts_tst_pos)} new diagnoses from ${bN(v.hts_tst)} tests (yield ${bP(div(v.hts_tst_pos,v.hts_tst))}); ${bP(div(v.tx_new_q, v.hts_tst_pos))} linked to ART${lk.target!=null&&periodFY()===TFY?` against a ${pct(lk.target,0)} target`:""}.`);
-  s.addNotes("The latest month is provisional while facilities submit. TX_NEW non-unique = new ART starts with transfer-ins removed (used for linkage and every other calculation). Unique = also counted in the NDR unique TX_CURR (CDC pillar rules, from FY26 Q3); before that both are the same. Linkage = TX_NEW ÷ HTS_TST_POS.");
+  bTake(ctx, s, `${bN(v.hts_tst_pos)} new diagnoses from ${bN(v.hts_tst)} tests (yield ${bP(div(v.hts_tst_pos,v.hts_tst))}); ${bP(lk.value)} linked to ART (TX_NEW unique)${lk.target!=null&&periodFY()===TFY?` against a ${pct(lk.target,0)} target`:""}.`);
+  s.addNotes("The latest month is provisional while facilities submit. TX_NEW non-unique = new ART starts with transfer-ins removed (used for linkage and every other calculation). Unique = also counted in the NDR unique TX_CURR (CDC pillar rules, from FY26 Q3); before that both are the same. Linkage (IPI) = TX_NEW unique ÷ HTS_TST_POS.");
 }
 
 /* ---------- a small by-state (or by-LGA) table that sits beside a slide's main visual ---------- */
@@ -2068,7 +2068,7 @@ function htsPage(){
      const lab=["Non-unique","Unique"], tip="Non-unique (used in every calculation): new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same.";
      return kpi2("TX_NEW",[[n(v.tx_new_q),lab[0]],[n(v.tx_new_unique),lab[1]]],"",null,tip)
        +kpi2(ipiYr?"Linkage with GC7 (IPI)":"Linkage with GC7",[[pct(div(v.tx_new_q,v.hts_tst_pos)),lab[0]],[pct(div(v.tx_new_unique,v.hts_tst_pos)),lab[1]]],
-             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"TX_NEW ÷ HTS_TST_POS",ipiYr?lk.status:null,"Linkage with GC7 = all TX_NEW ÷ HTS_TST_POS (GC7 women included). "+tip)
+             ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"TX_NEW ÷ HTS_TST_POS",ipiYr?lk.status:null,"Linkage with GC7 = all TX_NEW ÷ HTS_TST_POS (GC7 women included). The IPI uses the unique figure. "+tip)
        +kpi2("Linkage without GC7",[[pct(div(Math.max(0,(v.tx_new_q||0)-(v.pmtct_gc7||0)),v.hts_tst_pos)),lab[0]],[pct(div(Math.max(0,(v.tx_new_unique||0)-(v.pmtct_gc7||0)),v.hts_tst_pos)),lab[1]]],
             `(TX_NEW − GC7 ${n(v.pmtct_gc7||0)}) ÷ HTS_TST_POS`,null,
             "GC7 = pregnant women found by CBOs in the community and newly started on ART at our sites (PMTCT_ART, weekly DHIS2 form, reported from November 2026). They are not in our HTS_TST_POS, so taking them out of TX_NEW shows linkage of our own positives. "+tip); })()}${kpi(n(v.prep_new),"PrEP_NEW",pr.target!=null?`${TL()} target ${n(pr.target)} · <b>${pct(div(v.prep_new,pr.target),0)}</b> achieved`:"",pr.status)}</div>
@@ -2230,7 +2230,7 @@ function htsTargetRow(l, f, tot){ const x=agg(f), t=evaluate("HTS_TST",x,f), p=e
 function htsStateTable(){
   const rows=STATES.filter(x=>!F.state||x===F.state).map(s=>htsTargetRow(esc(s),{...F,state:s,lga:"",fac:""}));
   return `<div class="tw"><table><thead><tr><th>State</th><th class="n">HTS_TST target</th><th class="n">HTS_TST</th><th class="n">% ach.</th><th class="n">HTS_POS target</th><th class="n">HTS_TST_POS</th><th class="n">% ach.</th><th class="n">Yield</th><th class="n">TX_NEW</th><th class="n">Linkage</th></tr></thead><tbody>
-   ${rows.join("")}${htsTargetRow(esc(F.state?filterText():SPEED),F,1)}</tbody></table></div><p class="drillnote">Targets are for ${esc(P.label)} (programme and state level). Linkage = TX_NEW ÷ HTS_TST_POS.</p>`;
+   ${rows.join("")}${htsTargetRow(esc(F.state?filterText():SPEED),F,1)}</tbody></table></div><p class="drillnote">Targets are for ${esc(P.label)} (programme and state level). Linkage here = TX_NEW non-unique ÷ HTS_TST_POS; the IPI uses TX_NEW unique.</p>`;
 }
 /* ---------- HTS: index testing by sex, HIVST by <15 / 15+ ---------- */
 function indexBySex(){ const s=[["Male",agg({...F,sex:"M"})],["Female",agg({...F,sex:"F"})]];
@@ -2970,6 +2970,21 @@ function vlRow(label, x){ const pend=gv(x,"vl_sample")-gv(x,"vl_result");
    <td class="n">${n(x.vl_result)}</td><td class="n">${rpct(x.vl_result,x.vl_eligible)}</td><td class="n">${n(x.vl_suppressed)}</td><td class="n">${rpct(x.vl_suppressed,x.vl_result)}</td><td class="n">${n(x.vl_unsuppressed)}</td><td class="n">${rpct(x.vl_unsuppressed,x.vl_result)}</td>
    <td class="n">${n(x.vl_llv)}</td><td class="n">${rpct(x.vl_llv,x.vl_result)}</td><td class="n">${n(x.vl_undetectable)}</td><td class="n">${rpct(x.vl_undetectable,x.vl_result)}</td><td class="n">${n(pend)}</td></tr>`; }
 const VLHEAD = `<thead><tr><th></th><th class="n">Active (EMR)</th><th class="n">Eligible</th><th class="n">Sample collected</th><th class="n">Sample rate</th><th class="n">Results</th><th class="n">Coverage</th><th class="n">Suppressed</th><th class="n">VLS</th><th class="n">Unsuppressed ≥1000</th><th class="n">Unsupp. rate</th><th class="n">LLV</th><th class="n">LLV rate</th><th class="n">Undetectable</th><th class="n">U=U rate</th><th class="n">Pending</th></tr></thead>`;
+/* Turnaround time of results pending: days since the sample, by band */
+function vlTatSection(v){
+  if(v.vl_pend==null) return `<section class="c3d">${secH("VL turnaround time (TAT)")}<div class="empty">Comes with the next update.</div></section>`;
+  const g=k=>v[k]||0, p=g("vl_pend"), late=g("vl_pend_60")+g("vl_pend_90")+g("vl_pend_90p"), avg=(a,b)=>b?(a/b).toFixed(0)+" days":"—";
+  const bands=[["0–14 days","vl_pend_14","var(--bar-good)"],["15–30 days","vl_pend_30","var(--s1)"],["31–60 days","vl_pend_60","var(--s2)"],["61–90 days","vl_pend_90","var(--bar-warning)"],["Over 90 days","vl_pend_90p","var(--bar-critical)"]];
+  const late30=x=>(x.vl_pend_60||0)+(x.vl_pend_90||0)+(x.vl_pend_90p||0);
+  return `<section class="c3d">${secH("VL turnaround time (TAT)",`Results pending: sample in the 12 months, no result yet · days waiting to ${fmtDate(VLD())} · EMR line list`)}
+   <div class="kpis">${kpi(n(p),"Results pending","sample taken, no result yet")}${kpi(avg(g("vl_pend_days"),p),"Average days waiting","pending results")}
+     ${kpi(n(late),"Waiting over 30 days",`${pct(div(late,p),0)} of pending`,div(late,p)>.25?"critical":div(late,p)>.1?"warning":"good")}</div>
+   ${hbars(bands.map(([l,k,c])=>({l,v:g(k),c,txt:`<b>${n(g(k))}</b>${p?` · ${pct(div(g(k),p),0)}`:""}`})),{max:Math.max(1,...bands.map(b=>g(b[1])))})}
+   <div style="margin-top:12px">${pivot("vltat",[C("Pending",V("vl_pend"),0,0,"vl_pend"),C("Avg days waiting",x=>x.vl_pend?(x.vl_pend_days||0)/x.vl_pend:null,"x"),
+     C("0–14 d",V("vl_pend_14")),C("15–30 d",V("vl_pend_30")),C("31–60 d",V("vl_pend_60")),C("61–90 d",V("vl_pend_90")),C("Over 90 d",V("vl_pend_90p")),
+     C("% over 30 d",x=>div(late30(x),x.vl_pend),1,x=>{const r=div(late30(x),x.vl_pend); return r==null?null:r>.25?"critical":r>.1?"warning":"good";})],["org","paed","sex","age"],"org",{csv:"vl_tat"})}</div>
+   <p class="drillnote">Pending = Active in the EMR, a sample collected in the 12 months to the line-list date and no result dated on or after it; days waiting = line-list date − sample date. Turnaround for results already received is not shown: the EMR line list dates a result with its sample date (no date the result came back). Over 30 days: above 10% amber, above 25% red. Averages in days.</p></section>`;
+}
 function vlPage(){
   if(WIN||(WIN=windowSet()), !HAS("ll")) return context()+noData("Viral load figures");
   const v=agg(), E=c=>evaluate(c,v), ip=E("IPI_VLS_ON_ART"), pend=gv(v,"vl_sample")-gv(v,"vl_result");
@@ -2979,7 +2994,7 @@ function vlPage(){
      fr("Sample collection rate",v.vl_sample,v.vl_eligible),fs("Result received",v.vl_result),fr("Coverage",v.vl_result,v.vl_eligible),fs("Suppressed <1000",v.vl_suppressed),
      fr("Suppression rate",v.vl_suppressed,v.vl_result),fs("Unsuppressed ≥1000",v.vl_unsuppressed),fr("Unsuppressed rate",v.vl_unsuppressed,v.vl_result),fs("LLV 50–999",v.vl_llv),fr("LLV rate",v.vl_llv,v.vl_result),fs("Undetectable <50",v.vl_undetectable),fr("Undetectable rate",v.vl_undetectable,v.vl_result),
      fs("Pending result",pend,"Samples collected − results received, as in Power BI")])+`
-   <div class="kpis">${kpi(pct(ip.value),"VLS on ART (IPI)",`${D.meta.quarter.slice(-2)} milestone ${pct(ip.target,0)}`,ip.status,"Suppressed ÷ everyone Active (EMR)")}${kpi(n(v.vl_unsuppressed),"Unsuppressed ≥1000","need EAC and a repeat VL")}</div>
+   <div class="kpis">${kpi(pct(ip.value),"VLS on ART (IPI)",`${D.meta.quarter.slice(-2)} milestone ${pct(ip.target,0)}`,ip.status,"Everyone Active with a valid result <1,000 (any time on ART) ÷ everyone Active (EMR)")}${v.vl_supp_tx!=null?kpi(n(v.vl_supp_tx),"Suppressed, all on ART","valid result <1,000 · any time on ART"):""}${kpi(n(v.vl_unsuppressed),"Unsuppressed ≥1000","need EAC and a repeat VL")}</div>
    <section class="c3d">${secH("Paediatric & adolescent vs adult","Same flow for <20 and 20+ (EMR line list)")}<div class="tw"><table>${VLHEAD}<tbody>${grp.map(([l,f])=>vlRow(l,agg(f))).join("")}</tbody></table></div></section>
    <section class="c3d">${secH("By state")}<div class="tw"><table>${VLHEAD}<tbody>${st.map(s=>vlRow(esc(s),agg({...F,state:s,lga:"",fac:""}))).join("")}<tr class="total">${vlRow(esc(filterText()),v).slice(4)}</tbody></table></div></section>
    <div class="grid g2"><section class="c3d">${secH("VL coverage by age and sex","Results ÷ eligible · dashed line at 95%")}${pyramid("vl_result",{den:"vl_eligible",ref:.95,title:"Red number: below 95%"})}</section>
@@ -2987,6 +3002,7 @@ function vlPage(){
    <section class="c3d">${secH("Viral load by facility","Every facility · choose “By state” to drill state → LGA → facility, or rows by paediatric / adult, sex or age")}${pivot("vl",[C("Active (EMR)",V("vl_tx"),0,0,"vl_tx"),C("Eligible",V("vl_eligible")),C("Sample",V("vl_sample")),
      C("Sample rate",RV("vl_sample","vl_eligible"),1),C("Results",V("vl_result")),C("Coverage",RV("vl_result","vl_eligible"),1,x=>rateStatus(div(x.vl_result,x.vl_eligible),.95)),C("Suppressed",V("vl_suppressed")),
      C("VLS",RV("vl_suppressed","vl_result"),1,x=>rateStatus(div(x.vl_suppressed,x.vl_result),.95)),C("Unsuppressed",V("vl_unsuppressed")),C("Unsupp. rate",RV("vl_unsuppressed","vl_result"),1),C("LLV",V("vl_llv")),C("U=U rate",RV("vl_undetectable","vl_result"),1),C("Pending",x=>(x.vl_sample??0)-(x.vl_result??0))],["org","paed","sex","age"],"facility")}</section>
+   ${vlTatSection(v)}
    ${vlGapSection()}
    ${unsuppressedSection()}
    ${eacSection()}`;
@@ -3419,7 +3435,7 @@ function methodsPage(){
       ["Undetectable / low-level viraemia", `&lt; 50 / 50 to 999 copies`, `${n(v.vl_undetectable)} / ${n(v.vl_llv)}`],
       ["VL coverage", "results ÷ eligible", pct(div(g("vl_result"),g("vl_eligible")))],
       ["VLS among results", "suppressed ÷ results", pct(div(g("vl_suppressed"),g("vl_result")))],
-      ["VLS on ART (IPI)", "suppressed ÷ everyone Active in the EMR line list", pct(div(g("vl_suppressed"),g("vl_tx")))]]))
+      ["VLS on ART (IPI)", "everyone Active with a valid result (12 months) <1,000, any time on ART ÷ everyone Active in the EMR line list", pct(div(g("vl_supp_tx"),g("vl_tx")))]]))
   + sec("PMTCT", dh,
       tt("pmtct_stat_den","PMTCT_STAT_D","Facility PMTCT + Community PMTCT, as in the DAX and the deck's PMTCT slide.")
     + tt("pmtct_stat_num","PMTCT_STAT_N") + tt("pmtct_stat_pos","PMTCT_STAT_POS")

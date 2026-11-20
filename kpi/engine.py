@@ -408,7 +408,8 @@ def encode_cube(cube: pd.DataFrame, master: pd.DataFrame) -> dict:
 
 # The VL cascade measures taken from the EMR (CDR) line list when the NDR file is the treatment source
 VL_EMR = ["vl_tx", "vl_eligible", "vl_sample", "vl_result", "vl_suppressed", "vl_unsuppressed", "vl_undetectable", "vl_llv",
-          "vlr_regline", "vls_regline"]
+          "vlr_regline", "vls_regline", "vl_supp_tx", "vl_pend", "vl_pend_14", "vl_pend_30", "vl_pend_60", "vl_pend_90", "vl_pend_90p",
+          "vl_pend_days"]
 
 
 def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_stat: pd.DataFrame,

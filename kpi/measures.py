@@ -666,6 +666,21 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         gap = vl_el & ~vl_res
         in_emr, pending, _, _, _ = vl_gap_split(d, c, p.as_of)
         masks.update(vl_gap_elig=vl_el, vl_gap=gap, vl_gap_emr=gap & in_emr, vl_gap_pending=gap & pending, vl_gap_sample=gap & ~in_emr & ~pending)
+        # Turnaround time (TAT). Pending: everyone Active with a sample in the 12 months and no result dated on or
+        # after it; days waiting = line-list date - sample date. (Results already received have no TAT here: the
+        # EMR line list dates a result with its own sample date.)
+        sd, rd = pd.to_datetime(pd.Series(sample, index=d.index)), pd.to_datetime(pd.Series(vl_date, index=d.index))
+        pend = active_all & vl_win(sample) & ~(rd >= sd).fillna(False)
+        wait = (pd.Timestamp(p.as_of) - sd).dt.days
+        for k, lo, hi in (("vl_pend_14", 0, 14), ("vl_pend_30", 15, 30), ("vl_pend_60", 31, 60), ("vl_pend_90", 61, 90), ("vl_pend_90p", 91, 10**6)):
+            masks[k] = pend & wait.between(lo, hi)
+        masks["vl_pend"] = pend
+        sums = {"vl_pend_days": (pend, wait)}
+    else:
+        sums = {}
+    # VLS among clients on ART (IPI): everyone Active with a valid result (in the 12 months) below 1,000,
+    # whatever their time on ART; the denominator stays everyone Active (vl_tx)
+    masks["vl_supp_tx"] = active_all & vl_win(vl_date) & (vl < 1000)
     # EMR waterfall for the quarter the linelist date falls in (deck 'Continuity on Treatment'):
     # previous-quarter status from previous_quarter_status; the starting TX_CURR comes from that
     # table itself (engine), so clients no longer in the linelist land in 'gain/loss'
@@ -759,6 +774,11 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
                       "otz_transitioned": active & col("otz_transitioned").eq("yes")})
 
     out = [_long(d, masks, dated=dated)]
+    for k, (m, w) in sums.items():     # day totals (TAT): the dashboard divides them by the matching count
+        x = d[m].assign(_w=w[m].fillna(0))
+        g = x.groupby(["state", "lga", "facility", "sex", "age"], dropna=False)["_w"].sum()
+        if len(g):
+            out.append(g.rename("value").reset_index().assign(measure=k, mod="", period="")[DIMS + ["measure", "value"]])
     # ---- biometrics of new clients and of clients seen at the facility (NDR PBS fields, joined in run_pipeline)
     if "bio_baseline" in d:
         out.append(_bio_flow(d, c, start, ti, pickup, h0, p))
