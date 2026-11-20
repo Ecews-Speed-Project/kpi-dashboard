@@ -36,7 +36,7 @@ ipi:
     den: vl_tx           # everyone Active in the EMR line list: the VL cascade's own base (Power BI VL rules)
     kind: rate
     target: IPI_VLS_ON_ART
-    source: Central repository (linelist)
+    source: EMR line list (central repository)
   - code: IPI_JOINT_SSV
     name: Joint supportive supervision visits with GoN
     pillar: Systems
@@ -94,7 +94,7 @@ non_ipi:
     den: plhiv_est
     kind: rate
     target: NIPI_POP_VLS
-    source: Central repository, Naomi estimate (manual)
+    source: EMR line list (central repository), Naomi estimate (manual)
   - code: NIPI_TX_CURR
     name: TX_CURR
     pillar: 2nd 95
@@ -112,7 +112,7 @@ non_ipi:
     den: vl_result
     kind: rate
     target: NIPI_VLS_WITH_RESULT
-    source: Central repository (linelist)
+    source: EMR line list (central repository)
   - code: NIPI_DQA_COVERAGE
     name: DQA coverage rate
     pillar: Systems
