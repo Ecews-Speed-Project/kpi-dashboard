@@ -23,7 +23,7 @@ ipi:
     name: ART coverage among PLHIV who know their status
     pillar: 2nd 95
     measures: "People who know their HIV status and are on ART. Tracked through linkage (TX_NEW unique ÷ HTS_TST_POS), per the FY27 target note. Unique = new clients also in the NDR unique TX_CURR (valid unique print or under 15)"
-    num: tx_new_unique   # unique only (agreed 2026-11-20); the non-unique linkage stays in the TX_NEW cascade
+    num: tx_new_unique   # unique only (agreed 2026-11-20); the total (non-unique) linkage stays in the TX_NEW cascade
     den: hts_tst_pos
     kind: rate
     target: IPI_ART_COV

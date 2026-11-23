@@ -202,7 +202,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .kpi .k-l{font-size:14px;color:var(--ink-2);margin-top:4px}
 .kpi .k-s{font-size:13px;color:var(--ink-3);margin-top:2px}
 .kpi2{text-align:center}.kpi2 .k-l{margin-top:auto;padding-top:8px}.kpi2 .k-s{margin-top:2px !important}
-.k2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.k2 .k-v{font-size:26px}.k2 .k-t{font-size:12px;color:var(--ink-3);margin-top:3px;line-height:1.25}.k2>div+div{border-left:1px solid var(--rule-soft);padding-left:10px}
+.k2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.k2 .k-v{font-size:26px;white-space:nowrap}.k2 .k-t{font-size:12px;color:var(--ink-3);margin-top:3px;line-height:1.25}.k2>div+div{border-left:1px solid var(--rule-soft);padding-left:10px}
 
 /* bars */
 .hbars{display:grid;gap:7px}
@@ -1547,8 +1547,8 @@ function brfHts(ctx){
   const v = agg(), ht = ev("HTS_TST", v), cf = ev("HTS_TST_POS", v), lk = ev("IPI_ART_COV", v);
   const s = bSlide(ctx, "1st 95", "Testing and linkage", `${ctx.scope} · ${P.label} · DHIS2${P.mode==="quarter"?" monthly reports":""} · TX_NEW from the line list`);
   bCards(ctx, s, 1.75, 1.3, [[bN(v.hts_tst), "HTS_TST", tgtTxt("HTS_TST", ht), ht.status], [bN(v.hts_tst_pos), "HTS_TST_POS", tgtTxt("HTS_TST_POS", cf), cf.status],
-    [bP(div(v.hts_tst_pos, v.hts_tst)), "Testing yield", "POS ÷ TST"], [`${bN(v.tx_new_q)} | ${bN(v.tx_new_unique)}`, "TX_NEW", "non-unique | unique"],
-    [`${bP(div(v.tx_new_q, v.hts_tst_pos))} | ${bP(div(v.tx_new_unique, v.hts_tst_pos))}`, "Linkage", "non-unique | unique", periodFY()===TFY ? lk.status : null]]);
+    [bP(div(v.hts_tst_pos, v.hts_tst)), "Testing yield", "POS ÷ TST"], [`${bN(v.tx_new_q)} | ${bN(v.tx_new_unique)}`, "TX_NEW", `total | unique · non-unique ${bN(Math.max(0,(v.tx_new_q||0)-(v.tx_new_unique||0)))}`],
+    [`${bP(div(v.tx_new_q, v.hts_tst_pos))} | ${bP(div(v.tx_new_unique, v.hts_tst_pos))}`, "Linkage", "total | unique", periodFY()===TFY ? lk.status : null]]);
   const ms = lastMonths(12), g = agg(F, {by:"month", months:"all"}), x = mo => g.get(mo) || {};
   if(ms.length){
     s.addChart(ctx.pres.charts.BAR, [{name:"HTS_TST_POS", labels:ms.map(monthTick), values:ms.map(mo=>x(mo).hts_tst_pos||0)}], bChartBase({x:0.5, y:3.3, w:7.5, h:3.0,
@@ -1559,7 +1559,7 @@ function brfHts(ctx){
       showLegend:false, showTitle:true, title:"Testing yield by month", catAxisLabelFontSize:10}));
   } else bNoData(s, 0.5, 3.3, 12.33, 3.0, "No monthly testing data for this period.");
   bTake(ctx, s, `${bN(v.hts_tst_pos)} new diagnoses from ${bN(v.hts_tst)} tests (yield ${bP(div(v.hts_tst_pos,v.hts_tst))}); ${bP(lk.value)} linked to ART (TX_NEW unique)${lk.target!=null&&periodFY()===TFY?` against a ${pct(lk.target,0)} target`:""}.`);
-  s.addNotes("The latest month is provisional while facilities submit. TX_NEW non-unique = new ART starts with transfer-ins removed (used for linkage and every other calculation). Unique = also counted in the NDR unique TX_CURR (CDC pillar rules, from FY26 Q3); before that both are the same. Linkage (IPI) = TX_NEW unique ÷ HTS_TST_POS.");
+  s.addNotes("The latest month is provisional while facilities submit. TX_NEW total = new ART starts with transfer-ins removed (used for linkage and every other calculation). Unique = also counted in the NDR unique TX_CURR (CDC pillar rules, from FY26 Q3); before that both are the same. Non-unique = total − unique (no print, print issue or duplicate). Linkage (IPI) = TX_NEW unique ÷ HTS_TST_POS.");
 }
 
 /* ---------- a small by-state (or by-LGA) table that sits beside a slide's main visual ---------- */
@@ -1828,37 +1828,38 @@ function overviewPage(){
    ${!F.state&&!F.lga&&!F.fac?statesTable():""}`;
 }
 /* TX_NEW cascade: positives -> new on ART -> prints captured or not -> valid unique print -> TX_NEW unique, with linkage and GC7.
-   Print fields are from the NDR file (as of its date); TX_NEW is the plain (non-unique) count. */
+   Print fields are from the NDR file (as of its date); TX_NEW total is the plain count; non-unique = total − unique. */
 function txNewCascade(v){
   const g=k=>v[k]||0, pos=g("hts_tst_pos"), tn=g("tx_new_q"), tu=g("tx_new_unique"), gc=g("pmtct_gc7");
   const has=v.txn_cap!=null||v.txn_nocap!=null;
   const sh=(a,b)=>b?` · ${pct(div(a,b),0)}`:"";
   const bars=[
     {l:"HTS_TST_POS", v:pos, c:"var(--bar-none)", txt:`<b>${n(pos)}</b> new positives`},
-    {l:"TX_NEW (non-unique)", v:tn, txt:`<b>${n(tn)}</b>${pos?` · linkage ${pct(div(tn,pos))}`:""}`},
+    {l:"TX_NEW (total)", v:tn, txt:`<b>${n(tn)}</b>${pos?` · linkage ${pct(div(tn,pos))}`:""}`},
     ...(has?[
     {l:"  with prints captured", v:g("txn_cap"), c:"var(--s1)", txt:`<b>${n(g("txn_cap"))}</b>${sh(g("txn_cap"),tn)} of TX_NEW`},
     {l:"  no prints captured", v:g("txn_nocap"), c:"var(--s2)", txt:`<b>${n(g("txn_nocap"))}</b>${sh(g("txn_nocap"),tn)}${g("txn_nocap_u15")?` · ${n(g("txn_nocap_u15"))} under 15`:""}`},
     {l:"  valid unique print", v:g("txn_valid"), c:"var(--bar-good)", txt:`<b>${n(g("txn_valid"))}</b>${sh(g("txn_valid"),tn)}`},
     {l:"  print issue", v:g("txn_issue"), c:"var(--bar-critical)", txt:`<b>${n(g("txn_issue"))}</b> · invalid ${n(g("txn_iss_inv"))} · adjudication ${n(g("txn_iss_adj"))} · duplicate ${n(g("txn_iss_dup"))}`}]:[]),
     {l:"TX_NEW (unique)", v:tu, c:"var(--s3)", txt:`<b>${n(tu)}</b>${sh(tu,tn)} of TX_NEW${pos?` · linkage ${pct(div(tu,pos))}`:""}`},
+    {l:"TX_NEW (non-unique)", v:Math.max(0,tn-tu), c:"var(--bar-warning)", txt:`<b>${n(Math.max(0,tn-tu))}</b>${sh(Math.max(0,tn-tu),tn)} of TX_NEW · total − unique`},
     {l:"of TX_NEW: GC7", v:gc, c:"var(--s2)", txt:`<b>${n(gc)}</b> GC7 women (tested in the community)`}];
   const L=(a)=>pct(div(Math.max(0,a),pos));
-  const cards=`<div class="kpis" style="margin-top:12px">${kpi2("Linkage with GC7",[[L(tn),"Non-unique"],[L(tu),"Unique"]],"TX_NEW ÷ HTS_TST_POS")}
-     ${kpi2("Linkage without GC7",[[L(tn-gc),"Non-unique"],[L(tu-gc),"Unique"]],`(TX_NEW − GC7 ${n(gc)}) ÷ HTS_TST_POS`)}
-     ${has?kpi(pct(div(g("txn_cap"),tn)),"New clients with prints","captured ÷ TX_NEW","")+kpi(n(tn-tu),"Not in TX_NEW unique","non-unique − unique"):""}</div>`;
-  return `<section class="c3d">${secH("TX_NEW cascade","Positives to new on ART, prints captured or not, unique and non-unique, linkage and GC7 · "+esc(P.label))}
+  const cards=`<div class="kpis" style="margin-top:12px">${kpi2("Linkage with GC7",[[L(tn),"Total"],[L(tu),"Unique"]],"TX_NEW ÷ HTS_TST_POS")}
+     ${kpi2("Linkage without GC7",[[L(tn-gc),"Total"],[L(tu-gc),"Unique"]],`(TX_NEW − GC7 ${n(gc)}) ÷ HTS_TST_POS`)}
+     ${has?kpi(pct(div(g("txn_cap"),tn)),"New clients with prints","captured ÷ TX_NEW","")+kpi(n(Math.max(0,tn-tu)),"TX_NEW non-unique","total − unique"):""}</div>`;
+  return `<section class="c3d">${secH("TX_NEW cascade","Positives to new on ART, prints captured or not, total, unique and non-unique, linkage and GC7 · "+esc(P.label))}
     ${hbars(bars,{max:Math.max(pos,tn,1)})}${cards}
     <div style="height:26px"></div>${secH("TX_NEW cascade breakdown","Click a state, then an LGA, to reach facilities · or switch to LGA, facility, sex or age · sort any column")}
     ${has&&!(D.meta.archived||D.meta.shared)?`<div class="dimbar" style="margin-bottom:4px"><span class="drillnote" style="margin:0">Client list for follow-up: patient ID, DATIM code and PEPID of each TX_NEW client in this view (state, LGA, facility, sex, age and period filters), with print status and unique flag.</span><button class="reset" data-txncsv="1" style="margin-left:auto">Download client list (CSV)</button></div>`:""}
-    ${pivot("txn",[C("HTS_TST_POS",V("hts_tst_pos"),0,0,"hts_tst_pos"),C("TX_NEW non-unique",V("tx_new_q")),
+    ${pivot("txn",[C("HTS_TST_POS",V("hts_tst_pos"),0,0,"hts_tst_pos"),C("TX_NEW total",V("tx_new_q")),
       ...(has?[C("Prints captured",V("txn_cap")),C("Captured %",RV("txn_cap","tx_new_q"),1,x=>rateStatus(div(x.txn_cap||0,x.tx_new_q),.95)),C("No prints",V("txn_nocap")),
       C("Valid unique print",V("txn_valid")),C("Print issue",V("txn_issue"))]:[]),
-      C("TX_NEW unique",V("tx_new_unique")),C("GC7",V("pmtct_gc7")),
-      C("Linkage with GC7, non-unique",RV("tx_new_q","hts_tst_pos"),1),C("Linkage with GC7, unique",RV("tx_new_unique","hts_tst_pos"),1),
-      C("Linkage without GC7, non-unique",x=>div(Math.max(0,(x.tx_new_q||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
+      C("TX_NEW unique",V("tx_new_unique")),C("TX_NEW non-unique",x=>Math.max(0,(x.tx_new_q||0)-(x.tx_new_unique||0))),C("GC7",V("pmtct_gc7")),
+      C("Linkage with GC7, total",RV("tx_new_q","hts_tst_pos"),1),C("Linkage with GC7, unique",RV("tx_new_unique","hts_tst_pos"),1),
+      C("Linkage without GC7, total",x=>div(Math.max(0,(x.tx_new_q||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
       C("Linkage without GC7, unique",x=>div(Math.max(0,(x.tx_new_unique||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1)],["org","sex","age"],null,{csv:"tx_new_cascade"})}
-    <p class="drillnote">TX_NEW non-unique = every new ART start in the period, transfer-ins removed (used in every calculation). Unique = also in the NDR unique TX_CURR (active, with a valid unique print or under 15). Prints are as recorded in the NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}; a valid unique print = fingerprint valid, not a suppressed duplicate, not waiting for adjudication. GC7 = pregnant women found by CBOs in the community and started on ART at our sites, so they are in TX_NEW but not in our HTS_TST_POS.${has?"":" Print details come with the next update."}</p></section>`;
+    <p class="drillnote">TX_NEW total = every new ART start in the period, transfer-ins removed (used in every calculation). Unique = also in the NDR unique TX_CURR (active, with a valid unique print or under 15). Non-unique = total − unique. Prints are as recorded in the NDR file of ${fmtDate(D.meta.linelist_as_of||D.meta.as_of)}; a valid unique print = fingerprint valid, not a suppressed duplicate, not waiting for adjudication. GC7 = pregnant women found by CBOs in the community and started on ART at our sites, so they are in TX_NEW but not in our HTS_TST_POS.${has?"":" Print details come with the next update."}</p></section>`;
 }
 /* TX_NEW client list (NDR file): one row per new client in the period and the current filters, for follow-up.
    Fetched only when the button is clicked (a live build keeps it in its own part). */
@@ -2065,8 +2066,8 @@ function htsPage(){
    ${kpi(n(v.hts_tst_pos),"HTS_TST_POS",cf.target!=null?`${TL()} target ${n(cf.target)} · <b>${pct(div(v.hts_tst_pos,cf.target),0)}</b> achieved`:"",cf.status)}
    ${kpi(pct(div(v.hts_tst_pos,v.hts_tst)),"Testing yield","HTS_TST_POS ÷ HTS_TST")}
    ${(()=>{ const ipiYr=periodFY()===TFY, pf=D.meta.tx_new_pillars_from||"";
-     const lab=["Non-unique","Unique"], tip="Non-unique (used in every calculation): new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same.";
-     return kpi2("TX_NEW",[[n(v.tx_new_q),lab[0]],[n(v.tx_new_unique),lab[1]]],"",null,tip)
+     const lab=["Total","Unique"], nu=Math.max(0,(v.tx_new_q||0)-(v.tx_new_unique||0)), tip="Total (used in every calculation): new ART starts, transfer-ins removed. Unique: also in the NDR unique TX_CURR, from FY26 Q3"+(pf?` (${fmtDate(pf)})`:"")+"; before that both are the same. Non-unique = total − unique (no print, print issue or duplicate).";
+     return kpi2("TX_NEW",[[n(v.tx_new_q),lab[0]],[n(v.tx_new_unique),lab[1]]],`Non-unique <b>${n(nu)}</b> (total − unique)`,null,tip)
        +kpi2(ipiYr?"Linkage with GC7 (IPI)":"Linkage with GC7",[[pct(div(v.tx_new_q,v.hts_tst_pos)),lab[0]],[pct(div(v.tx_new_unique,v.hts_tst_pos)),lab[1]]],
              ipiYr&&lk.target!=null?`target ${pct(lk.target,0)}`:"TX_NEW ÷ HTS_TST_POS",ipiYr?lk.status:null,"Linkage with GC7 = all TX_NEW ÷ HTS_TST_POS (GC7 women included). The IPI uses the unique figure. "+tip)
        +kpi2("Linkage without GC7",[[pct(div(Math.max(0,(v.tx_new_q||0)-(v.pmtct_gc7||0)),v.hts_tst_pos)),lab[0]],[pct(div(Math.max(0,(v.tx_new_unique||0)-(v.pmtct_gc7||0)),v.hts_tst_pos)),lab[1]]],
@@ -2106,10 +2107,10 @@ function htsPage(){
    ${csccSection()}
    <section class="c3d">${secH("HTS breakdown","Drill like a DHIS2 pivot")}${pivot("hts",[C("HTS_TST",V("hts_tst"),0,0,"hts_tst"),C("HTS_POS",V("hts_tst_pos")),C("Yield",RV("hts_tst_pos","hts_tst"),1),
      // TX_NEW comes from the line list, which has no testing modality: those columns show "—" on modality rows
-     C("TX_NEW non-unique",x=>x.tx_new_q??null),C("TX_NEW unique",x=>x.tx_new_q==null?null:x.tx_new_unique||0),C("GC7",x=>x.tx_new_q==null?null:x.pmtct_gc7||0),
-     C("Linkage with GC7, non-unique",x=>x.tx_new_q==null?null:div(x.tx_new_q,x.hts_tst_pos),1,v=>v.tx_new_q==null?null:rateStatus(div(v.tx_new_q,v.hts_tst_pos),.98)),
+     C("TX_NEW total",x=>x.tx_new_q??null),C("TX_NEW unique",x=>x.tx_new_q==null?null:x.tx_new_unique||0),C("TX_NEW non-unique",x=>x.tx_new_q==null?null:Math.max(0,x.tx_new_q-(x.tx_new_unique||0))),C("GC7",x=>x.tx_new_q==null?null:x.pmtct_gc7||0),
+     C("Linkage with GC7, total",x=>x.tx_new_q==null?null:div(x.tx_new_q,x.hts_tst_pos),1,v=>v.tx_new_q==null?null:rateStatus(div(v.tx_new_q,v.hts_tst_pos),.98)),
      C("Linkage with GC7, unique",x=>x.tx_new_q==null?null:div(x.tx_new_unique||0,x.hts_tst_pos),1),
-     C("Linkage without GC7, non-unique",x=>x.tx_new_q==null?null:div(Math.max(0,(x.tx_new_q||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
+     C("Linkage without GC7, total",x=>x.tx_new_q==null?null:div(Math.max(0,(x.tx_new_q||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
      C("Linkage without GC7, unique",x=>x.tx_new_q==null?null:div(Math.max(0,(x.tx_new_unique||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
      C("PrEP_NEW",V("prep_new"))],
      ["org","paed","sex","age","mod"])}</section>`;
@@ -2230,7 +2231,7 @@ function htsTargetRow(l, f, tot){ const x=agg(f), t=evaluate("HTS_TST",x,f), p=e
 function htsStateTable(){
   const rows=STATES.filter(x=>!F.state||x===F.state).map(s=>htsTargetRow(esc(s),{...F,state:s,lga:"",fac:""}));
   return `<div class="tw"><table><thead><tr><th>State</th><th class="n">HTS_TST target</th><th class="n">HTS_TST</th><th class="n">% ach.</th><th class="n">HTS_POS target</th><th class="n">HTS_TST_POS</th><th class="n">% ach.</th><th class="n">Yield</th><th class="n">TX_NEW</th><th class="n">Linkage</th></tr></thead><tbody>
-   ${rows.join("")}${htsTargetRow(esc(F.state?filterText():SPEED),F,1)}</tbody></table></div><p class="drillnote">Targets are for ${esc(P.label)} (programme and state level). Linkage here = TX_NEW non-unique ÷ HTS_TST_POS; the IPI uses TX_NEW unique.</p>`;
+   ${rows.join("")}${htsTargetRow(esc(F.state?filterText():SPEED),F,1)}</tbody></table></div><p class="drillnote">Targets are for ${esc(P.label)} (programme and state level). Linkage here = TX_NEW total ÷ HTS_TST_POS; the IPI uses TX_NEW unique.</p>`;
 }
 /* ---------- HTS: index testing by sex, HIVST by <15 / 15+ ---------- */
 function indexBySex(){ const s=[["Male",agg({...F,sex:"M"})],["Female",agg({...F,sex:"F"})]];
