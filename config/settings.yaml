@@ -306,5 +306,8 @@ access:
   # Partners get in when this text appears in their email domain. Off until partners should see the whole dashboard,
   # client-level lists included. To switch on: partner_names: {fhi: FHI, ahni: AHNI, howard: Howard}
   partner_names: {}
+  # individual partner staff (full dashboard, client lists included; unit shown as Partners): address -> partner
+  partner_emails:
+    bmalgwi@fhi360.org: FHI 360     # added 2026-11-23 at the user's request
   live_emails: []                # optional: only these SI addresses get Live data entry; empty = everyone whose unit is SI
   session_minutes: 30            # sign in again after this long without activity

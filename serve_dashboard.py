@@ -54,6 +54,7 @@ ACCESS = cfg.get("access") or {}
 DOMAINS = [d.lower().lstrip("@") for d in ACCESS.get("allowed_domains", ["ecews.org"])]
 PARTNER_NAMES = {k.lower(): n for k, n in (ACCESS.get("partner_names") or {}).items()}     # text in the email domain -> partner
 EMAILS = {e.lower() for e in ACCESS.get("allowed_emails", [])}
+PARTNER_EMAILS = {k.lower(): n for k, n in (ACCESS.get("partner_emails") or {}).items()}   # one partner staff address -> partner
 SESSION_SECONDS = int(ACCESS.get("session_minutes", 30)) * 60
 LIVE_EMAILS = {e.lower() for e in ACCESS.get("live_emails") or []}       # optional: narrows Live data entry further
 UNITS = ["CSU", "Lab", "PSCM", "SI", "HSS/CQI", "PCS/VP", "Comms/IT", "Admin", "Programs", "Mgt", "Prevention"]
@@ -82,7 +83,10 @@ SECRET = _secret()
 
 
 def partner_of(addr: str) -> str:
-    """The partner whose name appears in the email domain (the part after @), else ''."""
+    """The partner of a listed partner staff address (partner_emails), else the partner whose name appears in the
+    email domain (the part after @), else ''."""
+    if addr.strip().lower() in PARTNER_EMAILS:
+        return PARTNER_EMAILS[addr.strip().lower()]
     domain = addr.rsplit("@", 1)[-1].lower()
     return next((n for k, n in PARTNER_NAMES.items() if k in domain), "")
 
