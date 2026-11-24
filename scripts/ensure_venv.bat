@@ -16,4 +16,12 @@ if not defined BASE (
 "%VENV%\Scripts\python.exe" -m pip install -q -r "%~dp0..\requirements.txt" || exit /b 1
 :found
 set "PY=%VENV%\Scripts\python.exe"
+REM Packages added to requirements.txt after the environment was built (opens the password-protected EAC files).
+REM A failed install must not stop the update.
+"%PY%" -c "import msoffcrypto" >nul 2>&1
+if errorlevel 1 (
+  echo Installing missing Python packages ...
+  "%PY%" -m pip install -q -r "%~dp0..\requirements.txt"
+)
+"%PY%" -c "import msoffcrypto; print('msoffcrypto available')" 2>nul
 exit /b 0
