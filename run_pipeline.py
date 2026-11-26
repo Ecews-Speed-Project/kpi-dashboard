@@ -382,6 +382,25 @@ def ndr_linelist(pbs: pd.DataFrame, cdr: pd.DataFrame, cfg: dict, file_date: dt.
     return out
 
 
+def ndr_print_status(cdr: pd.DataFrame, pbs: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """The NDR FingerPrintStatus on each EMR (CDR) client, matched by DATIM + ART number, then DATIM + hospital
+    number (punctuation and leading zeros ignored), so the VL cascade can be read for enrolled clients only."""
+    lc = cfg["columns"]["linelist"]
+    if not len(cdr) or "fingerprintstatus" not in pbs or lc.get("datim") not in cdr:
+        return cdr
+    def key(datim, no):
+        a = no.astype(str).str.upper().str.replace(r"[^A-Z0-9]", "", regex=True).str.replace(r"\d+", lambda m: str(int(m.group())), regex=True)
+        return datim.astype(str).str.strip().str.upper() + "|" + a
+    fp = pbs["fingerprintstatus"].astype(str)
+    st = pd.Series(pd.NA, index=cdr.index, dtype=object)
+    for ec, nc in (("art_no", "patientartnumber"), ("hosp_no", "hospitalnumber")):
+        if lc.get(ec) in cdr and nc in pbs:
+            m = dict(zip(key(pbs["datimcode"], pbs[nc]), fp))
+            st = st.fillna(key(cdr[lc["datim"]], cdr[lc[ec]]).map(m))
+    print(f"  NDR print status joined to the EMR line list for {st.notna().mean():.0%} of clients")
+    return cdr.assign(bio_fp_status=st.fillna(""))
+
+
 def read_flat(eng, pg: dict, lc: dict) -> pd.DataFrame:
     """Read linelist_flat: the latest period, plus any earlier period not yet saved as a dated copy
     (each week is read once, then kept in data/history/sources)."""
@@ -887,6 +906,7 @@ def cmd_run():
         m_ = re.search(r"(\d{4}-\d{2}-\d{2})", Path(pbs_path).name)
         fdate = dt.date.fromisoformat(m_.group(1)) if m_ else dt.date.fromtimestamp(Path(pbs_path).stat().st_mtime)
         cdr_linelist, linelist = linelist, ndr_linelist(pbs, linelist, cfg, fdate)
+        cdr_linelist = ndr_print_status(cdr_linelist, pbs, cfg)
     hist_start = (pd.Timestamp(str(cfg["fy_start"])) - pd.DateOffset(months=cfg["reporting"].get("history_months", 12))).date()
     quarter_linelist(cfg)                       # quarter-end line lists in the inbox -> dated copies
     past = load_sources(hist_start)

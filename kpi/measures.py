@@ -582,8 +582,26 @@ def _long_by(d: pd.DataFrame, mask: pd.Series, col: pd.Series, measure: str) -> 
     return g.rename("value").reset_index().assign(measure=measure, period="")[DIMS + ["measure", "value"]]
 
 
+# Treatment cohorts for the page switch (All active / Unique / Enrolled only, agreed 2026-11-26): stock measures
+# recomputed with "on treatment" narrowed to the cohort, saved as <measure>~<cohort>. Enrolled = the NDR's
+# FingerPrintStatus ENROLLED (strict: under-15s without prints are not added). Flows (TX_NEW, IIT, the waterfall)
+# and past snapshots keep the default cohort.
+COHORTS = ("all", "unq", "enr")
+COHORT_MEAS = re.compile(r"^(?:tx_curr_emr|emr_active|vl_|vlr_|vls_|mmd|ahde_|dsd_|tbst_|otz_enrolled|otz_vl_|otz_transitioned|tx_reg)")
+
+
+def cohort_mask(d: pd.DataFrame, c: dict, active_all: pd.Series, cohort: str) -> pd.Series:
+    """Active clients in a cohort: all, unique (valid print or under 15) or enrolled (NDR print status ENROLLED)."""
+    if cohort == "all":
+        return active_all
+    if cohort == "unq":
+        return emr_unique(d, c, active_all)
+    fp = _norm(d["bio_fp_status"]) if "bio_fp_status" in d else pd.Series("", index=d.index)
+    return active_all & fp.eq("enrolled")
+
+
 def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date | None = None,
-                  today: dt.date | None = None) -> pd.DataFrame:
+                  today: dt.date | None = None, cohort: str | None = None) -> pd.DataFrame:
     d = ll.rename(columns={c["state"]: "state", c["lga"]: "lga", c["facility"]: "facility"}).copy()
     d["sex"] = norm_sex(d[c["sex"]]) if c.get("sex") in d else "U"
     d["age"] = age_bands(d[c["age"]]) if c.get("age") in d else UNKNOWN_AGE
@@ -603,6 +621,8 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     # every client the EMR marks Active. Previous quarter: same rule on last quarter's status.
     active_all = status.isin(STATUS["active"])
     active = emr_unique(d, c, active_all)
+    if cohort:                 # the page switch: every "on treatment" base becomes the cohort
+        active = active_all = cohort_mask(d, c, active_all, cohort)
     prev_active = emr_unique(d, c, prev.isin(STATUS["active"]))
     if "prev_unique" in d:      # NDR: the previous quarter's reported TX_CURR (unique flag in its official file)
         prev_active = _norm(d["prev_unique"]).eq("yes")
@@ -780,7 +800,7 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         if len(g):
             out.append(g.rename("value").reset_index().assign(measure=k, mod="", period="")[DIMS + ["measure", "value"]])
     # ---- biometrics of new clients and of clients seen at the facility (NDR PBS fields, joined in run_pipeline)
-    if "bio_baseline" in d:
+    if "bio_baseline" in d and not cohort:
         out.append(_bio_flow(d, c, start, ti, pickup, h0, p))
     for key, meas in (("regimen_line", "tx_regline"), ("regimen", "tx_regimen")):
         if c.get(key) in d:
@@ -790,7 +810,11 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     if c.get("regimen_line") in d:
         out.append(_long_by(d, vl_res, d[c["regimen_line"]], "vlr_regline"))
         out.append(_long_by(d, vl_res & (vl < 1000), d[c["regimen_line"]], "vls_regline"))
-    return pd.concat(out, ignore_index=True)
+    res = pd.concat(out, ignore_index=True)
+    if cohort:                 # current stock only, renamed <measure>~<cohort>
+        res = res[(res["period"].fillna("") == "") & res["measure"].str.match(COHORT_MEAS)]
+        res = res.assign(measure=res["measure"] + "~" + cohort)
+    return res
 
 
 def _bio_flow(d: pd.DataFrame, c: dict, start, ti, pickup, h0: dt.date, p: Period) -> pd.DataFrame:
@@ -1113,7 +1137,7 @@ def _pbs_flags(d: pd.DataFrame, c: dict) -> dict[str, pd.Series]:
                 valid=_col(d, c, "valid") == "yes")
 
 
-def pbs_cube(pbs: pd.DataFrame, c: dict) -> pd.DataFrame:
+def pbs_cube(pbs: pd.DataFrame, c: dict, cohort: str | None = None) -> pd.DataFrame:
     """Biometrics cube. Card definitions reproduce the NDR PBS portal
     (TX_CURR, Captured, Valid, Invalid, Duplicate, Unique = Valid - Duplicate)."""
     if pbs.empty:
@@ -1125,6 +1149,11 @@ def pbs_cube(pbs: pd.DataFrame, c: dict) -> pd.DataFrame:
     d["age"] = age_bands(d[c["age"]]) if c.get("age") in d else UNKNOWN_AGE
     x = _pbs_flags(d, c)
     active, base, rec, mo, fp = x["active"], x["base"], x["rec"], x["mo"], x["fp"]
+    u15c = (pd.to_numeric(d[c["age"]], errors="coerce") < 15) if c.get("age") in d else pd.Series(False, index=d.index)
+    if cohort == "unq":        # TX_CURR_Unique: under 15, enrolled or ABIS duplicate kept (as ndr_tx_curr below)
+        active = active & (u15c | (((fp == "enrolled") | (fp == "duplicate")) & (x["dt"] != "duplicate")))
+    elif cohort == "enr":
+        active = active & (fp == "enrolled")
     masks = {
         "pbs_active": active,
         "pbs_baseline": active & base,                      # portal "Captured"/"Processed"
@@ -1191,7 +1220,14 @@ def pbs_cube(pbs: pd.DataFrame, c: dict) -> pd.DataFrame:
                 masks["tier4_dup_abis"] = cats["bio_dup_supp"] & ~twin   # matched elsewhere in the national ABIS gallery
             masks["tier5_invalid"] = cats["bio_invalid"]                 # recapture
             masks["tier5_noprint"] = cats["bio_noprint"]                 # baseline capture or exemption
-    return _long(d, masks)
+        if cohort:             # on the page switch, TX_CURR is the cohort itself
+            masks["ndr_tx_curr"] = active
+            for k in [k for k in masks if k.startswith("ndr_excl")]:
+                masks[k] = masks[k] & False
+    out = _long(d, masks)
+    if cohort:
+        out = out.assign(measure=out["measure"] + "~" + cohort)
+    return out
 
 
 def _client_key(datim: pd.Series, art_no: pd.Series) -> pd.Series:

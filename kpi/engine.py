@@ -11,7 +11,7 @@ import yaml
 
 from .measures import (AGE_BANDS, APPT_COLS, VL_COLS, vl_clients, TXN_COLS, txn_clients, VL_GAP_COLS, vl_gap_clients, EAC_COLS, eac_clients, _datetimes, CONC_CATS, CONC_COLS, DIMS, PBS_FOLLOWUP, UNKNOWN_AGE, Period,
                        appointment_clients, concurrence, dhis_cube, facility_key, linelist_backfill, ndr_waterfall,
-                       linelist_cube, week_ends, pbs_backfill, pbs_clients, pbs_cube, pbs_from_linelist)
+                       linelist_cube, week_ends, pbs_backfill, pbs_clients, pbs_cube, pbs_from_linelist, COHORTS)
 from .naomi import AGE5
 
 SPEED = "ECEWS SPEED"
@@ -451,6 +451,9 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
     parts = [dcube,
              attach_master(linelist_cube(linelist, cols["linelist"], p_ll, history_start, today=as_of), master, "linelist", dq),
              attach_master(pbs_cube(pbs_src, pc), master, "pbs", dq)]
+    # the page switch (All active / Unique / Enrolled only): current stock per cohort, <measure>~<cohort>
+    coh_ll = pd.concat([linelist_cube(linelist, cols["linelist"], p_ll, history_start, today=as_of, cohort=k) for k in COHORTS], ignore_index=True)
+    coh_pb = pd.concat([pbs_cube(pbs_src, pc, cohort=k) for k in COHORTS], ignore_index=True) if pbs_source == "ndr" else pd.DataFrame()
     # treatment from the NDR: the CDR line list still gives the EMR's own TX_CURR (same unique rule), so
     # EMR and NDR can be compared - tx_curr_cdr / emr_active_cdr, as of the CDR line list date
     cdr = manual.get("cdr_linelist")
@@ -463,9 +466,14 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
         from_emr = x["measure"].isin(["tx_new_all"] + VL_EMR)
         parts[1] = parts[1][~parts[1]["measure"].isin(["tx_new_all"] + VL_EMR)]
         parts.append(attach_master(x[from_emr], master, "cdr_linelist", dq))
+        is_vl = lambda y: y["measure"].str.split("~").str[0].isin(VL_EMR)
+        coh_ll = coh_ll[~is_vl(coh_ll)]
+        xc = pd.concat([linelist_cube(cdr, cols["linelist"], Period(as_of=cd, fy_start=p.fy_start), None, today=cd, cohort=k) for k in COHORTS], ignore_index=True)
+        parts.append(attach_master(xc[is_vl(xc)], master, "cdr_linelist", {}))
         x = x[(x["period"].fillna("") == "") & (x["mod"].fillna("") == "") & x["measure"].isin(["tx_curr_emr", "emr_active"])]
         parts.append(attach_master(x.assign(measure=x["measure"].map({"tx_curr_emr": "tx_curr_cdr", "emr_active": "emr_active_cdr"})),
                                    master, "cdr_linelist", dq))
+    parts += [attach_master(coh_ll, master, "linelist", {})] + ([attach_master(coh_pb, master, "pbs", {})] if len(coh_pb) else [])
     # Past periods: stock figures from the saved dated copies (one per month), period "SL<date>" /
     # "SN<date>". Quarter-relative flows (waterfall, appointments) come from today's files only.
     ndr_date = None
@@ -559,7 +567,9 @@ def run_engine(settings: dict, registry_path: str, merged: pd.DataFrame, month_s
     # when the NDR line list is loaded; otherwise the EMR linelist count. tx_curr_emr stays alongside.
     tx_src = "ndr_tx_curr" if pbs_source == "ndr" and (cube["measure"] == "ndr_tx_curr").any() else "tx_curr_emr"
     head = cube[cube["measure"] == tx_src].assign(measure="tx_curr")
-    cube = pd.concat([cube[cube["measure"] != "ndr_tx_curr"], head], ignore_index=True)
+    hc = cube[cube["measure"].str.startswith(tx_src + "~")]
+    head = pd.concat([head, hc.assign(measure="tx_curr~" + hc["measure"].str.split("~").str[1])], ignore_index=True)
+    cube = pd.concat([cube[~cube["measure"].str.match(r"^ndr_tx_curr(?:~|$)")], head], ignore_index=True)
     tx_curr_source = "NDR" if tx_src == "ndr_tx_curr" else "EMR"
 
     # State-level inputs that cannot be placed at a facility

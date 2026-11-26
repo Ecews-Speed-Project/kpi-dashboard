@@ -636,18 +636,38 @@ const keyFns = {
   state:r=>FAC[rf[r]].state, lga:r=>FAC[rf[r]].lga, facility:r=>FAC[rf[r]].facility,
   sex:r=>DM.sex[rs[r]], age:r=>ageOf(AGE[ra[r]]), agegrp:r=>LT15.has(AGE[ra[r]])?"<15":AGE[ra[r]]==="Unknown"?"Unknown":"15+", paed:r=>LT20.has(AGE[ra[r]])?"<20":AGE[ra[r]]==="Unknown"?"Unknown":"20+",
   mod:r=>DM.mod[rm[r]], month:r=>PM[rt[r]].month, agesex:r=>ageOf(AGE[ra[r]])+"|"+DM.sex[rs[r]], week:r=>PM[rt[r]].wk, facweek:r=>rf[r]+"|"+PM[rt[r]].wk};
+/* Treatment cohort switch (Current on treatment, Viral load, Biometrics; agreed 2026-11-26): All active / Unique
+   (valid print or under 15) / Enrolled only (NDR FingerPrintStatus ENROLLED). The pipeline saves current stock
+   per cohort as <measure>~<cohort>; agg() reads the chosen cohort's rows under the plain name. Each page keeps
+   its usual base as its default; flows (TX_NEW, IIT, the waterfall) and past snapshots are not switched. */
+const COHL = {all:"All active", unq:"Unique", enr:"Enrolled only"};
+const COH_DEF = {art:"unq", vl:"all", pbs:"unq"};
+let COH = null, COHM = null, COHK = "";
+const COHP = Uint8Array.from(PM, p=>p.kind?0:1);            // current stock rows (the only ones with cohort copies)
+const cohOf = () => COH_DEF[page] ? (COH||COH_DEF[page]) : null;
+const cohHas = c => MEAS.some(m=>m.endsWith("~"+c));
+function cohMap(){ const c=cohOf(), want = c && c!==COH_DEF[page] && cohHas(c) ? c : null, key=String(want);
+  if(COHK===key && COHM) return COHM; COHK=key;
+  const has = new Set(want ? MEAS.filter(m=>m.endsWith("~"+want)).map(m=>m.slice(0,-want.length-1)) : []);
+  // name to count the row under, or null to skip it; base rows of a switched measure are skipped on current stock only (2 = check period)
+  COHM = MEAS.map(m=>{ const i=m.indexOf("~"); if(i>=0) return m.slice(i+1)===want ? m.slice(0,i) : null; return has.has(m) ? 2 : m; });
+  return COHM; }
+function cohBar(){ const c=cohOf(); if(!c || !cohHas("enr")) return "";
+  return `<div class="dimbar coh"><span class="eyebrow">On treatment</span><span class="seg">${Object.entries(COHL).map(([k,l])=>`<button data-coh="${k}" aria-pressed="${c===k}">${l}${k===COH_DEF[page]?" (default)":""}</button>`).join("")}</span>
+   <span class="drillnote" style="margin:0">${{all:"Every client active on treatment.",unq:"Active with a valid unique print, or under 15 (TX_CURR_Unique).",enr:"Active with NDR fingerprint status ENROLLED only (under-15s without prints are not added)."}[c]}${STOCK?"":" The switch applies to the latest data only: past periods show the page's usual base."} Flows (TX_NEW, IIT, the waterfall) and trends are not switched.</span></div>`; }
 /** Sum every measure for rows passing the filter. months: "q" = selected period | "all" */
 function agg(f=F, {by=null, months="q"}={}){
   const fp = new Uint8Array(FAC.length); FAC.forEach((_,i)=>fp[i]=facPass(i,f)?1:0);
   const mset = months==="all" ? null : (WIN || (WIN = windowSet()));
   const sexI = f.sex ? DM.sex.indexOf(f.sex) : -1;
   const ageOk = AGE.map((_,a)=>agePass(a,f.age));
-  const out = new Map(); const kf = by ? keyFns[by] : null;
+  const out = new Map(); const kf = by ? keyFns[by] : null, CM = cohMap();
   for (let r=0;r<N;r++){
     if(!fp[rf[r]]) continue; if(sexI>=0&&rs[r]!==sexI) continue; if(!ageOk[ra[r]]) continue; if(mset&&(!mset.has(rt[r])||SKIPM[rk[r]])) continue;
     if(!mset && TRW[rt[r]]) continue;                 // trend-only weeks: never in an all-months total
     const k = kf?kf(r):"_"; let o=out.get(k); if(!o){o={};out.set(k,o);}
-    const m=MEAS[rk[r]]; o[m]=(o[m]||0)+rv[r];
+    let m=CM[rk[r]]; if(m===null) continue; if(m===2){ if(COHP[rt[r]]) continue; m=MEAS[rk[r]]; }
+    o[m]=(o[m]||0)+rv[r];
   }
   if(!by) return withExtras(out.get("_")||{}, f);
   return out;
@@ -931,7 +951,7 @@ const RV = (a,b) => v => div(v[a]??0, v[b]);
 
 
 /* ---------- TX_CURR source label ---------- */
-const TXL = () => D.meta.tx_curr_source==="NDR" ? "TX_CURR_Unique (NDR)" : "TX_CURR";
+const TXL = () => { const c=cohOf(); return c&&c!=="unq"&&cohHas(c) ? `TX_CURR (${COHL[c]})` : D.meta.tx_curr_source==="NDR" ? "TX_CURR_Unique (NDR)" : "TX_CURR"; };
 const TXTIP = () => D.meta.tx_curr_source==="NDR" ? "TX_CURR_Unique, as the NDR / PHIS3 summary: enrolled (valid unique print) + ABIS duplicate kept + every active client under 15 whatever the print status. Adjudication waiting, duplicates, invalid prints and clients with no baseline print are not counted." : "";
 
 /* ---------- KPI summary: achievement in the selected period (one section; replaces the old
@@ -2328,7 +2348,7 @@ function txcurrReflection(v){
   if(!v.ndr_excl&&!v.pbs_active) return "";
   const st=STATES.filter(x=>!F.state||x===F.state).map(s=>[esc(s),agg({...F,state:s,lga:"",fac:""})]).concat([[esc(F.state?filterText():SPEED),v,1]]);
   return `<section class="c3d">${secH("TX_CURR reflection — active records vs unique TX_CURR","Why active NDR records are not in TX_CURR (valid unique print or under 15)")}
-   <div class="kpis">${kpi(n(v.pbs_active),"All on treatment (NDR)","CurrentStatus28 active")}${kpi(n(v.tx_curr),"TX_CURR_Unique (NDR)")}${kpi(n(v.ndr_excl),"Excluded",`${pct(div(v.ndr_excl,v.pbs_active))} of active records`)}
+   <div class="kpis">${kpi(n(v.pbs_active),"All on treatment (NDR)","CurrentStatus28 active")}${kpi(n(v.tx_curr),TXL())}${kpi(n(v.ndr_excl),"Excluded",`${pct(div(v.ndr_excl,v.pbs_active))} of active records`)}
     ${kpi(n(v.ndr_excl_adj),"Adjudication waiting",`${pct(div(v.ndr_excl_adj,v.ndr_excl))} of excluded`)}${kpi(n(v.ndr_excl_dup),"Duplicate (ABIS)",`${pct(div(v.ndr_excl_dup,v.ndr_excl))} of excluded`)}
     ${kpi(n(v.ndr_excl_nocap),"No print captured",`${pct(div(v.ndr_excl_nocap,v.ndr_excl))} of excluded`)}${kpi(n(v.ndr_excl_other),"Invalid prints / other",`${pct(div(v.ndr_excl_other,v.ndr_excl))} of excluded`)}${kpi(n(v.ndr_excl_refill),"Excluded but still refilling",`pickup in the last 3 months · ${pct(div(v.ndr_excl_refill,v.ndr_excl))}`)}</div>
    <div class="tw" style="margin-top:14px"><table><thead><tr><th>State</th><th class="n">NDR active</th><th class="n">Unique TX_CURR</th><th class="n">Excluded</th><th class="n">Exclusion rate</th><th class="n">Adjudication waiting</th><th class="n">Duplicate (ABIS)</th><th class="n">No print captured</th><th class="n">Invalid / other</th><th class="n">Still refilling</th></tr></thead><tbody>
@@ -3242,7 +3262,7 @@ function pbsCsv(rows){
 const BIOX = [["pbs_adjudication","Adjudication waiting","var(--bar-critical)"],["pbs_nocap","Yet to capture","var(--s2)"],["pbs_invalid","Invalid prints","#8A5FB8"],["pbs_duplicate","Duplicate","var(--s3)"]];
 const bx = (x,k) => k==="pbs_nocap" ? (x.pbs_active||0)-(x.pbs_baseline||0) : k==="bio_u15back" ? (x.tx_curr||0)-BIOX.reduce((a,[q])=>a-bx(x,q),x.pbs_active||0) : (x[k]||0);
 function bioCards(v){ const g=k=>bx(v,k), act=g("pbs_active"), uq=g("tx_curr");
-  return `${kpi(n(act),"All on treatment (NDR)","active clients")}${kpi(n(uq),"TX_CURR_Unique","counted by the NDR",rateStatus(div(uq,act),.95))}${kpi(pct(div(uq,act)),"Unique share","ref. 95%",rateStatus(div(uq,act),.95))}
+  return `${kpi(n(act),"All on treatment (NDR)","active clients")}${kpi(n(uq),TXL().replace(" (NDR)",""),"counted by the NDR",rateStatus(div(uq,act),.95))}${kpi(pct(div(uq,act)),"Unique share","ref. 95%",rateStatus(div(uq,act),.95))}
    ${kpi(n(act-uq),"Gap to close","on treatment but not counted")}${kpi(n(g("pbs_adjudication")),"Adjudication waiting","NDR status: adjudication waiting · cause not yet known")}${kpi(n(g("pbs_nocap")),"Yet to capture","no baseline print · capture needed")}
    ${kpi(n(g("pbs_invalid")),"Invalid prints","NO_VALID_DATA · recapture")}${kpi(n(g("pbs_duplicate")),"Duplicate","duplicate type · ABIS match")}${kpi(n(g("bio_u15back")),"Under 15, counted anyway","in the groups above, but every under-15 counts")}`; }
 function bioWaterfall(v){ const g=k=>bx(v,k);
@@ -3881,7 +3901,7 @@ function render(){
       ? `<section class="c3d empty"><b>Part of this page could not be loaded.</b> Check the connection and <a href="javascript:location.reload()">refresh</a>.</section>`
       : LOADING);
     return; }
-  document.getElementById("main").innerHTML=hello+fn();
+  document.getElementById("main").innerHTML=hello+cohBar()+fn();
   afterRender();
   document.getElementById("foot").textContent=`Generated ${m.generated_at.replace("T"," ")} from DHIS2 (weekly + monthly, merged per facility), the central repository linelist, the PBS extract, FY27 targets and the Naomi PLHIV estimate. Counts are scored on pace (≥75% green, 50–74% amber, below 50% red); rates against the target itself (met = green, within ${Math.round((RAG.rate_warning_gap??.05)*100)} points = amber).`;
   try{localStorage.setItem("speed.filters",JSON.stringify(F));
@@ -3944,6 +3964,7 @@ document.addEventListener("click", e=>{
   if(e.target.closest("#cl-csv-all")){ callCsv(callRows(), F.fac||F.lga||F.state||"SPEED"); return; }
   const vc=e.target.closest("[data-vcat]"); if(vc){const [k,c]=vc.dataset.vcat.split("|"); vst(k).cat=c; render(); return;}
   const et=e.target.closest("[data-ethr]"); if(et){ES.thr=+et.dataset.ethr; render(); return;}
+  const ch=e.target.closest("[data-coh]"); if(ch){COH=ch.dataset.coh; EMRF=null; render(); return;}
   const ea=e.target.closest("[data-eact]"); if(ea){ES.active=ea.dataset.eact==="1"; render(); return;}
   const ek=e.target.closest("[data-ecat]"); if(ek){ES.cat=+ek.dataset.ecat; render(); return;}
   if(e.target.closest("#eac-csv")){ const q=ES.q.trim().toLowerCase(); eacCsv(eacList().filter(r=>ECATS[ES.cat][1](r)&&(!q||EC.cols.some(c=>String(ecv(r,c)).toLowerCase().includes(q))))); return; }
