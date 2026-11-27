@@ -594,6 +594,10 @@ def cohort_mask(d: pd.DataFrame, c: dict, active_all: pd.Series, cohort: str) ->
     """Active clients in a cohort: all, unique (valid print or under 15) or enrolled (NDR print status ENROLLED)."""
     if cohort == "all":
         return active_all
+    if "ndr_cohort" in d:      # the EMR line list with the NDR joined (run_pipeline.ndr_print_status): the cohort is the
+        # NDR's own (NDR status Active and its print rule), whatever the EMR status - the team's method: NDR clients
+        # looked up in the EMR line list for their VL
+        return d["ndr_cohort"].astype(str).str.contains(cohort, regex=False)
     if cohort == "unq":
         return emr_unique(d, c, active_all)
     fp = _norm(d["bio_fp_status"]) if "bio_fp_status" in d else pd.Series("", index=d.index)
@@ -621,8 +625,10 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     # every client the EMR marks Active. Previous quarter: same rule on last quarter's status.
     active_all = status.isin(STATUS["active"])
     active = emr_unique(d, c, active_all)
+    active_u = active          # the default unique cohort (TX_NEW unique), whatever the page switch
+    coh = cohort_mask(d, c, active_all, cohort) if cohort else None
     if cohort:                 # the page switch: every "on treatment" base becomes the cohort
-        active = active_all = cohort_mask(d, c, active_all, cohort)
+        active = active_all = coh
     prev_active = emr_unique(d, c, prev.isin(STATUS["active"]))
     if "prev_unique" in d:      # NDR: the previous quarter's reported TX_CURR (unique flag in its official file)
         prev_active = _norm(d["prev_unique"]).eq("yes")
@@ -639,7 +645,7 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
     # TX_NEW is the plain count (agreed 2026-11-16): every new ART start in the period, transfer-ins removed,
     # no print or status filter. The unique count (also in the unique TX_CURR cohort: active with a valid
     # print, or under 15, as the NDR quarter summary) is kept as tx_new_unique, and the waterfall uses it
-    uniq = active
+    uniq = active_u
     if c.get("new_unique") in d:      # a quarter file: the NDR's own unique flag (q<N>_algo 1-4)
         uniq = _norm(d[c["new_unique"]]).eq("yes")
 
@@ -811,8 +817,16 @@ def linelist_cube(ll: pd.DataFrame, c: dict, p: Period, history_start: dt.date |
         out.append(_long_by(d, vl_res, d[c["regimen_line"]], "vlr_regline"))
         out.append(_long_by(d, vl_res & (vl < 1000), d[c["regimen_line"]], "vls_regline"))
     res = pd.concat(out, ignore_index=True)
-    if cohort:                 # current stock only, renamed <measure>~<cohort>
-        res = res[(res["period"].fillna("") == "") & res["measure"].str.match(COHORT_MEAS)]
+    if cohort:                 # current stock, plus TX_NEW in the cohort (dated), renamed <measure>~<cohort>
+        # TX_NEW: All active = every new start (the total), Unique = the unique count, Enrolled = new starts
+        # active with NDR print status ENROLLED
+        txn = {"all": None, "unq": "tx_new_unique", "enr": None}[cohort]
+        if cohort == "enr":
+            res = pd.concat([res, _long(d, {"tx_new_enr": masks["tx_new_q"] & coh}, dated={"tx_new_enr": pd.Series(start, index=d.index)})], ignore_index=True)
+            txn = "tx_new_enr"
+        flow = res["measure"].eq(txn or "tx_new_q")
+        res = pd.concat([res[(res["period"].fillna("") == "") & res["measure"].str.match(COHORT_MEAS)],
+                         res[flow].assign(measure="tx_new_q")], ignore_index=True)
         res = res.assign(measure=res["measure"] + "~" + cohort)
     return res
 

@@ -639,22 +639,25 @@ const keyFns = {
 /* Treatment cohort switch (Current on treatment, Viral load, Biometrics; agreed 2026-11-26): All active / Unique
    (valid print or under 15) / Enrolled only (NDR FingerPrintStatus ENROLLED). The pipeline saves current stock
    per cohort as <measure>~<cohort>; agg() reads the chosen cohort's rows under the plain name. Each page keeps
-   its usual base as its default; flows (TX_NEW, IIT, the waterfall) and past snapshots are not switched. */
+   its usual base as its default; TX_NEW follows the switch (COHF); IIT, the waterfall and past snapshots are not. */
 const COHL = {all:"All active", unq:"Unique", enr:"Enrolled only"};
 const COH_DEF = {art:"unq", vl:"all", pbs:"unq"};
 let COH = null, COHM = null, COHK = "";
 const COHP = Uint8Array.from(PM, p=>p.kind?0:1);            // current stock rows (the only ones with cohort copies)
 const cohOf = () => COH_DEF[page] ? (COH||COH_DEF[page]) : null;
 const cohHas = c => MEAS.some(m=>m.endsWith("~"+c));
-function cohMap(){ const c=cohOf(), want = c && c!==COH_DEF[page] && cohHas(c) ? c : null, key=String(want);
+const COHF = {tx_new_q:"tx_new_coh"};   // flows in the chosen group, any choice: read under their own name (TX_NEW of the group beside total / unique)
+function cohMap(){ const c=cohOf(), ok = c && cohHas(c), key=String(ok?c:null)+"|"+(COH_DEF[page]||"");
   if(COHK===key && COHM) return COHM; COHK=key;
-  const has = new Set(want ? MEAS.filter(m=>m.endsWith("~"+want)).map(m=>m.slice(0,-want.length-1)) : []);
-  // name to count the row under, or null to skip it; base rows of a switched measure are skipped on current stock only (2 = check period)
-  COHM = MEAS.map(m=>{ const i=m.indexOf("~"); if(i>=0) return m.slice(i+1)===want ? m.slice(0,i) : null; return has.has(m) ? 2 : m; });
+  const want = c && c!==COH_DEF[page] && ok ? c : null, has = new Set(want ? MEAS.filter(m=>m.endsWith("~"+want)).map(m=>m.slice(0,-want.length-1)) : []);
+  // name to count the row under, or null to skip it; base rows of a switched stock measure are skipped on current stock only (2 = check period)
+  COHM = MEAS.map(m=>{ const i=m.indexOf("~"), b=i>=0?m.slice(0,i):m;
+    if(i>=0) return COHF[b] ? (ok && m.slice(i+1)===c ? COHF[b] : null) : m.slice(i+1)===want ? b : null;
+    return has.has(m) && !COHF[m] ? 2 : m; });
   return COHM; }
 function cohBar(){ const c=cohOf(); if(!c || !cohHas("enr")) return "";
   return `<div class="dimbar coh"><span class="eyebrow">On treatment</span><span class="seg">${Object.entries(COHL).map(([k,l])=>`<button data-coh="${k}" aria-pressed="${c===k}">${l}${k===COH_DEF[page]?" (default)":""}</button>`).join("")}</span>
-   <span class="drillnote" style="margin:0">${{all:"Every client active on treatment.",unq:"Active with a valid unique print, or under 15 (TX_CURR_Unique).",enr:"Active with NDR fingerprint status ENROLLED only (under-15s without prints are not added)."}[c]}${STOCK?"":" The switch applies to the latest data only: past periods show the page's usual base."} Flows (TX_NEW, IIT, the waterfall) and trends are not switched.</span></div>`; }
+   <span class="drillnote" style="margin:0">${{all:"Every client active on treatment.",unq:"Active with a valid unique print, or under 15 (TX_CURR_Unique).",enr:"Active with NDR fingerprint status ENROLLED only (under-15s without prints are not added)."}[c]}${page==="vl"&&c!=="all"?" Viral load: the NDR clients in this group, looked up in the EMR line list for their results.":""}${STOCK?"":" The switch applies to the latest data only: past periods show the page's usual base."}${page==="pbs"?" TX_NEW of the group is shown in the TX_NEW cascade beside total and unique (All active = every new start, Unique = unique, Enrolled only = new clients active with print status ENROLLED).":""} IIT, the waterfall and trends are not switched.</span></div>`; }
 /** Sum every measure for rows passing the filter. months: "q" = selected period | "all" */
 function agg(f=F, {by=null, months="q"}={}){
   const fp = new Uint8Array(FAC.length); FAC.forEach((_,i)=>fp[i]=facPass(i,f)?1:0);
@@ -1851,6 +1854,7 @@ function overviewPage(){
    Print fields are from the NDR file (as of its date); TX_NEW total is the plain count; non-unique = total − unique. */
 function txNewCascade(v){
   const g=k=>v[k]||0, pos=g("hts_tst_pos"), tn=g("tx_new_q"), tu=g("tx_new_unique"), gc=g("pmtct_gc7");
+  const cc=cohOf(), tc=cc&&v.tx_new_coh!=null ? g("tx_new_coh") : null, cl=tc==null?"":`TX_NEW (${COHL[cc]})`;
   const has=v.txn_cap!=null||v.txn_nocap!=null;
   const sh=(a,b)=>b?` · ${pct(div(a,b),0)}`:"";
   const bars=[
@@ -1863,11 +1867,13 @@ function txNewCascade(v){
     {l:"  print issue", v:g("txn_issue"), c:"var(--bar-critical)", txt:`<b>${n(g("txn_issue"))}</b> · invalid ${n(g("txn_iss_inv"))} · adjudication ${n(g("txn_iss_adj"))} · duplicate ${n(g("txn_iss_dup"))}`}]:[]),
     {l:"TX_NEW (unique)", v:tu, c:"var(--s3)", txt:`<b>${n(tu)}</b>${sh(tu,tn)} of TX_NEW${pos?` · linkage ${pct(div(tu,pos))}`:""}`},
     {l:"TX_NEW (non-unique)", v:Math.max(0,tn-tu), c:"var(--bar-warning)", txt:`<b>${n(Math.max(0,tn-tu))}</b>${sh(Math.max(0,tn-tu),tn)} of TX_NEW · total − unique`},
-    {l:"of TX_NEW: GC7", v:gc, c:"var(--s2)", txt:`<b>${n(gc)}</b> GC7 women (tested in the community)`}];
+    {l:"of TX_NEW: GC7", v:gc, c:"var(--s2)", txt:`<b>${n(gc)}</b> GC7 women (tested in the community)`},
+    ...(tc!=null?[{l:cl, v:tc, c:"var(--s1)", txt:`<b>${n(tc)}</b>${sh(tc,tn)} of TX_NEW${pos?` · linkage ${pct(div(tc,pos))}`:""} · the group chosen above`}]:[])];
   const L=(a)=>pct(div(Math.max(0,a),pos));
   const cards=`<div class="kpis" style="margin-top:12px">${kpi2("Linkage with GC7",[[L(tn),"Total"],[L(tu),"Unique"]],"TX_NEW ÷ HTS_TST_POS")}
      ${kpi2("Linkage without GC7",[[L(tn-gc),"Total"],[L(tu-gc),"Unique"]],`(TX_NEW − GC7 ${n(gc)}) ÷ HTS_TST_POS`)}
-     ${has?kpi(pct(div(g("txn_cap"),tn)),"New clients with prints","captured ÷ TX_NEW","")+kpi(n(Math.max(0,tn-tu)),"TX_NEW non-unique","total − unique"):""}</div>`;
+     ${has?kpi(pct(div(g("txn_cap"),tn)),"New clients with prints","captured ÷ TX_NEW","")+kpi(n(Math.max(0,tn-tu)),"TX_NEW non-unique","total − unique"):""}
+     ${tc!=null?kpi(n(tc),cl,`linkage ${pct(div(tc,pos))} · ${pct(div(tc,tn),0)} of total`,""):""}</div>`;
   return `<section class="c3d">${secH("TX_NEW cascade","Positives to new on ART, prints captured or not, total, unique and non-unique, linkage and GC7 · "+esc(P.label))}
     ${hbars(bars,{max:Math.max(pos,tn,1)})}${cards}
     <div style="height:26px"></div>${secH("TX_NEW cascade breakdown","Click a state, then an LGA, to reach facilities · or switch to LGA, facility, sex or age · sort any column")}
@@ -1875,7 +1881,7 @@ function txNewCascade(v){
     ${pivot("txn",[C("HTS_TST_POS",V("hts_tst_pos"),0,0,"hts_tst_pos"),C("TX_NEW total",V("tx_new_q")),
       ...(has?[C("Prints captured",V("txn_cap")),C("Captured %",RV("txn_cap","tx_new_q"),1,x=>rateStatus(div(x.txn_cap||0,x.tx_new_q),.95)),C("No prints",V("txn_nocap")),
       C("Valid unique print",V("txn_valid")),C("Print issue",V("txn_issue"))]:[]),
-      C("TX_NEW unique",V("tx_new_unique")),C("TX_NEW non-unique",x=>Math.max(0,(x.tx_new_q||0)-(x.tx_new_unique||0))),C("GC7",V("pmtct_gc7")),
+      C("TX_NEW unique",V("tx_new_unique")),C("TX_NEW non-unique",x=>Math.max(0,(x.tx_new_q||0)-(x.tx_new_unique||0))),...(tc!=null?[C(cl,V("tx_new_coh"))]:[]),C("GC7",V("pmtct_gc7")),
       C("Linkage with GC7, total",RV("tx_new_q","hts_tst_pos"),1),C("Linkage with GC7, unique",RV("tx_new_unique","hts_tst_pos"),1),
       C("Linkage without GC7, total",x=>div(Math.max(0,(x.tx_new_q||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1),
       C("Linkage without GC7, unique",x=>div(Math.max(0,(x.tx_new_unique||0)-(x.pmtct_gc7||0)),x.hts_tst_pos),1)],["org","sex","age"],null,{csv:"tx_new_cascade"})}

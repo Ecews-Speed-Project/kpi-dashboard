@@ -392,13 +392,35 @@ def ndr_print_status(cdr: pd.DataFrame, pbs: pd.DataFrame, cfg: dict) -> pd.Data
         a = no.astype(str).str.upper().str.replace(r"[^A-Z0-9]", "", regex=True).str.replace(r"\d+", lambda m: str(int(m.group())), regex=True)
         return datim.astype(str).str.strip().str.upper() + "|" + a
     fp = pbs["fingerprintstatus"].astype(str)
+    # the NDR cohorts for the page switch: unq = TX_CURR_Unique (Active; under 15, or ENROLLED / DUPLICATE not
+    # suppressed as a duplicate), enr = Active and ENROLLED
+    n = lambda k: pbs[k].astype(str).str.strip().str.lower() if k in pbs else pd.Series("", index=pbs.index)
+    act, f_, dt_ = n("currentstatus28").eq("active"), n("fingerprintstatus"), n("duplicate_type")
+    u15 = pd.to_numeric(pbs["currentage"], errors="coerce").lt(15) if "currentage" in pbs else False
+    unq = act & (u15 | (f_.isin(["enrolled", "duplicate"]) & dt_.ne("duplicate")))
+    coh = (unq.map({True: "unq", False: ""}) + " " + (act & f_.eq("enrolled")).map({True: "enr", False: ""})).str.strip()
     st = pd.Series(pd.NA, index=cdr.index, dtype=object)
+    ch = pd.Series("", index=cdr.index, dtype=object)
+    import numpy as np
+    used = np.zeros(len(pbs), bool)                    # each NDR client counts on one EMR row at most
+    done = pd.Series(False, index=cdr.index)
+    blank = lambda k: k.str.split("|").str[1].isin(["", "NAN", "NONE", "NULL", "0"])
     for ec, nc in (("art_no", "patientartnumber"), ("hosp_no", "hospitalnumber")):
         if lc.get(ec) in cdr and nc in pbs:
-            m = dict(zip(key(pbs["datimcode"], pbs[nc]), fp))
-            st = st.fillna(key(cdr[lc["datim"]], cdr[lc[ec]]).map(m))
-    print(f"  NDR print status joined to the EMR line list for {st.notna().mean():.0%} of clients")
-    return cdr.assign(bio_fp_status=st.fillna(""))
+            k = key(pbs["datimcode"], pbs[nc])
+            ek = key(cdr[lc["datim"]], cdr[lc[ec]])
+            st = st.fillna(ek.map(dict(zip(k, fp))))
+            ok = ~used & ~k.duplicated().values & ~blank(k).values
+            free = pd.Series(np.arange(len(pbs))[ok], index=k.values[ok])            # NDR row per key, not yet used
+            row = ek.map(free).where(~done & ~ek.duplicated() & ~blank(ek))           # first EMR row per key, not yet set
+            hit = row.notna()
+            pos = row[hit].astype(int).values
+            ch[hit] = coh.iloc[pos].values
+            done |= hit
+            used[pos] = True
+    print(f"  NDR print status joined to the EMR line list for {st.notna().mean():.0%} of clients; "
+          f"NDR unique {ch.str.contains('unq').sum():,} / enrolled {ch.str.contains('enr').sum():,} found in the EMR")
+    return cdr.assign(bio_fp_status=st.fillna(""), ndr_cohort=ch)
 
 
 def read_flat(eng, pg: dict, lc: dict) -> pd.DataFrame:
